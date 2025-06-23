@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from sklearn.cluster import HDBSCAN
-from sklearn.decomposition import PCA
+from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.metrics import silhouette_score
 from sklearn.manifold import TSNE
@@ -54,13 +54,13 @@ icd_columns = [
 # Fill NaN values with 'missing' before encoding
 df[icd_columns] = df[icd_columns].fillna('missing')
 
-# One-hot encode all columns at once
-encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-encoded_array = encoder.fit_transform(df[icd_columns])
+# One-hot encode all columns at once - keep sparse format for memory efficiency
+encoder = OneHotEncoder(sparse_output=True, handle_unknown='ignore')
+encoded_sparse = encoder.fit_transform(df[icd_columns])
 
-# Create DataFrame with proper column names
+# Create sparse DataFrame with proper column names
 feature_names = encoder.get_feature_names_out(icd_columns)
-encoded_df = pd.DataFrame(encoded_array, columns=feature_names, index=df.index)
+encoded_df = pd.DataFrame.sparse.from_spmatrix(encoded_sparse, columns=feature_names, index=df.index)
 
 # Drop original ICD columns and concatenate encoded columns
 df_processed = df.drop(columns=icd_columns)
@@ -69,24 +69,32 @@ df_final = pd.concat([df_processed, encoded_df], axis=1)
 # Show
 print(df_final.shape)
 
+# Filter features by frequency - use sparse-aware operations
 min_frequency = len(df) * 0.01
-frequent_features = encoded_df.columns[encoded_df.sum() >= min_frequency]
+column_sums = np.array(encoded_sparse.sum(axis=0)).flatten()  # More memory efficient
+frequent_mask = column_sums >= min_frequency
+frequent_features = feature_names[frequent_mask]
 df_filtered = encoded_df[frequent_features]
 print(df_filtered.shape)
 
-# 1. Check data sparsity
-sparsity = (df_filtered == 0).sum().sum() / (df_filtered.shape[0] * df_filtered.shape[1])
+# 1. Check data sparsity - use sparse-aware calculation
+sparse_matrix = df_filtered.sparse.to_coo()
+total_elements = df_filtered.shape[0] * df_filtered.shape[1]
+non_zero_elements = sparse_matrix.nnz
+sparsity = (total_elements - non_zero_elements) / total_elements
 print(f"Data sparsity: {sparsity:.3f}")
 
-# 2. Optional: Apply scaling for better distance calculation
-scaler = StandardScaler()
-df_scaled = scaler.fit_transform(df_filtered)
+# 2. Convert to dense only what's needed for scaling - use sparse-compatible scaler
+from scipy import sparse
+sparse_data = sparse.csr_matrix(df_filtered.sparse.to_coo())
+scaler = StandardScaler(with_mean=False)  # Don't center sparse data
+df_scaled = scaler.fit_transform(sparse_data)
 
 # 3. HDBSCAN clustering with appropriate parameters for binary/sparse data
 hdb = HDBSCAN(
-    min_cluster_size=8,        # Minimum 10 patients per cluster
+    min_cluster_size=8,        # Minimum 8 patients per cluster
     min_samples=5,              # Core point threshold (5)
-    metric='hamming',           # Good for binary data
+    metric='cosine',           # Better for sparse high-dimensional data than hamming
     cluster_selection_epsilon=0.1,  # For more stable clusters
     cluster_selection_method='leaf',
     n_jobs=-1
@@ -120,8 +128,10 @@ if n_clusters > 1:
 anomaly_indices = np.where(cluster_labels == -1)[0]
 print(f"Anomaly patient indices: {anomaly_indices[:20]}...")  # Show first 20
 
-# 1. PCA for 2D visualization
-pca = PCA(n_components=2)
+# 1. PCA for 2D visualization - handle sparse input
+
+# Use TruncatedSVD which works better with sparse data
+pca = TruncatedSVD(n_components=2, random_state=42)
 pca_result = pca.fit_transform(df_scaled)
 
 # 2. Create visualization
@@ -131,13 +141,13 @@ fig, axes = plt.subplots(2, 2, figsize=(15, 12))
 scatter1 = axes[0,0].scatter(pca_result[:, 0], pca_result[:, 1],
                             c=cluster_labels, cmap='tab10', alpha=0.7)
 axes[0,0].set_title('PCA Projection')
-axes[0,0].set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2%} variance)')
-axes[0,0].set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2%} variance)')
+axes[0,0].set_xlabel(f'SVD1 ({pca.explained_variance_ratio_[0]:.2%} variance)')
+axes[0,0].set_ylabel(f'SVD2 ({pca.explained_variance_ratio_[1]:.2%} variance)')
 
-# Plot 2: t-SNE (if data not too large)
-if len(df_scaled) <= 1000:
+# Plot 2: t-SNE (if data not too large) - convert sparse to dense only for small datasets
+if df_scaled.shape[0] <= 1000:
     tsne = TSNE(n_components=2, random_state=42, perplexity=30)
-    tsne_result = tsne.fit_transform(df_scaled)
+    tsne_result = tsne.fit_transform(df_scaled.toarray())  # Convert to dense for t-SNE
     scatter2 = axes[0,1].scatter(tsne_result[:, 0], tsne_result[:, 1],
                                 c=cluster_labels, cmap='tab10', alpha=0.7)
     axes[0,1].set_title('t-SNE Projection')
@@ -167,4 +177,4 @@ plt.show()
 # Summary stats
 print(f"Clusters found: {len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)}")
 print(f"Anomalies: {sum(cluster_labels == -1)} ({sum(cluster_labels == -1)/len(cluster_labels)*100:.1f}%)")
-print(f"Total variance explained by PC1+PC2: {sum(pca.explained_variance_ratio_):.2%}")
+print(f"Total variance explained by SVD1+SVD2: {sum(pca.explained_variance_ratio_):.2%}")
