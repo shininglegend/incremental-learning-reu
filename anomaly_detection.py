@@ -11,6 +11,7 @@ Original file is located at
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy import sparse
 
 from sklearn.cluster import HDBSCAN
 from sklearn.decomposition import TruncatedSVD
@@ -55,7 +56,7 @@ icd_columns = [
 df[icd_columns] = df[icd_columns].fillna('missing')
 
 # One-hot encode all columns at once - keep sparse format for memory efficiency
-encoder = OneHotEncoder(sparse_output=True, handle_unknown='ignore')
+encoder = OneHotEncoder(sparse_output=True, handle_unknown='ignore', dtype=np.float32)
 encoded_sparse = encoder.fit_transform(df[icd_columns])
 
 # Create sparse DataFrame with proper column names
@@ -85,10 +86,9 @@ sparsity = (total_elements - non_zero_elements) / total_elements
 print(f"Data sparsity: {sparsity:.3f}")
 
 # 2. Convert to dense only what's needed for scaling - use sparse-compatible scaler
-from scipy import sparse
 sparse_data = sparse.csr_matrix(df_filtered.sparse.to_coo())
 scaler = StandardScaler(with_mean=False)  # Don't center sparse data
-df_scaled = scaler.fit_transform(sparse_data)
+df_scaled = scaler.fit_transform(sparse_data).astype(np.float32)
 
 # 3. HDBSCAN clustering with appropriate parameters for binary/sparse data
 hdb = HDBSCAN(
@@ -132,7 +132,7 @@ print(f"Anomaly patient indices: {anomaly_indices[:20]}...")  # Show first 20
 
 # Use TruncatedSVD which works better with sparse data
 pca = TruncatedSVD(n_components=2, random_state=42)
-pca_result = pca.fit_transform(df_scaled)
+pca_result = pca.fit_transform(df_scaled).astype(np.float32)
 
 # 2. Create visualization
 fig, axes = plt.subplots(2, 2, figsize=(15, 12))
@@ -147,7 +147,7 @@ axes[0,0].set_ylabel(f'SVD2 ({pca.explained_variance_ratio_[1]:.2%} variance)')
 # Plot 2: t-SNE (if data not too large) - convert sparse to dense only for small datasets
 if df_scaled.shape[0] <= 1000:
     tsne = TSNE(n_components=2, random_state=42, perplexity=30)
-    tsne_result = tsne.fit_transform(df_scaled.toarray())  # Convert to dense for t-SNE
+    tsne_result = tsne.fit_transform(df_scaled.toarray().astype(np.float32))  # Convert to dense for t-SNE
     scatter2 = axes[0,1].scatter(tsne_result[:, 0], tsne_result[:, 1],
                                 c=cluster_labels, cmap='tab10', alpha=0.7)
     axes[0,1].set_title('t-SNE Projection')
