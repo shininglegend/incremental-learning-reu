@@ -8,13 +8,13 @@ Original file is located at
     https://colab.research.google.com/drive/109OF1JF_L_oizkcqvqi1QktiHyqddbDh
 """
 
-import hdbscan
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.cluster import HDBSCAN
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.metrics import silhouette_score
 from sklearn.manifold import TSNE
 
@@ -83,16 +83,17 @@ scaler = StandardScaler()
 df_scaled = scaler.fit_transform(df_filtered)
 
 # 3. HDBSCAN clustering with appropriate parameters for binary/sparse data
-clusterer = hdbscan.HDBSCAN(
-    min_cluster_size=10,        # Minimum 10 patients per cluster
+hdb = HDBSCAN(
+    min_cluster_size=8,        # Minimum 10 patients per cluster
     min_samples=5,              # Core point threshold (5)
     metric='hamming',           # Good for binary data
     cluster_selection_epsilon=0.1,  # For more stable clusters
-    cluster_selection_method='leaf'
+    cluster_selection_method='leaf',
+    n_jobs=-1
 )
 
 # 4. Fit clustering
-cluster_labels = clusterer.fit_predict(df_scaled)
+cluster_labels = hdb.fit_predict(df_scaled)
 
 # 5. Evaluate results
 n_clusters = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
@@ -110,10 +111,10 @@ if n_clusters > 1:
         sil_score = silhouette_score(df_scaled[mask], cluster_labels[mask])
         print(f"Silhouette score: {sil_score:.3f}")
 
-# 7. Analyze cluster strengths
-cluster_strengths = clusterer.cluster_persistence_
-if cluster_strengths is not None:
-    print("Cluster persistence scores:", cluster_strengths)
+# # 7. Analyze cluster strengths
+# cluster_strengths = clusterer.cluster_persistence_
+# if cluster_strengths is not None:
+#     print("Cluster persistence scores:", cluster_strengths)
 
 # 8. Identify anomalies (noise points)
 anomaly_indices = np.where(cluster_labels == -1)[0]
