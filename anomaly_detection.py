@@ -33,7 +33,7 @@ string_columns = [
 
 dtype_dict = {col: 'string' for col in string_columns}
 
-df = pd.read_csv('in.csv', dtype=dtype_dict)
+df = pd.read_csv('in.csv', dtype=dtype_dict, nrows=10000)
 
 print(df.shape) # Show what the data shape (x, y) is
 # print(df.head()) # Show the first 5 rows
@@ -87,13 +87,13 @@ print(f"Data sparsity: {sparsity:.3f}")
 
 # 2. Convert to dense only what's needed for scaling - use sparse-compatible scaler
 sparse_data = sparse.csr_matrix(df_filtered.sparse.to_coo())
-scaler = StandardScaler(with_mean=False)  # Don't center sparse data
+scaler = StandardScaler(with_mean=False)
 df_scaled = scaler.fit_transform(sparse_data).astype(np.float32)
 
 # 3. HDBSCAN clustering with appropriate parameters for binary/sparse data
 hdb = HDBSCAN(
-    min_cluster_size=8,        # Minimum 8 patients per cluster
-    min_samples=5,              # Core point threshold (5)
+    min_cluster_size=3,        # Minimum 8 patients per cluster
+    min_samples=2,              # Core point threshold (5)
     metric='cosine',           # Better for sparse high-dimensional data than hamming
     cluster_selection_epsilon=0.1,  # For more stable clusters
     cluster_selection_method='leaf',
