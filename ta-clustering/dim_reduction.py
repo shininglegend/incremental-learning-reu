@@ -1,10 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
 from sklearn.decomposition import PCA as SklearnPCA
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-
 
 class DimensionalityReducer(ABC):
     """Abstract base class for dimensionality reduction techniques."""
@@ -137,6 +133,9 @@ class AutoencoderReducer(DimensionalityReducer):
 
     def _build_autoencoder(self, input_dim):
         """Build the autoencoder architecture."""
+        from tensorflow import keras
+        from tensorflow.keras import layers
+        
         # Input layer
         input_layer = keras.Input(shape=(input_dim,))
 

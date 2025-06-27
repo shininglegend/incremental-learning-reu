@@ -129,7 +129,6 @@ class ClusteringMechanism:
             z_list (ndp_array): list of samples to add
         """
         self.fit_reducer(z_list)
-        print("Adding to clustering mechanism...")
         [self.add(z) for z in z_list]
 
     def get_clusters_for_training(self) -> np.ndarray:
