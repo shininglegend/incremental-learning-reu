@@ -2,7 +2,7 @@
 import numpy as np
 import pandas
 from collections import deque
-from sklearn.decomposition import PCA
+from dim_reduction import IdentityReducer
 
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
@@ -33,21 +33,19 @@ class Cluster:
 class ClusteringMechanism:
     """Implements the clustering mechanism described in Algorithm 3."""
 
-    def __init__(self, Q=100, P=3, pca_components=None):
+    def __init__(self, Q=100, P=3, dimensionality_reducer=None):
         """
         Initializes the clustering mechanism.
 
         Args:
             Q (int): Maximum number of clusters.
             P (int): Maximum size of each cluster.
-            pca_components (int): Number of PCA components to reduce to. If None, no PCA is applied.
+            dimensionality_reducer (DimensionalityReducer): Dimensionality reduction method. If None, no reduction is applied.
         """
         self.clusters = []  # List of Cluster objects
         self.Q = Q          # Max number of clusters
         self.P = P          # Max cluster size
-        self.pca_components = pca_components
-        self.pca = PCA(n_components=pca_components) if pca_components else None
-        self.pca_fitted = False
+        self.dimensionality_reducer = dimensionality_reducer if dimensionality_reducer else IdentityReducer()
 
     def add(self, z:np.ndarray):
         """
@@ -58,12 +56,11 @@ class ClusteringMechanism:
         """
         assert len(z.shape) == 1, "Sample should only have one axis."
 
-        # Apply PCA if configured
-        if self.pca is not None:
-            if not self.pca_fitted:
-                raise ValueError("PCA must be fitted before adding samples. Call fit_pca() first.")
-            z_reshaped = z.reshape(1, -1)  # PCA expects 2D input
-            z = self.pca.transform(z_reshaped).flatten()
+        # Apply dimensionality reduction if configured
+        if self.dimensionality_reducer is not None:
+            if not self.dimensionality_reducer.fitted:
+                raise ValueError("Dimensionality reducer must be fitted before adding samples. Call fit_reducer() first.")
+            z = self.dimensionality_reducer.transform(z)
         # if z is a set of samples, add it one by one
         if len(self.clusters) < self.Q:
             # If the number of clusters is less than Q, create a new cluster
@@ -92,26 +89,37 @@ class ClusteringMechanism:
                 q_star.remove_oldest()
 
 
-    def fit_pca(self, z_list):
+    def fit_reducer(self, z_list):
         """
-        Fit PCA on a set of samples. Must be called before adding samples if PCA is configured.
+        Fit dimensionality reducer on a set of samples. Must be called before adding samples if reducer is configured.
 
         Args:
-            z_list (list or np.ndarray): List of samples to fit PCA on
+            z_list (list or np.ndarray): List of samples to fit reducer on
         """
-        if self.pca is None:
+        if self.dimensionality_reducer.fitted:
+            return
+        if self.dimensionality_reducer is None:
             return
 
-        if isinstance(z_list, list):
-            X = np.array(z_list)
-        else:
-            X = z_list
+        self.dimensionality_reducer.fit(z_list)
 
-        if len(X.shape) == 1:
-            X = X.reshape(1, -1)
+    def transform(self, z):
+        """
+        Apply dimensionality reduction transformation to external data (e.g., test data).
 
-        self.pca.fit(X)
-        self.pca_fitted = True
+        Args:
+            z (np.ndarray): Sample or batch of samples to transform
+
+        Returns:
+            np.ndarray: Transformed data
+        """
+        if self.dimensionality_reducer is None:
+            return z
+
+        if not self.dimensionality_reducer.fitted:
+            raise ValueError("Dimensionality reducer must be fitted before transforming data. Call fit_reducer() first.")
+
+        return self.dimensionality_reducer.transform(z)
 
     def add_multi(self, z_list):
         """
@@ -120,6 +128,8 @@ class ClusteringMechanism:
         Args:
             z_list (ndp_array): list of samples to add
         """
+        self.fit_reducer(z_list)
+        print("Adding to clustering mechanism...")
         [self.add(z) for z in z_list]
 
     def get_clusters_for_training(self) -> np.ndarray:

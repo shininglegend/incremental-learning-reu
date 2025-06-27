@@ -9,9 +9,10 @@ from os.path  import join
 # Set file paths based on added MNIST Datasets
 import kagglehub
 
-# Download latest version
-path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-print(f"Downloaded dataset to {path}")
+# Download latest version (Uncomment if you're getting file not found errors)
+# path = kagglehub.dataset_download("hojjatk/mnist-dataset")
+path = "/Users/jvcte/.cache/kagglehub/datasets/hojjatk/mnist-dataset/versions/1"
+print(f"Dataset is at {path}")
 input_path = path
 training_images_filepath = join(input_path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
 training_labels_filepath = join(input_path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
