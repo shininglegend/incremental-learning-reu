@@ -51,17 +51,18 @@ class AGEMHandler:
                 param.grad.data = grad_vector[pointer:pointer + num_param].view(param.shape)
                 pointer += num_param
 
-    def optimize(self, data, labels, memory_samples):
+    def optimize(self, data, labels, memory_samples=None):
         """A-GEM optimization with gradient projection"""
         # Compute gradient on current task
         current_grad = self.compute_gradient(data, labels)
 
         # If we have memory samples, compute reference gradient and project
-        if memory_samples and len(memory_samples) > 0:
+        if memory_samples is not None and len(memory_samples) > 0:
             # Prepare memory data
             mem_data_list = []
             mem_labels_list = []
 
+            # TODO: Error here, too many values to unpack
             for sample_data, sample_label in memory_samples[:self.eps_mem_batch]:
                 mem_data_list.append(sample_data)
                 mem_labels_list.append(sample_label)

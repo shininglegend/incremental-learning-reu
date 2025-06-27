@@ -15,7 +15,7 @@ class ClusteringMemory():
             P (int): Maximum samples per cluster
             input_type (str): Type of input ('samples' for TA-A-GEM)
         """
-        self.clustering_mechanism = ClusteringMechanism(Q=Q, P=P)
+        self.clustering_mechanism = ClusteringMechanism(Q=Q, P=P, dimensionality_reducer=None)
         self.input_type = input_type
 
     def get_memory_samples(self):

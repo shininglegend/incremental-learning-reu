@@ -102,7 +102,7 @@ class ClusteringMechanism:
         self.clusters = []  # List of Cluster objects
         self.Q = Q          # Max number of clusters
         self.P = P          # Max cluster size
-        self.dimensionality_reducer = dimensionality_reducer if dimensionality_reducer else IdentityReducer()
+        self.dimensionality_reducer = dimensionality_reducer
 
     def add(self, z:np.ndarray, label=None):
         """
@@ -203,7 +203,7 @@ class ClusteringMechanism:
         for cluster in self.clusters:
             for sample in cluster.samples:
                 all_samples.append(sample)
-        return np.array(all_samples) if all_samples else np.array([]).reshape(0, -1)
+        return np.array(all_samples) if all_samples else np.array([])
 
     def get_clusters_with_labels(self):
         """Gets the samples and their labels currently stored in the clusters
