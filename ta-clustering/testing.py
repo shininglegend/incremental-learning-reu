@@ -15,15 +15,17 @@ if __name__ == "__main__":
     # Flatten the images and normalize the pixel values
     train_images = np.array(train_images)
     train_images = train_images.reshape(-1, 784) / 255.0
+    test_images = np.array(test_images)
+    test_images = test_images.reshape(-1, 784) / 255.0
 
     # TODO Perform clustering using k-means. After each 100 are saved in the cluster_storage,
     # retrain on it, test and save the accuracy.
     accuracy = []
-    cluster_storage = clustering_gemini.ClusteringMechanism(Q=10, P=50)
+    cluster_storage = clustering_gemini.ClusteringMechanism(Q=10, P=50, pca_components=15)
     for i in range(0, len(train_images), 100):
         # Add that batch
         cluster_storage.add_multi(train_images[i:i+100])
-        cluster_storage.visualize()
+        #cluster_storage.visualize()
         # Train
         model = KMeans(n_clusters=10)
         X = cluster_storage.get_clusters_for_training()
@@ -32,8 +34,8 @@ if __name__ == "__main__":
         returned_labels = model.predict(test_images)
         # Save the accuracy
         accuracy.append(np.mean(returned_labels == test_labels))
-        print("Accuracy:", accuracy)
-
+        if i%5000==0:
+            print("Accuracy:", accuracy[int(i/100)])
     # Visualize the accuracy as a function of time
     fig = px.line(x=range(len(accuracy)), y=accuracy)
     fig.show()

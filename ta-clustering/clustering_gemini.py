@@ -2,6 +2,7 @@
 import numpy as np
 import pandas
 from collections import deque
+from sklearn.decomposition import PCA
 
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
@@ -32,17 +33,21 @@ class Cluster:
 class ClusteringMechanism:
     """Implements the clustering mechanism described in Algorithm 3."""
 
-    def __init__(self, Q=100, P=3):
+    def __init__(self, Q=100, P=3, pca_components=None):
         """
         Initializes the clustering mechanism.
 
         Args:
             Q (int): Maximum number of clusters.
             P (int): Maximum size of each cluster.
+            pca_components (int): Number of PCA components to reduce to. If None, no PCA is applied.
         """
         self.clusters = []  # List of Cluster objects
         self.Q = Q          # Max number of clusters
         self.P = P          # Max cluster size
+        self.pca_components = pca_components
+        self.pca = PCA(n_components=pca_components) if pca_components else None
+        self.pca_fitted = False
 
     def add(self, z:np.ndarray):
         """
@@ -52,6 +57,13 @@ class ClusteringMechanism:
             z (np.ndarray): The sample (e.g., activation vector) to add.
         """
         assert len(z.shape) == 1, "Sample should only have one axis."
+
+        # Apply PCA if configured
+        if self.pca is not None:
+            if not self.pca_fitted:
+                raise ValueError("PCA must be fitted before adding samples. Call fit_pca() first.")
+            z_reshaped = z.reshape(1, -1)  # PCA expects 2D input
+            z = self.pca.transform(z_reshaped).flatten()
         # if z is a set of samples, add it one by one
         if len(self.clusters) < self.Q:
             # If the number of clusters is less than Q, create a new cluster
@@ -80,6 +92,27 @@ class ClusteringMechanism:
                 q_star.remove_oldest()
 
 
+    def fit_pca(self, z_list):
+        """
+        Fit PCA on a set of samples. Must be called before adding samples if PCA is configured.
+
+        Args:
+            z_list (list or np.ndarray): List of samples to fit PCA on
+        """
+        if self.pca is None:
+            return
+
+        if isinstance(z_list, list):
+            X = np.array(z_list)
+        else:
+            X = z_list
+
+        if len(X.shape) == 1:
+            X = X.reshape(1, -1)
+
+        self.pca.fit(X)
+        self.pca_fitted = True
+
     def add_multi(self, z_list):
         """
         This adds a list of samples to the system. TM
@@ -95,8 +128,11 @@ class ClusteringMechanism:
         Returns:
             np.ndarray: an array of samples currently stored in the clusters
         """
-        return np.array((sample for sample in cluster.samples)
-                for cluster in self.clusters)
+        all_samples = []
+        for cluster in self.clusters:
+            for sample in cluster.samples:
+                all_samples.append(sample)
+        return np.array(all_samples) if all_samples else np.array([]).reshape(0, -1)
 
     def visualize(self):
         """
