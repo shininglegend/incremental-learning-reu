@@ -37,21 +37,22 @@ if __name__ == "__main__":
     per_digit_accuracy = {i: [] for i in range(10)}  # Track accuracy for each digit over time
 
     # Easy switching between reducers - uncomment the one you want:
-    reducer = create_pca_reducer(50)                    # PCA with 50 components
-    # reducer = create_random_projection_reducer(100)   # Random projection with 100 components
+    # reducer = create_pca_reducer(50)                    # PCA with 50 components
+    reducer = create_random_projection_reducer(100)   # Random projection with 100 components
     # reducer = create_identity_reducer()               # No dimensionality reduction
     # reducer = create_autoencoder_reducer(10, hidden_layers=[32, 32], epochs=20)  # Autoencoder with 10 components
 
-    cluster_storage = clustering_gemini.ClusteringMechanism(Q=10, P=100, dimensionality_reducer=reducer)
+    cluster_storage = clustering_gemini.ClusteringMechanism(Q=10, P=50, dimensionality_reducer=reducer)
 
     # Fit reducer on initial batch
     print("Fitting reducer on initial batch...")
-    cluster_storage.fit_reducer(train_images[:(STEP*2)])
+    cluster_storage.fit_reducer(train_images)
     print("Fitted!")
 
     # Track which digit we're currently learning
     current_digit = 0
     digit_counts = np.bincount(train_labels)
+    print(f"Digit counts: {digit_counts}")
 
     for i in range(0, len(train_images), STEP):
         # Add that batch with labels
@@ -64,6 +65,8 @@ if __name__ == "__main__":
             if batch_digit != current_digit:
                 print(f"\nNow learning digit {batch_digit}")
                 current_digit = batch_digit
+                if current_digit == 2:
+                    cluster_storage.visualize()
 
         # Train MLP directly on stored cluster data with stored labels
         stored_points, stored_labels = cluster_storage.get_clusters_with_labels()
