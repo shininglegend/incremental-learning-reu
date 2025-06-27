@@ -24,7 +24,7 @@ class Cluster:
         Removes a sample from the cluster and updates its mean.
         """
         return self.remove_oldest()
-    
+
 
     def remove_based_on_mean(self):
         """
@@ -217,7 +217,7 @@ class ClusteringMechanism:
             for sample, label in zip(cluster.samples, cluster.labels):
                 all_samples.append(sample)
                 all_labels.append(label)
-        samples_array = np.array(all_samples) if all_samples else np.array([]).reshape(0, -1)
+        samples_array = np.array(all_samples) if all_samples else np.array([])
         return samples_array, all_labels
 
     def visualize(self):
@@ -282,37 +282,3 @@ class ClusteringMechanism:
                            hover_data={'Cluster': True, 'Label': True})
 
         fig.show()
-
-
-
-
-# Example Usage for ClusteringMechanism:
-if __name__ == '__main__':
-    clustering_system = ClusteringMechanism(Q=3, P=2) # Smaller Q, P for demonstration
-
-    print("Adding first 5 samples to initialize clusters:")
-    for i in range(5):
-        sample = np.array([i, i + 0.5])
-        clustering_system.add(sample)
-        print(f"Added sample {sample}. Clusters: {len(clustering_system.clusters)}")
-        for j, c in enumerate(clustering_system.clusters):
-            print(f"  Cluster {j} (mean: {c.mean}): {list(c.samples)}")
-
-    print("\nAdding more samples, testing cluster size limit and mean update:")
-    # These samples should go into existing clusters, triggering removal of oldest
-    sample_close_to_0 = np.array([0.1, 0.6])
-    clustering_system.add(sample_close_to_0)
-    print(f"Added sample {sample_close_to_0}. Clusters: {len(clustering_system.clusters)}")
-    for j, c in enumerate(clustering_system.clusters):
-        print(f"  Cluster {j} (mean: {c.mean}): {list(c.samples)}")
-
-    sample_close_to_4 = np.array([4.1, 4.6])
-    clustering_system.add(sample_close_to_4)
-    print(f"Added sample {sample_close_to_4}. Clusters: {len(clustering_system.clusters)}")
-    for j, c in enumerate(clustering_system.clusters):
-        print(f"  Cluster {j} (mean: {c.mean}): {list(c.samples)}")
-
-    # Check if oldest samples were removed correctly
-    # With P=2, each cluster should have max 2 samples.
-    # E.g., for cluster 0, if [0, 0.5] was first, then [0.1, 0.6] was added,
-    # and it was already size 2, then [0, 0.5] should be removed.
