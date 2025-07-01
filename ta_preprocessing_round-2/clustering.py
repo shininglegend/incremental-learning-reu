@@ -19,13 +19,24 @@ class ClusteringMemory():
         self.input_type = input_type
 
     def get_memory_samples(self):
-        """Returns all samples currently stored.
+        """Returns all samples currently stored as tuples of (sample, label).
 
         Returns:
-            np.ndarray: Array of all stored samples
+            list: List of (sample, label) tuples
         """
-        samples, _ = self.clustering_mechanism.get_clusters_with_labels()
-        return samples
+        samples, labels = self.clustering_mechanism.get_clusters_with_labels()
+        if len(samples) == 0:
+            return []
+
+        # Convert numpy arrays back to tensors and pair with labels
+        import torch
+        memory_samples = []
+        for sample, label in zip(samples, labels):
+            sample_tensor = torch.FloatTensor(sample)
+            label_tensor = torch.tensor(label) if label is not None else torch.tensor(0)
+            memory_samples.append((sample_tensor, label_tensor))
+
+        return memory_samples
 
     def add_sample(self, sample_data, sample_label):
         """Add a sample to the clustering memory.
@@ -47,3 +58,12 @@ class ClusteringMemory():
             sample_label = sample_label.item()
 
         self.clustering_mechanism.add(sample_data, sample_label)
+
+    def get_memory_size(self):
+        """Get the current number of samples stored in memory.
+
+        Returns:
+            int: Number of samples currently stored
+        """
+        samples, _ = self.clustering_mechanism.get_clusters_with_labels()
+        return len(samples)

@@ -53,8 +53,19 @@ class AGEMHandler:
 
     def optimize(self, data, labels, memory_samples=None):
         """A-GEM optimization with gradient projection"""
+        # Compute loss for tracking
+        self.model.zero_grad()
+        outputs = self.model(data)
+        loss = self.criterion(outputs, labels)
+        current_loss = loss.item()
+
         # Compute gradient on current task
-        current_grad = self.compute_gradient(data, labels)
+        loss.backward()
+        current_grad = []
+        for param in self.model.parameters():
+            if param.grad is not None:
+                current_grad.append(param.grad.view(-1))
+        current_grad = torch.cat(current_grad) if current_grad else torch.tensor([])
 
         # If we have memory samples, compute reference gradient and project
         if memory_samples is not None and len(memory_samples) > 0:
@@ -62,31 +73,44 @@ class AGEMHandler:
             mem_data_list = []
             mem_labels_list = []
 
-            # TODO: Error here, too many values to unpack
-            for sample_data, sample_label in memory_samples[:self.eps_mem_batch]:
-                mem_data_list.append(sample_data)
-                mem_labels_list.append(sample_label)
+            # Handle memory samples correctly
+            try:
+                for sample_item in memory_samples[:self.eps_mem_batch]:
+                    if isinstance(sample_item, (list, tuple)) and len(sample_item) >= 2:
+                        sample_data, sample_label = sample_item[0], sample_item[1]
+                    else:
+                        # Assume it's just data if not tuple/list
+                        sample_data, sample_label = sample_item, 0
 
-            if mem_data_list:
-                mem_data = torch.stack(mem_data_list)
-                mem_labels = torch.stack(mem_labels_list) if isinstance(mem_labels_list[0], torch.Tensor) else torch.tensor(mem_labels_list)
+                    mem_data_list.append(sample_data)
+                    mem_labels_list.append(sample_label)
 
-                # Compute reference gradient on memory
-                ref_grad = self.compute_gradient(mem_data, mem_labels)
+                if mem_data_list:
+                    mem_data = torch.stack(mem_data_list)
+                    mem_labels = torch.stack(mem_labels_list) if isinstance(mem_labels_list[0], torch.Tensor) else torch.tensor(mem_labels_list)
 
-                # Project current gradient
-                projected_grad = self.project_gradient(current_grad, ref_grad)
+                    # Compute reference gradient on memory
+                    ref_grad = self.compute_gradient(mem_data, mem_labels)
 
-                # Set projected gradient and optimize
-                self.model.zero_grad()
-                self.set_gradient(projected_grad)
-                self.optimizer.step()
-            else:
-                # No valid memory samples, just do regular update
+                    # Project current gradient
+                    projected_grad = self.project_gradient(current_grad, ref_grad)
+
+                    # Set projected gradient and optimize
+                    self.model.zero_grad()
+                    self.set_gradient(projected_grad)
+                    self.optimizer.step()
+                else:
+                    # No valid memory samples, just do regular update
+                    self.optimizer.step()
+            except Exception as e:
+                # Fallback to regular update if memory processing fails
+                print(f"Memory processing failed: {e}")
                 self.optimizer.step()
         else:
             # No memory samples, just do regular update
             self.optimizer.step()
+
+        return current_loss
 
 def evaluate_all_tasks(model, criterion, task_dataloaders):
     """Evaluate model on all tasks and return average accuracy"""
@@ -101,5 +125,20 @@ def evaluate_all_tasks(model, criterion, task_dataloaders):
                 _, predicted = torch.max(outputs.data, 1)
                 total_samples += labels.size(0)
                 total_correct += (predicted == labels).sum().item()
+
+    return total_correct / total_samples if total_samples > 0 else 0.0
+
+def evaluate_single_task(model, criterion, task_dataloader):
+    """Evaluate model on a single task and return accuracy"""
+    model.eval()
+    total_correct = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for data, labels in task_dataloader:
+            outputs = model(data)
+            _, predicted = torch.max(outputs.data, 1)
+            total_samples += labels.size(0)
+            total_correct += (predicted == labels).sum().item()
 
     return total_correct / total_samples if total_samples > 0 else 0.0

@@ -13,8 +13,8 @@ import torchvision.transforms.functional as TF
 import kagglehub
 
 # Download latest version (Uncomment if you're getting file not found errors)
-# path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-path = "/Users/jvcte/.cache/kagglehub/datasets/hojjatk/mnist-dataset/versions/1"
+path = kagglehub.dataset_download("hojjatk/mnist-dataset")
+# path = "/Users/jvcte/.cache/kagglehub/datasets/hojjatk/mnist-dataset/versions/1"
 print(f"Dataset is at {path}")
 input_path = path
 training_images_filepath = join(input_path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')

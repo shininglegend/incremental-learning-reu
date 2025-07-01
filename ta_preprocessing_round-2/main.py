@@ -5,6 +5,10 @@ import mnist
 # import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
+import pandas as pd
+from visualization_analysis import TAGemVisualizer
+import time
 
 # --- 1. Configuration and Initialization ---
 NUM_CLASSES = 10 # For MNIST
@@ -58,18 +62,32 @@ task_dataloaders = mnist.prepare_domain_incremental_mnist(
     task_type='permutation', num_tasks=NUM_TASKS, batch_size=BATCH_SIZE
 )
 
+# --- Initialize comprehensive visualizer ---
+visualizer = TAGemVisualizer()
+
 # --- 2. Training Loop ---
 print("Starting TA-A-GEM training...")
 for task_id, task_dataloader in enumerate(task_dataloaders):
     print(f"\n--- Training on Task {task_id} ---")
 
+    task_start_time = time.time()
+    task_epoch_losses = []
+
     for epoch in range(NUM_EPOCHS):
         model.train()
+        epoch_loss = 0.0
+        num_batches = 0
+
         for batch_idx, (data, labels) in enumerate(task_dataloader):
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
-            agem_handler.optimize(data, labels, clustering_memory.get_memory_samples())
+            batch_loss = agem_handler.optimize(data, labels, clustering_memory.get_memory_samples())
+
+            # Track batch loss
+            if batch_loss is not None:
+                epoch_loss += batch_loss
+                visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
             # Step 2: Update the clustered memory with current batch samples
             # This is where the core clustering for TA-A-GEM happens
@@ -78,12 +96,60 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
                 sample_label = labels[i]
                 clustering_memory.add_sample(sample_data, sample_label) # Add sample to clusters
 
-            if batch_idx % 100 == 0:
-                print(f"Task {task_id}, Epoch {epoch}, Batch {batch_idx}")
+            num_batches += 1
+            # Update progress bar every 100 batches or on last batch
+            if batch_idx % 50 == 0 or batch_idx == len(task_dataloader) - 1:
+                progress = (batch_idx + 1) / len(task_dataloader)
+                bar_length = 30
+                filled_length = int(bar_length * progress)
+                bar = '█' * filled_length + '-' * (bar_length - filled_length)
+                print(f'\rTask {task_id:3}, Epoch {epoch+1:>3}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(task_dataloader)})', end='', flush=True)
 
-    # Optional: Evaluate performance after each task (as in the paper's "disjoint tasks" experiments)
+        # Print newline after progress bar completion
+        print()
+
+        # Track epoch loss
+        avg_epoch_loss = epoch_loss / max(num_batches, 1)
+        task_epoch_losses.append(avg_epoch_loss)
+
+    # Evaluate performance after each task
     model.eval()
     avg_accuracy = agem.evaluate_all_tasks(model, criterion, task_dataloaders)
+
+    # Evaluate on individual tasks for detailed tracking
+    individual_accuracies = []
+    for eval_task_id, eval_dataloader in enumerate(task_dataloaders[:task_id+1]):
+        task_acc = agem.evaluate_single_task(model, criterion, eval_dataloader)
+        individual_accuracies.append(task_acc)
+
+    # Calculate training time for this task
+    task_time = time.time() - task_start_time
+
+    # Update visualizer with all metrics
+    memory_size = clustering_memory.get_memory_size()
+    visualizer.update_metrics(
+        task_id=task_id,
+        overall_accuracy=avg_accuracy,
+        individual_accuracies=individual_accuracies,
+        epoch_losses=task_epoch_losses,
+        memory_size=memory_size,
+        training_time=task_time
+    )
+
     print(f"After Task {task_id}, Average Accuracy: {avg_accuracy:.4f}")
+    print(f"Memory Size: {memory_size} samples")
+    print(f"Task Training Time: {task_time:.2f}s")
 
 print("\nTA-A-GEM training complete.")
+
+# --- 3. Comprehensive Visualization and Analysis ---
+print("\nGenerating comprehensive analysis...")
+
+# Save metrics for future analysis
+timestamp = time.strftime("%Y%m%d_%H%M%S")
+visualizer.save_metrics(f"ta_agem_metrics_{timestamp}.pkl")
+
+# Generate comprehensive report with all visualizations
+visualizer.generate_report(f"ta_agem_analysis_{timestamp}")
+
+print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
