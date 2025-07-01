@@ -164,9 +164,9 @@ print("\nGenerating comprehensive analysis...")
 
 # Save metrics for future analysis
 timestamp = time.strftime("%Y%m%d_%H%M%S")
-visualizer.save_metrics(f"ta_agem_metrics_{timestamp}.pkl")
+visualizer.save_metrics(f"test_results/ta_agem_metrics_{timestamp}.pkl")
 
 # Generate simplified report with 3 key visualizations
-visualizer.generate_simple_report(clustering_memory, f"ta_agem_analysis_{timestamp}")
+visualizer.generate_simple_report(clustering_memory)
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")

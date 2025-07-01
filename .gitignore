@@ -1,5 +1,4 @@
-*.html
-*.pkl
+/test_results/*
 
 # Ignore the data file itself
 *.csv
