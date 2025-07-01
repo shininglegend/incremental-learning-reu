@@ -9,7 +9,16 @@ class AGEMHandler:
         self.eps_mem_batch = 256  # Memory batch size for gradient computation
 
     def compute_gradient(self, data, labels):
-        """Compute gradients for given data and labels"""
+        """Compute gradients for given data and labels without corrupting model state"""
+        # Save current gradients
+        current_grads = []
+        for param in self.model.parameters():
+            if param.grad is not None:
+                current_grads.append(param.grad.clone())
+            else:
+                current_grads.append(None)
+
+        # Compute new gradients
         self.model.zero_grad()
         outputs = self.model(data)
         loss = self.criterion(outputs, labels)
@@ -20,6 +29,14 @@ class AGEMHandler:
         for param in self.model.parameters():
             if param.grad is not None:
                 grads.append(param.grad.view(-1))
+
+        # Restore original gradients
+        for param, original_grad in zip(self.model.parameters(), current_grads):
+            if original_grad is not None:
+                param.grad = original_grad
+            else:
+                param.grad = None
+
         return torch.cat(grads) if grads else torch.tensor([])
 
     def project_gradient(self, current_grad, ref_grad):
@@ -96,7 +113,6 @@ class AGEMHandler:
                     projected_grad = self.project_gradient(current_grad, ref_grad)
 
                     # Set projected gradient and optimize
-                    self.model.zero_grad()
                     self.set_gradient(projected_grad)
                     self.optimizer.step()
                 else:
@@ -120,6 +136,23 @@ def evaluate_all_tasks(model, criterion, task_dataloaders):
 
     with torch.no_grad():
         for task_dataloader in task_dataloaders:
+            for data, labels in task_dataloader:
+                outputs = model(data)
+                _, predicted = torch.max(outputs.data, 1)
+                total_samples += labels.size(0)
+                total_correct += (predicted == labels).sum().item()
+
+    return total_correct / total_samples if total_samples > 0 else 0.0
+
+def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
+    """Evaluate model only on tasks seen so far"""
+    model.eval()
+    total_correct = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for task_id in range(current_task_id + 1):
+            task_dataloader = task_dataloaders[task_id]
             for data, labels in task_dataloader:
                 outputs = model(data)
                 _, predicted = torch.max(outputs.data, 1)

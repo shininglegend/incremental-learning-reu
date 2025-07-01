@@ -1,3 +1,6 @@
+*.html
+*.pkl
+
 # Ignore the data file itself
 *.csv
 *.zip

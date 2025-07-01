@@ -34,7 +34,11 @@ class SimpleMLP(nn.Module):
         self.fc3 = nn.Linear(hidden_dim, num_classes)
 
     def forward(self, x):
-        x = x.view(-1, INPUT_DIM) # Flatten MNIST images
+        # Ensure consistent flattening regardless of input shape
+        if len(x.shape) > 2:
+            x = x.view(x.size(0), -1)  # Flatten to (batch_size, features)
+        elif len(x.shape) == 1:
+            x = x.unsqueeze(0)  # Add batch dimension if missing
         x = self.fc1(x)
         x = self.relu1(x)
         x = self.fc2(x)
@@ -92,6 +96,8 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
+
+
             # Step 2: Update the clustered memory with current batch samples
             # This is where the core clustering for TA-A-GEM happens
             for i in range(len(data)):
@@ -100,28 +106,36 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
                 clustering_memory.add_sample(sample_data, sample_label) # Add sample to clusters
 
             num_batches += 1
-            # Update progress bar every 100 batches or on last batch
-            if batch_idx % 50 == 0 or batch_idx == len(task_dataloader) - 1:
-                progress = (batch_idx + 1) / len(task_dataloader)
-                bar_length = 30
-                filled_length = int(bar_length * progress)
-                bar = '█' * filled_length + '-' * (bar_length - filled_length)
-                print(f'\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(task_dataloader)})', end='', flush=True)
+
+
+
+            # Update progress bar every 50 batches or on last batch
+            # if batch_idx % 50 == 0 or batch_idx == len(task_dataloader) - 1:
+            #     progress = (batch_idx + 1) / len(task_dataloader)
+            #     bar_length = 30
+            #     filled_length = int(bar_length * progress)
+            #     bar = '█' * filled_length + '-' * (bar_length - filled_length)
+            #     print(f'\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(task_dataloader)})', end='', flush=True)
 
         # Print newline after progress bar completion
-        print()
+        # print()
 
         # Track epoch loss
         avg_epoch_loss = epoch_loss / max(num_batches, 1)
         task_epoch_losses.append(avg_epoch_loss)
 
+        # Print epoch summary
+        if epoch % 5 == 0 or epoch == NUM_EPOCHS - 1:
+            print(f'  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}')
+
     # Evaluate performance after each task
     model.eval()
-    avg_accuracy = agem.evaluate_all_tasks(model, criterion, task_dataloaders)
+    avg_accuracy = agem.evaluate_tasks_up_to(model, criterion, task_dataloaders, task_id)
 
     # Evaluate on individual tasks for detailed tracking
     individual_accuracies = []
-    for eval_task_id, eval_dataloader in enumerate(task_dataloaders[:task_id+1]):
+    for eval_task_id in range(task_id + 1):
+        eval_dataloader = task_dataloaders[eval_task_id]
         task_acc = agem.evaluate_single_task(model, criterion, eval_dataloader)
         individual_accuracies.append(task_acc)
 

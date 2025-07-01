@@ -138,6 +138,8 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
                 rotated_images.append(rotated_img)
 
             x_task = torch.stack(rotated_images)
+            # Flatten for consistent model input
+            x_task = x_task.view(x_task.size(0), -1)  # (N, 784)
 
             # Create dataset and dataloader
             dataset = TensorDataset(x_task, y_train_tensor)
@@ -165,16 +167,14 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
             x_task = x_train_tensor[task_mask]
             y_task = y_train_tensor[task_mask]
 
-            # Remap labels to continuous range starting from 0
-            y_task_remapped = torch.zeros_like(y_task)
-            for i, cls in enumerate(task_classes):
-                y_task_remapped[y_task == cls] = i
+            # Keep original labels (0-9) for consistent model output
+            # No remapping needed - model should handle all 10 classes
 
-            # Add channel dimension for consistency
-            x_task = x_task.unsqueeze(1)  # (N, 1, 28, 28)
+            # Flatten for consistent model input
+            x_task = x_task.view(x_task.size(0), -1)  # (N, 784)
 
             # Create dataset and dataloader
-            dataset = TensorDataset(x_task, y_task_remapped)
+            dataset = TensorDataset(x_task, y_task)
             dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
             task_dataloaders.append(dataloader)
 
@@ -205,7 +205,7 @@ if __name__ == "__main__":
             image = x[0]
             title_text = x[1]
             plt.subplot(rows, cols, index)
-            plt.imshow(image, cmap=plt.cm.gray)
+            plt.imshow(image, cmap='gray')
             if (title_text != ''):
                 plt.title(title_text, fontsize = 15);
             index += 1
