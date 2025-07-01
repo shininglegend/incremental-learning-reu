@@ -7,6 +7,10 @@ import pickle
 import os
 from datetime import datetime
 
+# NOTE: Many functions in this class are unused but kept for reference
+# Only create_per_task_accuracy_graph, create_cluster_visualization,
+# create_overall_accuracy_graph, and generate_simple_report are actively used
+
 class TAGemVisualizer:
     def __init__(self):
         self.task_accuracies = []
@@ -82,8 +86,13 @@ class TAGemVisualizer:
             return True
         return False
 
-    def create_main_dashboard(self):
+    def create_main_dashboard(self):  # UNUSED - kept for reference
         """Create the main analysis dashboard"""
+        # Validate data before creating visualizations
+        if not any([self.task_accuracies, self.memory_sizes, self.epoch_losses]):
+            print("Warning: No data available for main dashboard")
+            return None
+
         fig = make_subplots(
             rows=3, cols=2,
             subplot_titles=('Overall Performance Trajectory', 'Task-Specific Accuracy Evolution',
@@ -117,17 +126,19 @@ class TAGemVisualizer:
                 )
 
         # 2. Task-specific accuracy evolution
-        if self.per_task_accuracies:
+        if self.per_task_accuracies and len(self.per_task_accuracies) > 0:
             colors = px.colors.qualitative.Set1
-            for task_id in range(len(self.per_task_accuracies[0])):
+            max_tasks = max(len(accs) for accs in self.per_task_accuracies) if self.per_task_accuracies else 0
+            for task_id in range(max_tasks):
                 task_accs = [accs[task_id] if task_id < len(accs) else 0
                             for accs in self.per_task_accuracies]
-                fig.add_trace(
-                    go.Scatter(x=list(range(len(task_accs))), y=task_accs,
-                              mode='lines+markers', name=f'Task {task_id}',
-                              line=dict(color=colors[task_id % len(colors)], width=2)),
-                    row=1, col=2
-                )
+                if any(acc > 0 for acc in task_accs):  # Only plot if there's meaningful data
+                    fig.add_trace(
+                        go.Scatter(x=list(range(len(task_accs))), y=task_accs,
+                                  mode='lines+markers', name=f'Task {task_id}',
+                                  line=dict(color=colors[task_id % len(colors)], width=2)),
+                        row=1, col=2
+                    )
 
         # 3. Memory utilization and efficiency
         if self.memory_sizes:
@@ -150,13 +161,16 @@ class TAGemVisualizer:
         if self.epoch_losses:
             colors = px.colors.qualitative.Pastel1
             for task_id, losses in enumerate(self.epoch_losses):
-                if losses:
-                    fig.add_trace(
-                        go.Scatter(x=list(range(len(losses))), y=losses,
-                                  mode='lines', name=f'Task {task_id} Loss',
-                                  line=dict(color=colors[task_id % len(colors)])),
-                        row=2, col=2
-                    )
+                if losses and len(losses) > 0:
+                    # Ensure losses are valid numbers
+                    valid_losses = [l for l in losses if isinstance(l, (int, float)) and not np.isnan(l)]
+                    if valid_losses:
+                        fig.add_trace(
+                            go.Scatter(x=list(range(len(valid_losses))), y=valid_losses,
+                                      mode='lines', name=f'Task {task_id} Loss',
+                                      line=dict(color=colors[task_id % len(colors)])),
+                            row=2, col=2
+                        )
 
         # 5. Catastrophic forgetting heatmap
         if len(self.per_task_accuracies) > 1:
@@ -171,19 +185,28 @@ class TAGemVisualizer:
             )
 
         # 6. Training dynamics (batch loss smoothed)
-        if self.batch_losses:
-            batch_df = pd.DataFrame(self.batch_losses)
-            for task_id in batch_df['task'].unique():
-                task_data = batch_df[batch_df['task'] == task_id]
-                # Smooth with rolling average
-                if len(task_data) > 10:
-                    smoothed = task_data['loss'].rolling(window=10, center=True).mean()
-                    fig.add_trace(
-                        go.Scatter(x=range(len(smoothed)), y=smoothed,
-                                  mode='lines', name=f'Task {task_id} Smoothed',
-                                  line=dict(width=2)),
-                        row=3, col=2
-                    )
+        if self.batch_losses and len(self.batch_losses) > 0:
+            try:
+                batch_df = pd.DataFrame(self.batch_losses)
+                if not batch_df.empty and 'task' in batch_df.columns and 'loss' in batch_df.columns:
+                    for task_id in batch_df['task'].unique():
+                        task_data = batch_df[batch_df['task'] == task_id]
+                        # Smooth with rolling average
+                        if len(task_data) > 10:
+                            # Remove invalid values before smoothing
+                            task_data = task_data[task_data['loss'].notna()]
+                            if len(task_data) > 5:
+                                smoothed = task_data['loss'].rolling(window=min(10, len(task_data)), center=True).mean()
+                                smoothed = smoothed.dropna()
+                                if len(smoothed) > 0:
+                                    fig.add_trace(
+                                        go.Scatter(x=list(range(len(smoothed))), y=list(smoothed),
+                                                  mode='lines', name=f'Task {task_id} Smoothed',
+                                                  line=dict(width=2)),
+                                        row=3, col=2
+                                    )
+            except Exception as e:
+                print(f"Warning: Could not create batch loss visualization: {e}")
 
         # Update layout with professional styling
         fig.update_layout(
@@ -224,12 +247,16 @@ class TAGemVisualizer:
 
         return fig
 
-    def create_forgetting_analysis(self):
+    def create_forgetting_analysis(self):  # UNUSED - kept for reference
         """Create detailed catastrophic forgetting analysis"""
         if len(self.per_task_accuracies) < 2:
+            print("Warning: Need at least 2 tasks for forgetting analysis")
             return None
 
         forgetting_data = self._compute_detailed_forgetting()
+        if not forgetting_data or all(len(task_data) == 0 for task_data in forgetting_data):
+            print("Warning: No forgetting data available")
+            return None
 
         fig = make_subplots(
             rows=2, cols=2,
@@ -242,11 +269,12 @@ class TAGemVisualizer:
         # 1. Forgetting timeline
         for task_id in range(len(forgetting_data)):
             task_forget = [fd['forgetting'] for fd in forgetting_data[task_id]]
-            fig.add_trace(
-                go.Scatter(x=list(range(len(task_forget))), y=task_forget,
-                          mode='lines+markers', name=f'Task {task_id}'),
-                row=1, col=1
-            )
+            if task_forget:  # Only add if there's data
+                fig.add_trace(
+                    go.Scatter(x=list(range(len(task_forget))), y=task_forget,
+                              mode='lines+markers', name=f'Task {task_id}'),
+                    row=1, col=1
+                )
 
         # 2. Final vs Initial performance scatter
         initial_accs = []
@@ -315,9 +343,10 @@ class TAGemVisualizer:
 
         return fig
 
-    def create_memory_analysis(self):
+    def create_memory_analysis(self):  # UNUSED - kept for reference
         """Create memory utilization analysis"""
-        if not self.memory_sizes:
+        if not self.memory_sizes or len(self.memory_sizes) == 0:
+            print("Warning: No memory data available for analysis")
             return None
 
         fig = make_subplots(
@@ -371,7 +400,7 @@ class TAGemVisualizer:
 
         return fig
 
-    def _compute_forgetting_matrix(self):
+    def _compute_forgetting_matrix(self):  # UNUSED - kept for reference
         """Compute forgetting matrix for heatmap"""
         n_tasks = len(self.per_task_accuracies)
         forgetting_matrix = np.zeros((n_tasks, n_tasks))
@@ -387,7 +416,7 @@ class TAGemVisualizer:
 
         return forgetting_matrix
 
-    def _compute_detailed_forgetting(self):
+    def _compute_detailed_forgetting(self):  # UNUSED - kept for reference
         """Compute detailed forgetting data for analysis"""
         forgetting_data = []
 
@@ -410,37 +439,133 @@ class TAGemVisualizer:
 
         return forgetting_data
 
-    def generate_report(self, save_path=None):
+    def create_per_task_accuracy_graph(self):
+        """Create line graph showing accuracy per task over time, sampled per epoch"""
+        if not self.per_task_accuracies:
+            print("No per-task accuracy data available")
+            return None
+
+        plot_data = []
+        for task_id, task_accuracies in enumerate(self.per_task_accuracies):
+            for prev_task_id, accuracy in enumerate(task_accuracies):
+                plot_data.append({
+                    'Task_Learned': task_id,
+                    'Task_Evaluated': prev_task_id,
+                    'Accuracy': accuracy
+                })
+
+        df = pd.DataFrame(plot_data)
+        fig = px.line(df, x='Task_Learned', y='Accuracy', color='Task_Evaluated',
+                      title='Per-Task Accuracy Over Time',
+                      labels={'Task_Learned': 'Training Progress (Tasks Completed)',
+                             'Task_Evaluated': 'Task Being Evaluated'},
+                      range_y=[0.0, 1.0])
+        return fig
+
+    def create_cluster_visualization(self, clustering_memory):
+        """Create 3D visualization of cluster storage using ClusteringMechanism.visualize()"""
+        try:
+            clustering_memory.clustering_mechanism.visualize()
+        except Exception as e:
+            print(f"Error creating cluster visualization: {e}")
+
+    def create_overall_accuracy_graph(self):
+        """Create line graph showing overall accuracy over time, sampled per epoch"""
+        if not self.task_accuracies:
+            print("No overall accuracy data available")
+            return None
+
+        fig = px.line(x=range(len(self.task_accuracies)), y=self.task_accuracies,
+                     title='Overall Accuracy Over Time',
+                     labels={'x': 'Tasks Completed', 'y': 'Overall Accuracy'},
+                     range_y=[0.0, 1.0])
+        return fig
+
+    def generate_simple_report(self, clustering_memory, save_path=None):
+        """Generate simplified analysis with just 3 graphs"""
+        if not any([self.task_accuracies, self.per_task_accuracies]):
+            print("No data available for report generation")
+            return
+
+        print("Generating simplified visualizations...")
+
+        # Graph 1: Per-task accuracy over time
+        try:
+            per_task_fig = self.create_per_task_accuracy_graph()
+            if per_task_fig:
+                per_task_fig.show()
+                if save_path:
+                    per_task_fig.write_html(f"{save_path}_per_task_accuracy.html")
+                    print(f"Per-task accuracy graph saved to {save_path}_per_task_accuracy.html")
+        except Exception as e:
+            print(f"Error creating per-task accuracy graph: {e}")
+
+        # Graph 2: Cluster storage visualization
+        try:
+            print("Displaying cluster storage visualization...")
+            self.create_cluster_visualization(clustering_memory)
+        except Exception as e:
+            print(f"Error creating cluster visualization: {e}")
+
+        # Graph 3: Overall accuracy over time
+        try:
+            overall_fig = self.create_overall_accuracy_graph()
+            if overall_fig:
+                overall_fig.show()
+                if save_path:
+                    overall_fig.write_html(f"{save_path}_overall_accuracy.html")
+                    print(f"Overall accuracy graph saved to {save_path}_overall_accuracy.html")
+        except Exception as e:
+            print(f"Error creating overall accuracy graph: {e}")
+
+    def generate_report(self, save_path=None):  # UNUSED - kept for reference
         """Generate comprehensive analysis report"""
         if not any([self.task_accuracies, self.memory_sizes, self.epoch_losses]):
             print("No data available for report generation")
             return
 
+        print("Generating visualizations...")
+
         # Create main dashboard
-        main_fig = self.create_main_dashboard()
-        if main_fig:
-            main_fig.show()
-            if save_path:
-                main_fig.write_html(f"{save_path}_main_dashboard.html")
+        try:
+            main_fig = self.create_main_dashboard()
+            if main_fig:
+                main_fig.show()
+                if save_path:
+                    main_fig.write_html(f"{save_path}_main_dashboard.html")
+                    print(f"Main dashboard saved to {save_path}_main_dashboard.html")
+        except Exception as e:
+            print(f"Error creating main dashboard: {e}")
 
         # Create forgetting analysis
-        forget_fig = self.create_forgetting_analysis()
-        if forget_fig:
-            forget_fig.show()
-            if save_path:
-                forget_fig.write_html(f"{save_path}_forgetting_analysis.html")
+        try:
+            forget_fig = self.create_forgetting_analysis()
+            if forget_fig:
+                forget_fig.show()
+                if save_path:
+                    forget_fig.write_html(f"{save_path}_forgetting_analysis.html")
+                    print(f"Forgetting analysis saved to {save_path}_forgetting_analysis.html")
+        except Exception as e:
+            print(f"Error creating forgetting analysis: {e}")
 
         # Create memory analysis
-        memory_fig = self.create_memory_analysis()
-        if memory_fig:
-            memory_fig.show()
-            if save_path:
-                memory_fig.write_html(f"{save_path}_memory_analysis.html")
+        try:
+            memory_fig = self.create_memory_analysis()
+            if memory_fig:
+                memory_fig.show()
+                if save_path:
+                    memory_fig.write_html(f"{save_path}_memory_analysis.html")
+                    print(f"Memory analysis saved to {save_path}_memory_analysis.html")
+        except Exception as e:
+            print(f"Error creating memory analysis: {e}")
 
         # Print summary statistics
-        self._print_summary_stats()
+        try:
+            self._print_summary_stats()
+        except Exception as e:
+            print(f"Error printing summary stats: {e}")
 
-    def _print_summary_stats(self):
+    def _print_summary_stats(self):  # UNUSED - kept for reference
         """Print summary statistics"""
         print("\n" + "="*50)
         print("TA-A-GEM TRAINING SUMMARY")
@@ -481,10 +606,11 @@ if __name__ == "__main__":
     visualizer = TAGemVisualizer()
 
     # Simulate some training data
+    np.random.seed(42)  # For reproducible test data
     for task_id in range(5):
-        overall_acc = 0.8 - 0.1 * task_id + np.random.normal(0, 0.02)
-        individual_accs = [max(0.5, 0.9 - 0.05 * (task_id - i)) for i in range(task_id + 1)]
-        epoch_losses = [1.0 * np.exp(-0.1 * epoch) + np.random.normal(0, 0.01) for epoch in range(20)]
+        overall_acc = max(0.1, 0.8 - 0.05 * task_id + np.random.normal(0, 0.02))
+        individual_accs = [max(0.1, 0.9 - 0.03 * max(0, task_id - i)) for i in range(task_id + 1)]
+        epoch_losses = [max(0.01, 1.0 * np.exp(-0.1 * epoch) + np.random.normal(0, 0.01)) for epoch in range(20)]
         memory_size = min(100, 20 * (task_id + 1))
 
         visualizer.update_metrics(task_id, overall_acc, individual_accs, epoch_losses, memory_size)
@@ -492,7 +618,7 @@ if __name__ == "__main__":
         # Add some batch losses
         for epoch in range(5):
             for batch in range(10):
-                loss = epoch_losses[epoch] + np.random.normal(0, 0.05)
+                loss = max(0.01, epoch_losses[epoch] + np.random.normal(0, 0.05))
                 visualizer.add_batch_loss(task_id, epoch, batch, loss)
 
     # Generate report

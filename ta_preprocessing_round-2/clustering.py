@@ -67,3 +67,11 @@ class ClusteringMemory():
         """
         samples, _ = self.clustering_mechanism.get_clusters_with_labels()
         return len(samples)
+
+    def get_clustering_mechanism(self):
+        """Get access to the underlying clustering mechanism for visualization.
+
+        Returns:
+            ClusteringMechanism: The clustering mechanism instance
+        """
+        return self.clustering_mechanism

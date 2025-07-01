@@ -11,15 +11,17 @@ from visualization_analysis import TAGemVisualizer
 import time
 
 # --- 1. Configuration and Initialization ---
+QUICK_TEST_MODE = True  # Set to False for full training
+
 NUM_CLASSES = 10 # For MNIST
 INPUT_DIM = 784  # For MNIST (28*28)
 HIDDEN_DIM = 200 # As per paper
 MEMORY_SIZE_Q = 10 # Number of clusters (Q)
 MEMORY_SIZE_P = 3  # Max samples per cluster (P)
-BATCH_SIZE = 10    # As per paper
+BATCH_SIZE = 50 if QUICK_TEST_MODE else 10    # As per paper
 LEARNING_RATE = 1e-3
 NUM_EPOCHS = 20
-NUM_TASKS = 5 # Example: for permutation or rotation based tasks
+NUM_TASKS = 2 if QUICK_TEST_MODE else 5 # Example: for permutation or rotation based tasks
 
 # Define a simple MLP model
 class SimpleMLP(nn.Module):
@@ -59,7 +61,8 @@ agem_handler = agem.AGEMHandler(model, criterion, optimizer)
 # This function would encapsulate the permutation, rotation, or class split logic
 # It returns a list of data loaders, one for each task/domain
 task_dataloaders = mnist.prepare_domain_incremental_mnist(
-    task_type='permutation', num_tasks=NUM_TASKS, batch_size=BATCH_SIZE
+    task_type='permutation', num_tasks=NUM_TASKS, batch_size=BATCH_SIZE,
+    quick_test=QUICK_TEST_MODE
 )
 
 # --- Initialize comprehensive visualizer ---
@@ -103,7 +106,7 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
                 bar_length = 30
                 filled_length = int(bar_length * progress)
                 bar = '█' * filled_length + '-' * (bar_length - filled_length)
-                print(f'\rTask {task_id:3}, Epoch {epoch+1:>3}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(task_dataloader)})', end='', flush=True)
+                print(f'\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(task_dataloader)})', end='', flush=True)
 
         # Print newline after progress bar completion
         print()
@@ -149,7 +152,7 @@ print("\nGenerating comprehensive analysis...")
 timestamp = time.strftime("%Y%m%d_%H%M%S")
 visualizer.save_metrics(f"ta_agem_metrics_{timestamp}.pkl")
 
-# Generate comprehensive report with all visualizations
-visualizer.generate_report(f"ta_agem_analysis_{timestamp}")
+# Generate simplified report with 3 key visualizations
+visualizer.generate_simple_report(clustering_memory, f"ta_agem_analysis_{timestamp}")
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")

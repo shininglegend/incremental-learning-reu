@@ -62,7 +62,7 @@ class MnistDataloader(object):
         x_test, y_test = self.read_images_labels(self.test_images_filepath, self.test_labels_filepath)
         return (x_train, y_train),(x_test, y_test)
 
-def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size):
+def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_test=False):
     """Load and prepare MNIST data for domain-incremental learning
     This function would encapsulate the permutation, rotation, or class split logic.
     It returns a list of data loaders, one for each task/domain
@@ -71,13 +71,34 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size):
         task_type (str): One of 'permutation', 'rotation', 'class_split'
         num_tasks (int): Number of tasks to create
         batch_size (int): Batch size for DataLoaders
+        quick_test (bool): If True, use reduced dataset for faster testing
 
     Returns:
         list: List of DataLoader objects, one for each task
     """
+    # Load MNIST data
+    _mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath, test_images_filepath, test_labels_filepath)
+    (x_train, y_train), (x_test, y_test) = _mnist_dataloader.load_data()
+
+    # Convert list of numpy arrays to single numpy array before tensor conversion
+    x_train_array = np.array(x_train)
+    y_train_array = np.array(y_train)
+
     # Convert numpy arrays to tensors and normalize
-    x_train_tensor = torch.FloatTensor(x_train) / 255.0  # Normalize to [0,1]
-    y_train_tensor = torch.LongTensor(y_train)
+    x_train_tensor = torch.FloatTensor(x_train_array) / 255.0  # Normalize to [0,1]
+    y_train_tensor = torch.LongTensor(y_train_array)
+
+    # For quick testing, use only first 1000 samples per class
+    if quick_test:
+        quick_indices = []
+        for class_id in range(10):  # MNIST has 10 classes
+            class_mask = (y_train_tensor == class_id)
+            class_indices = torch.where(class_mask)[0][:1000]  # First 1000 samples
+            quick_indices.extend(class_indices.tolist())
+
+        quick_indices = torch.tensor(quick_indices)
+        x_train_tensor = x_train_tensor[quick_indices]
+        y_train_tensor = y_train_tensor[quick_indices]
 
     task_dataloaders = []
 
