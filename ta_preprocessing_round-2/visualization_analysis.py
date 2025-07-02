@@ -49,8 +49,8 @@ class TAGemVisualizer:
             'loss': loss
         })
 
-    def save_metrics(self, filepath):
-        """Save all metrics to file for later analysis"""
+    def save_metrics(self, filepath, params=None):
+        """Save all metrics and params to file for later analysis"""
         metrics = {
             'task_accuracies': self.task_accuracies,
             'per_task_accuracies': self.per_task_accuracies,
@@ -62,6 +62,9 @@ class TAGemVisualizer:
             'memory_efficiency': self.memory_efficiency,
             'timestamp': datetime.now().isoformat()
         }
+
+        if params:
+            metrics['params'] = params
 
         with open(filepath, 'wb') as f:
             pickle.dump(metrics, f)
@@ -463,9 +466,17 @@ class TAGemVisualizer:
         return fig
 
     def create_cluster_visualization(self, clustering_memory):
-        """Create 3D visualization of cluster storage using ClusteringMechanism.visualize()"""
+        """Create 3D visualization of cluster storage using multi-pool ClusteringMechanism.visualize()"""
         try:
-            clustering_memory.clustering_mechanism.visualize()
+            pools = clustering_memory.get_clustering_mechanism()
+            if not pools:
+                print("No clustering pools available for visualization")
+                return
+
+            print(f"Visualizing {len(pools)} clustering pools:")
+            for label, pool in pools.items():
+                print(f"Pool for label {label}:")
+                pool.visualize()
         except Exception as e:
             print(f"Error creating cluster visualization: {e}")
 

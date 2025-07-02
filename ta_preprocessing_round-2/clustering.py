@@ -1,46 +1,75 @@
-from ta_clustering.clustering_gemini import ClusteringMechanism
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'ta-clustering'))
+
+from clustering_gemini import ClusteringMechanism
 import numpy as np
 
-
 class ClusteringMemory():
-    def __init__(self, Q, P, input_type):
+    def __init__(self, Q, P, input_type, num_pools=10):
         """
-        Initialize clustering memory wrapper.
+        Initialize multi-pool clustering memory wrapper.
 
         Args:
-            Q (int): Maximum number of clusters
+            Q (int): Maximum number of clusters per pool
             P (int): Maximum samples per cluster
             input_type (str): Type of input ('samples' for TA-A-GEM)
+            num_pools (int): Number of separate pools (10 for permutation/rotation, 2 for class split)
         """
-        self.clustering_mechanism = ClusteringMechanism(Q=Q, P=P, dimensionality_reducer=None)
+        self.Q = Q
+        self.P = P
         self.input_type = input_type
+        self.num_pools = num_pools
 
-    def get_memory_samples(self):
-        """Returns all samples currently stored as tuples of (sample, label).
+        # Create separate clustering mechanisms for each pool (class label)
+        self.pools = {}
+        self.pool_labels = set()  # Track which labels we've seen
+
+    def _get_or_create_pool(self, label):
+        """Get clustering mechanism for a label, creating if needed.
+
+        Args:
+            label (int): Class label to get pool for
 
         Returns:
-            list: List of (sample, label) tuples
+            ClusteringMechanism: The clustering mechanism for this label
         """
-        samples, labels = self.clustering_mechanism.get_clusters_with_labels()
-        if len(samples) == 0:
-            return []
+        if label not in self.pools:
+            # Create new pool for this label
+            self.pools[label] = ClusteringMechanism(Q=self.Q, P=self.P, dimensionality_reducer=None)
+            self.pool_labels.add(label)
 
-        # Convert numpy arrays back to tensors and pair with labels
-        import torch
-        memory_samples = []
-        for sample, label in zip(samples, labels):
-            sample_tensor = torch.FloatTensor(sample)
-            label_tensor = torch.tensor(label) if label is not None else torch.tensor(0)
-            memory_samples.append((sample_tensor, label_tensor))
+        return self.pools[label]
 
-        return memory_samples
+    def get_memory_samples(self):
+        """Returns all samples currently stored across all pools as tuples of (sample, label).
+
+        Returns:
+            list: List of (sample, label) tuples from all pools
+        """
+        all_memory_samples = []
+
+        # Collect samples from all pools
+        for label, pool in self.pools.items():
+            samples, labels = pool.get_clusters_with_labels()
+            if len(samples) == 0:
+                continue
+
+            # Convert numpy arrays back to tensors and pair with labels
+            import torch
+            for sample, sample_label in zip(samples, labels):
+                sample_tensor = torch.FloatTensor(sample)
+                label_tensor = torch.tensor(sample_label) if sample_label is not None else torch.tensor(label)
+                all_memory_samples.append((sample_tensor, label_tensor))
+
+        return all_memory_samples
 
     def add_sample(self, sample_data, sample_label):
-        """Add a sample to the clustering memory.
+        """Add a sample to the appropriate pool based on its label.
 
         Args:
             sample_data: The sample to add (tensor or array)
-            sample_label: Label associated with the sample
+            sample_label: Label associated with the sample (determines which pool)
         """
         # Convert tensor to numpy if needed
         if hasattr(sample_data, 'detach'):
@@ -54,21 +83,46 @@ class ClusteringMemory():
         if hasattr(sample_label, 'item'):
             sample_label = sample_label.item()
 
-        self.clustering_mechanism.add(sample_data, sample_label)
+        # Get the appropriate pool for this label and add the sample
+        pool = self._get_or_create_pool(sample_label)
+        pool.add(sample_data, sample_label)
 
     def get_memory_size(self):
-        """Get the current number of samples stored in memory.
+        """Get the current number of samples stored across all pools.
 
         Returns:
-            int: Number of samples currently stored
+            int: Total number of samples currently stored across all pools
         """
-        samples, _ = self.clustering_mechanism.get_clusters_with_labels()
-        return len(samples)
+        total_samples = 0
+        for pool in self.pools.values():
+            samples, _ = pool.get_clusters_with_labels()
+            total_samples += len(samples)
+        return total_samples
+
+    def get_pool_sizes(self):
+        """Get the number of samples in each pool.
+
+        Returns:
+            dict: Mapping from label to number of samples in that pool
+        """
+        pool_sizes = {}
+        for label, pool in self.pools.items():
+            samples, _ = pool.get_clusters_with_labels()
+            pool_sizes[label] = len(samples)
+        return pool_sizes
 
     def get_clustering_mechanism(self):
-        """Get access to the underlying clustering mechanism for visualization.
+        """Get access to all clustering mechanisms for visualization.
 
         Returns:
-            ClusteringMechanism: The clustering mechanism instance
+            dict: Mapping from label to ClusteringMechanism instance
         """
-        return self.clustering_mechanism
+        return self.pools
+
+    def get_num_active_pools(self):
+        """Get the number of pools that have been created.
+
+        Returns:
+            int: Number of active pools
+        """
+        return len(self.pools)
