@@ -2,7 +2,6 @@
 import numpy as np
 import pandas
 from collections import deque
-from dim_reduction import IdentityReducer
 
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""

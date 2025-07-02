@@ -1,9 +1,5 @@
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'ta-clustering'))
-
 from clustering_gemini import ClusteringMechanism
-import numpy as np
+# import numpy as np
 
 class ClusteringMemory():
     def __init__(self, Q, P, input_type, num_pools=10):
