@@ -26,7 +26,7 @@ sys.stdout.flush()
 
 # If set to True, will w run less tasks and less data, and logs loss per batch
 # If set to False, will run full MNIST with 5 tasks and 10 epochs with normal progress bar
-QUICK_TEST_MODE = True
+QUICK_TEST_MODE = False
 
 NUM_CLASSES = 10 # For MNIST
 INPUT_DIM = 784  # For MNIST (28*28)
