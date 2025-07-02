@@ -11,7 +11,9 @@ from visualization_analysis import TAGemVisualizer
 import time
 
 # --- 1. Configuration and Initialization ---
-QUICK_TEST_MODE = False  # Set to False for full training
+# If set to True, will w run less tasks and less data, and logs loss per batch
+# If set to False, will run full MNIST with 5 tasks and 10 epochs with normal progress bar
+QUICK_TEST_MODE = False
 
 NUM_CLASSES = 10 # For MNIST
 INPUT_DIM = 784  # For MNIST (28*28)
@@ -134,10 +136,8 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
 
             num_batches += 1
 
-
-
             # Update progress bar every 50 batches or on last batch
-            if batch_idx % 50 == 0 or batch_idx == len(task_dataloader) - 1:
+            if not QUICK_TEST_MODE and (batch_idx % 50 == 0 or batch_idx == len(task_dataloader) - 1):
                 progress = (batch_idx + 1) / len(task_dataloader)
                 bar_length = 30
                 filled_length = int(bar_length * progress)
@@ -145,15 +145,15 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
                 print(f'\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(task_dataloader)})', end='', flush=True)
 
         # Print newline after progress bar completion
-        print()
+        if not QUICK_TEST_MODE: print()
 
         # Track epoch loss
         avg_epoch_loss = epoch_loss / max(num_batches, 1)
         task_epoch_losses.append(avg_epoch_loss)
 
         # Print epoch summary
-        # if epoch % 5 == 0 or epoch == NUM_EPOCHS - 1:
-        #     print(f'  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}')
+        if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
+            print(f'  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}')
 
     # Evaluate performance after each task
     model.eval()
