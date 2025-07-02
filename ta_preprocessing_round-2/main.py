@@ -2,18 +2,31 @@
 import agem
 import clustering
 import mnist
-# import torch
+import torch
 import torch.nn as nn
 import torch.optim as optim
 # import numpy as np
 # import pandas as pd
 from visualization_analysis import TAGemVisualizer
 import time
+import sys
+import os
 
 # --- 1. Configuration and Initialization ---
+# Device setup for SLURM/srun compatibility
+if torch.cuda.is_available():
+    # Use SLURM_LOCALID if available, otherwise use CUDA_VISIBLE_DEVICES or default to 0
+    local_rank = int(os.environ.get('SLURM_LOCALID', os.environ.get('LOCAL_RANK', '0')))
+    device = torch.device(f'cuda:{local_rank}')
+    print(f"Using GPU: {device}")
+else:
+    device = torch.device('cpu')
+    print("Using CPU")
+sys.stdout.flush()
+
 # If set to True, will w run less tasks and less data, and logs loss per batch
 # If set to False, will run full MNIST with 5 tasks and 10 epochs with normal progress bar
-QUICK_TEST_MODE = False
+QUICK_TEST_MODE = True
 
 NUM_CLASSES = 10 # For MNIST
 INPUT_DIM = 784  # For MNIST (28*28)
@@ -76,7 +89,7 @@ class SimpleMLP(nn.Module):
         return x
 
 # Initialize model, optimizer, and loss function
-model = SimpleMLP(INPUT_DIM, HIDDEN_DIM, NUM_CLASSES)
+model = SimpleMLP(INPUT_DIM, HIDDEN_DIM, NUM_CLASSES).to(device)
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
 
@@ -103,8 +116,10 @@ visualizer = TAGemVisualizer()
 
 # --- 2. Training Loop ---
 print("Starting TA-A-GEM training...")
+sys.stdout.flush()
 for task_id, task_dataloader in enumerate(task_dataloaders):
     print(f"\n--- Training on Task {task_id} ---")
+    sys.stdout.flush()
 
     task_start_time = time.time()
     task_epoch_losses = []
@@ -115,6 +130,9 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
         num_batches = 0
 
         for batch_idx, (data, labels) in enumerate(task_dataloader):
+            # Move data to device
+            data, labels = data.to(device), labels.to(device)
+
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
@@ -154,6 +172,7 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
         # Print epoch summary
         if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
             print(f'  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}')
+            sys.stdout.flush()
 
     # Evaluate performance after each task
     model.eval()
@@ -187,11 +206,14 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
     print(f"Memory Size: {memory_size} samples across {num_active_pools} active pools")
     print(f"Pool sizes: {pool_sizes}")
     print(f"Task Training Time: {task_time:.2f}s")
+    sys.stdout.flush()
 
 print("\nTA-A-GEM training complete.")
+sys.stdout.flush()
 
 # --- 3. Comprehensive Visualization and Analysis ---
 print("\nGenerating comprehensive analysis...")
+sys.stdout.flush()
 
 # Save metrics for future analysis
 timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -201,3 +223,4 @@ visualizer.save_metrics(f"test_results/ta_agem_metrics_{timestamp}.pkl", params=
 visualizer.generate_simple_report(clustering_memory)
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
+sys.stdout.flush()
