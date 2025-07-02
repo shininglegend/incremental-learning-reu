@@ -2,11 +2,11 @@ import torch
 import torch.nn.functional as F
 
 class AGEMHandler:
-    def __init__(self, model, criterion, optimizer):
+    def __init__(self, model, criterion, optimizer, batch_size=256):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
-        self.eps_mem_batch = 256  # Memory batch size for gradient computation
+        self.eps_mem_batch = batch_size  # Memory batch size for gradient computation
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
