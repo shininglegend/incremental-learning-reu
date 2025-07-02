@@ -37,7 +37,7 @@ class AGEMHandler:
             else:
                 param.grad = None
 
-        return torch.cat(grads) if grads else torch.tensor([])
+        return torch.cat(grads) if grads else torch.tensor([], device=next(self.model.parameters()).device)
 
     def project_gradient(self, current_grad, ref_grad):
         """Project current gradient to not increase loss on reference gradient"""
@@ -82,7 +82,7 @@ class AGEMHandler:
         for param in self.model.parameters():
             if param.grad is not None:
                 current_grad.append(param.grad.view(-1))
-        current_grad = torch.cat(current_grad) if current_grad else torch.tensor([])
+        current_grad = torch.cat(current_grad) if current_grad else torch.tensor([], device=next(self.model.parameters()).device)
 
         # If we have memory samples, compute reference gradient and project
         if memory_samples is not None and len(memory_samples) > 0:
@@ -104,7 +104,7 @@ class AGEMHandler:
 
                 if mem_data_list:
                     mem_data = torch.stack(mem_data_list)
-                    mem_labels = torch.stack(mem_labels_list) if isinstance(mem_labels_list[0], torch.Tensor) else torch.tensor(mem_labels_list)
+                    mem_labels = torch.stack(mem_labels_list) if isinstance(mem_labels_list[0], torch.Tensor) else torch.tensor(mem_labels_list, device=next(self.model.parameters()).device)
 
                     # Compute reference gradient on memory
                     ref_grad = self.compute_gradient(mem_data, mem_labels)
@@ -128,7 +128,7 @@ class AGEMHandler:
 
         return current_loss
 
-def evaluate_all_tasks(model, criterion, task_dataloaders):
+def evaluate_all_tasks(model, criterion, task_dataloaders, device=None):
     """Evaluate model on all tasks and return average accuracy"""
     model.eval()
     total_correct = 0
@@ -137,6 +137,8 @@ def evaluate_all_tasks(model, criterion, task_dataloaders):
     with torch.no_grad():
         for task_dataloader in task_dataloaders:
             for data, labels in task_dataloader:
+                if device is not None:
+                    data, labels = data.to(device), labels.to(device)
                 outputs = model(data)
                 _, predicted = torch.max(outputs.data, 1)
                 total_samples += labels.size(0)
@@ -144,7 +146,7 @@ def evaluate_all_tasks(model, criterion, task_dataloaders):
 
     return total_correct / total_samples if total_samples > 0 else 0.0
 
-def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
+def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id, device=None):
     """Evaluate model only on tasks seen so far"""
     model.eval()
     total_correct = 0
@@ -154,6 +156,8 @@ def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
         for task_id in range(current_task_id + 1):
             task_dataloader = task_dataloaders[task_id]
             for data, labels in task_dataloader:
+                if device is not None:
+                    data, labels = data.to(device), labels.to(device)
                 outputs = model(data)
                 _, predicted = torch.max(outputs.data, 1)
                 total_samples += labels.size(0)
@@ -161,7 +165,7 @@ def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
 
     return total_correct / total_samples if total_samples > 0 else 0.0
 
-def evaluate_single_task(model, criterion, task_dataloader):
+def evaluate_single_task(model, criterion, task_dataloader, device=None):
     """Evaluate model on a single task and return accuracy"""
     model.eval()
     total_correct = 0
@@ -169,6 +173,8 @@ def evaluate_single_task(model, criterion, task_dataloader):
 
     with torch.no_grad():
         for data, labels in task_dataloader:
+            if device is not None:
+                data, labels = data.to(device), labels.to(device)
             outputs = model(data)
             _, predicted = torch.max(outputs.data, 1)
             total_samples += labels.size(0)

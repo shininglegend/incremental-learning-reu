@@ -136,7 +136,7 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
-            batch_loss = agem_handler.optimize(data, labels, clustering_memory.get_memory_samples())
+            batch_loss = agem_handler.optimize(data, labels, clustering_memory.get_memory_samples(device))
 
             # Track batch loss
             if batch_loss is not None:
@@ -176,13 +176,13 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
 
     # Evaluate performance after each task
     model.eval()
-    avg_accuracy = agem.evaluate_tasks_up_to(model, criterion, task_dataloaders, task_id)
+    avg_accuracy = agem.evaluate_tasks_up_to(model, criterion, task_dataloaders, task_id, device)
 
     # Evaluate on individual tasks for detailed tracking
     individual_accuracies = []
     for eval_task_id in range(task_id + 1):
         eval_dataloader = task_dataloaders[eval_task_id]
-        task_acc = agem.evaluate_single_task(model, criterion, eval_dataloader)
+        task_acc = agem.evaluate_single_task(model, criterion, eval_dataloader, device)
         individual_accuracies.append(task_acc)
 
     # Calculate training time for this task

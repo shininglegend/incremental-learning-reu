@@ -41,8 +41,11 @@ class ClusteringMemory():
 
         return self.pools[label]
 
-    def get_memory_samples(self):
+    def get_memory_samples(self, device=None):
         """Returns all samples currently stored across all pools as tuples of (sample, label).
+
+        Args:
+            device: The device to place tensors on (e.g., 'cuda:0', 'cpu'). If None, uses CPU.
 
         Returns:
             list: List of (sample, label) tuples from all pools
@@ -59,7 +62,12 @@ class ClusteringMemory():
             import torch
             for sample, sample_label in zip(samples, labels):
                 sample_tensor = torch.FloatTensor(sample)
-                label_tensor = torch.tensor(sample_label) if sample_label is not None else torch.tensor(label)
+                label_tensor = torch.tensor(sample_label, device=device) if sample_label is not None else torch.tensor(label, device=device)
+                
+                # Move tensors to the specified device
+                if device is not None:
+                    sample_tensor = sample_tensor.to(device)
+                
                 all_memory_samples.append((sample_tensor, label_tensor))
 
         return all_memory_samples
