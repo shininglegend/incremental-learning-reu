@@ -1,4 +1,6 @@
-# Code written by Gemini 2.5 Flash. Edited by Titus
+# Code written by Gemini 2.5 Flash.
+# Edited by Titus Murphy and Abigail Dodd
+import math
 import agem
 import clustering
 import mnist
@@ -10,8 +12,8 @@ import pandas as pd
 from visualization_analysis import TAGemVisualizer
 import time
 
-# --- 1. Configuration and Initialization ---
-QUICK_TEST_MODE = True  # Set to False for full training
+# ---  Configuration and Initialization ---
+QUICK_TEST_MODE = True  # Set to True for abbreviated training
 
 NUM_CLASSES = 10 # For MNIST
 INPUT_DIM = 784  # For MNIST (28*28)
@@ -22,6 +24,7 @@ BATCH_SIZE = 50 if QUICK_TEST_MODE else 10    # As per paper
 LEARNING_RATE = 1e-3
 NUM_EPOCHS = 20
 NUM_TASKS = 2 if QUICK_TEST_MODE else 5 # Example: for permutation or rotation based tasks
+
 
 # Define a simple MLP model
 class SimpleMLP(nn.Module):
@@ -45,6 +48,14 @@ class SimpleMLP(nn.Module):
         x = self.relu2(x)
         x = self.fc3(x)
         return x
+
+
+def print_program_runtime():
+    run_time = time.time() - program_start_time
+    run_time_minutes = math.floor(run_time / 60)
+    run_time_seconds = run_time - run_time_minutes*60
+    print(f"It took {run_time_minutes}min and {run_time_seconds:.2f}s.")
+
 
 # Initialize model, optimizer, and loss function
 model = SimpleMLP(INPUT_DIM, HIDDEN_DIM, NUM_CLASSES)
@@ -72,8 +83,9 @@ task_dataloaders = mnist.prepare_domain_incremental_mnist(
 # --- Initialize comprehensive visualizer ---
 visualizer = TAGemVisualizer()
 
-# --- 2. Training Loop ---
+# ---  Training Loop ---
 print("Starting TA-A-GEM training...")
+program_start_time = time.time()
 for task_id, task_dataloader in enumerate(task_dataloaders):
     print(f"\n--- Training on Task {task_id} ---")
 
@@ -96,8 +108,6 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
-
-
             # Step 2: Update the clustered memory with current batch samples
             # This is where the core clustering for TA-A-GEM happens
             for i in range(len(data)):
@@ -106,8 +116,6 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
                 clustering_memory.add_sample(sample_data, sample_label) # Add sample to clusters
 
             num_batches += 1
-
-
 
             # Update progress bar every 50 batches or on last batch
             # if batch_idx % 50 == 0 or batch_idx == len(task_dataloader) - 1:
@@ -158,15 +166,16 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
     print(f"Task Training Time: {task_time:.2f}s")
 
 print("\nTA-A-GEM training complete.")
+print_program_runtime()
 
 # --- 3. Comprehensive Visualization and Analysis ---
 print("\nGenerating comprehensive analysis...")
 
 # Save metrics for future analysis
 timestamp = time.strftime("%Y%m%d_%H%M%S")
-visualizer.save_metrics(f"test_results/ta_agem_metrics_{timestamp}.pkl")
+visualizer.save_metrics(f"ta_agem_metrics_{timestamp}.pkl")
 
 # Generate simplified report with 3 key visualizations
-visualizer.generate_simple_report(clustering_memory)
+visualizer.generate_simple_report(clustering_memory, f"ta_agem_analysis_{timestamp}")
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
