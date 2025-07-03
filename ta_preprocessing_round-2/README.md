@@ -18,12 +18,13 @@ The implementation consists of several key components:
 - **`main.py`**: Main training loop and experiment orchestration
 - **`agem.py`**: A-GEM gradient projection implementation
 - **`clustering.py`**: Multi-pool clustering memory management
-- **`mnist.py`**: MNIST data loading and task generation
+    - **Multi-pool management**: Separate clustering pools per class/task type
+- **`load_dataset.py`**: Abstract data loading and task generation
 - **`visualization_analysis.py`**: Comprehensive analysis and visualization tools
+- **`clustering_gemini.py`** for core clustering algorithms
 
 ### Dependencies
-- **External clustering**: Uses `ta-clustering/clustering_gemini.py` for core clustering algorithms
-- **Multi-pool management**: Separate clustering pools per class/task type
+- See the \*_env.yml files for dependencies.
 
 ## Installation
 
@@ -43,16 +44,10 @@ conda env create -f mac_env.yml
 conda activate ta-a-gem
 ```
 
-### Manual Installation
-If conda environments fail, install key dependencies manually:
-```bash
-pip install torch torchvision numpy pandas matplotlib plotly scikit-learn kagglehub
-```
-
 ### Dataset Setup
-The code automatically downloads MNIST via kagglehub. If you encounter issues:
-1. Manually download from: https://www.kaggle.com/datasets/hojjatk/mnist-dataset
-2. Update the `path` variable in `mnist.py` with your local path
+The code automatically downloads the datasets via kagglehub. If you encounter issues:
+1. Manually download the correct dataset from: https://www.kaggle.com/
+2. Update the `path` variable in the relevant dataset file with your path.
 
 ## Usage
 
@@ -60,7 +55,8 @@ The code automatically downloads MNIST via kagglehub. If you encounter issues:
 
 **Quick Test Mode (Recommended for initial testing):**
 ```bash
-python main.py
+# Edit main.py and set QUICK_TEST_MODE = True
+python3 main.py
 ```
 - Runs 2 tasks with reduced dataset
 - 20 epochs per task
@@ -70,9 +66,9 @@ python main.py
 **Full Experiment Mode:**
 ```bash
 # Edit main.py and set QUICK_TEST_MODE = False
-python main.py
+python3 main.py
 ```
-- Runs 5 tasks with full MNIST dataset
+- Runs 5 tasks with full dataset
 - 20 epochs per task
 - Progress bar display
 - Complete experimental setup
@@ -89,16 +85,16 @@ TASK_TYPE = 'permutation'  # 'permutation', 'rotation', or 'class_split'
 
 #### Model Architecture
 ```python
-INPUT_DIM = 784      # MNIST flattened (28*28)
-HIDDEN_DIM = 200     # Hidden layer size (as per paper)
-NUM_CLASSES = 10     # MNIST classes
+INPUT_DIM = 784      # flattened (28*28)
+NUM_CLASSES = 10     # incoming classes
+HIDDEN_DIM = 200     # Hidden layer size for MLP (as per paper)
 ```
 
 #### Memory Configuration
 ```python
 MEMORY_SIZE_Q = 10   # Clusters per pool (Q)
 MEMORY_SIZE_P = 3    # Max samples per cluster (P)
-NUM_POOLS = 10       # Number of memory pools
+NUM_POOLS = 10       # Number of memory pools (tied to task_type)
 ```
 
 #### Training Parameters
@@ -115,7 +111,7 @@ NUM_EPOCHS = 20      # Epochs per task
 TASK_TYPE = 'permutation'
 NUM_POOLS = 10  # 10 pools for permutation tasks
 ```
-- Applies random pixel permutations to MNIST images
+- Applies random pixel permutations to dataset images
 - Each task uses a different fixed permutation
 - Tests model's ability to handle input transformation
 
@@ -124,7 +120,7 @@ NUM_POOLS = 10  # 10 pools for permutation tasks
 TASK_TYPE = 'rotation'
 NUM_POOLS = 10  # 10 pools for rotation tasks
 ```
-- Rotates MNIST images by different angles
+- Rotates dataset images by different angles
 - Angles distributed evenly across tasks
 - Tests spatial invariance learning
 
@@ -133,7 +129,7 @@ NUM_POOLS = 10  # 10 pools for rotation tasks
 TASK_TYPE = 'class_split'
 NUM_POOLS = 2   # 2 pools for class split tasks
 ```
-- Splits 10 MNIST classes across tasks
+- Splits 10 dataset classes across tasks
 - Each task contains subset of classes
 - Tests class-incremental learning
 
@@ -152,9 +148,8 @@ def optimize(self, data, labels, memory_samples=None):
 ```
 
 **Key features:**
-- Gradient computation without model state corruption
+- Gradient computation without model state corruption (hopefully)
 - Dot product-based projection
-- Fallback to standard SGD when memory unavailable
 
 ### Multi-Pool Clustering Memory
 
@@ -169,16 +164,16 @@ def add_sample(self, sample_data, sample_label):
 
 **Architecture:**
 - Separate clustering pools per class/task
-- Dynamic pool creation as new classes encountered
+- Dynamic pool creation as new classes encountered, limit NUM_POOLS
 - Configurable cluster count (Q) and samples per cluster (P)
 
 ### Task Data Generation
 
-The `prepare_domain_incremental_mnist` function creates task-specific datasets:
+The `prepare_domain_incremental_data` function creates task-specific datasets:
 
 **Permutation Tasks:**
 - Generates unique random permutations
-- Applies to flattened MNIST images
+- Applies to flattened dataset images
 - Preserves original labels
 
 **Rotation Tasks:**
@@ -210,7 +205,7 @@ Memory Size: 450 samples across 8 active pools
 Task 0, Epoch  1/20: |██████████████████████████████| 100.0% (600/600)
 After Task 0, Average Accuracy: 0.8567
 Memory Size: 450 samples across 8 active pools
-Pool sizes: {0: 56, 1: 62, 2: 48, ...}
+Pool sizes: (should be maxed at P)
 ```
 
 ### Comprehensive Visualization
@@ -296,12 +291,11 @@ python main.py
 
 **Dataset Download Issues:**
 - Check internet connection
-- Manually download MNIST dataset
-- Update `path` variable in `mnist.py`
+- Manually download dataset
+- Update `path` variable
 
 **Import Errors:**
 - Verify conda environment activation
-- Check that `ta-clustering` directory exists
 - Install missing dependencies manually
 
 ### Debug Mode
@@ -314,9 +308,6 @@ Use VS code debugging. You will need to select the correct python interpreter in
 ```python
 # Run with minimal configuration
 QUICK_TEST_MODE = True
-NUM_TASKS = 2
-NUM_EPOCHS = 5
-BATCH_SIZE = 32
 ```
 
 ## Algorithm Details
@@ -386,13 +377,7 @@ class YourCustomModel(nn.Module):
 
 ### Different Datasets
 
-Implement new data loading in similar format to `mnist.py`:
-```python
-def prepare_domain_incremental_dataset(dataset_name, task_type, ...):
-    # Load your dataset
-    # Create task-specific transformations
-    # Return list of DataLoaders
-```
+Implement new data loading using abstract classes in `load_dataset.py`
 
 ## Acknowledgments
 
