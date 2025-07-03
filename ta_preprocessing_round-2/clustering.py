@@ -2,7 +2,7 @@ from clustering_gemini import ClusteringMechanism
 # import numpy as np
 
 class ClusteringMemory():
-    def __init__(self, Q, P, input_type, num_pools=10):
+    def __init__(self, Q, P, input_type, device, num_pools=10):
         """
         Initialize multi-pool clustering memory wrapper.
 
@@ -11,7 +11,9 @@ class ClusteringMemory():
             P (int): Maximum samples per cluster
             input_type (str): Type of input ('samples' for TA-A-GEM)
             num_pools (int): Number of separate pools (10 for permutation/rotation, 2 for class split)
+            device: PyTorch device to use for tensor creation
         """
+        self.device = device
         self.Q = Q
         self.P = P
         self.input_type = input_type
@@ -54,8 +56,8 @@ class ClusteringMemory():
             # Convert numpy arrays back to tensors and pair with labels
             import torch
             for sample, sample_label in zip(samples, labels):
-                sample_tensor = torch.FloatTensor(sample)
-                label_tensor = torch.tensor(sample_label) if sample_label is not None else torch.tensor(label)
+                sample_tensor = torch.FloatTensor(sample).to(self.device)
+                label_tensor = torch.tensor(sample_label).to(self.device) if sample_label is not None else torch.tensor(label).to(self.device)
                 all_memory_samples.append((sample_tensor, label_tensor))
 
         return all_memory_samples

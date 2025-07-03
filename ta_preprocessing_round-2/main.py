@@ -2,7 +2,7 @@
 import agem
 import clustering
 import mnist
-# import torch
+import torch
 import torch.nn as nn
 import torch.optim as optim
 # import numpy as np
@@ -11,6 +11,10 @@ from visualization_analysis import TAGemVisualizer
 import time
 
 # --- 1. Configuration and Initialization ---
+# Device configuration - use GPU if available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
 # If set to True, will w run less tasks and less data, and logs loss per batch
 # If set to False, will run full MNIST with 5 tasks and 10 epochs with normal progress bar
 QUICK_TEST_MODE = False
@@ -76,19 +80,19 @@ class SimpleMLP(nn.Module):
         return x
 
 # Initialize model, optimizer, and loss function
-model = SimpleMLP(INPUT_DIM, HIDDEN_DIM, NUM_CLASSES)
+model = SimpleMLP(INPUT_DIM, HIDDEN_DIM, NUM_CLASSES).to(device)
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
 
 # Initialize TA-A-GEM components with multi-pool architecture
 # Clustering_memory will manage the episodic memory with separate pools per class
 clustering_memory = clustering.ClusteringMemory(
-    Q=CLUSTERS_PER_POOL, P=MEMORY_SIZE_P, input_type='samples', num_pools=NUM_POOLS
+    Q=CLUSTERS_PER_POOL, P=MEMORY_SIZE_P, input_type='samples', device=device, num_pools=NUM_POOLS
 )
 
 # A-GEM wrapper/class for gradient projection logic
 # It needs to access the memory managed by clustering_memory
-agem_handler = agem.AGEMHandler(model, criterion, optimizer)
+agem_handler = agem.AGEMHandler(model, criterion, optimizer, device=device)
 
 # Load and prepare MNIST data for domain-incremental learning
 # This function would encapsulate the permutation, rotation, or class split logic
@@ -115,6 +119,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         num_batches = 0
 
         for batch_idx, (data, labels) in enumerate(train_dataloader):
+            # Move data to device
+            data, labels = data.to(device), labels.to(device)
+
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
@@ -130,8 +137,8 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Step 2: Update the clustered memory with current batch samples
             # This is where the core clustering for TA-A-GEM happens
             for i in range(len(data)):
-                sample_data = data[i]
-                sample_label = labels[i]
+                sample_data = data[i].cpu()  # Move to CPU for memory storage
+                sample_label = labels[i].cpu()  # Move to CPU for memory storage
                 clustering_memory.add_sample(sample_data, sample_label) # Add sample to clusters
 
             num_batches += 1
@@ -157,13 +164,13 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
     # Evaluate performance after each task on TEST DATA
     model.eval()
-    avg_accuracy = agem.evaluate_tasks_up_to(model, criterion, test_dataloaders, task_id)
+    avg_accuracy = agem.evaluate_tasks_up_to(model, criterion, test_dataloaders, task_id, device=device)
 
     # Evaluate on individual tasks for detailed tracking
     individual_accuracies = []
     for eval_task_id in range(task_id + 1):
         eval_dataloader = test_dataloaders[eval_task_id]
-        task_acc = agem.evaluate_single_task(model, criterion, eval_dataloader)
+        task_acc = agem.evaluate_single_task(model, criterion, eval_dataloader, device=device)
         individual_accuracies.append(task_acc)
 
     # Calculate training time for this task

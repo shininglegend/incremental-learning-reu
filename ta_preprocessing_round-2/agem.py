@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 class AGEMHandler:
-    def __init__(self, model, criterion, optimizer, batch_size=256):
+    def __init__(self, model, criterion, optimizer, device, batch_size=256):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -10,6 +10,9 @@ class AGEMHandler:
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
+        # Move data to device
+        data, labels = data.to(self.device), labels.to(self.device)
+
         # Save current gradients
         current_grads = []
         for param in self.model.parameters():
@@ -37,7 +40,7 @@ class AGEMHandler:
             else:
                 param.grad = None
 
-        return torch.cat(grads) if grads else torch.tensor([])
+        return torch.cat(grads) if grads else torch.tensor([]).to(self.device)
 
     def project_gradient(self, current_grad, ref_grad):
         """Project current gradient to not increase loss on reference gradient"""
@@ -103,8 +106,8 @@ class AGEMHandler:
                     mem_labels_list.append(sample_label)
 
                 if mem_data_list:
-                    mem_data = torch.stack(mem_data_list)
-                    mem_labels = torch.stack(mem_labels_list) if isinstance(mem_labels_list[0], torch.Tensor) else torch.tensor(mem_labels_list)
+                    mem_data = torch.stack(mem_data_list).to(self.device)
+                    mem_labels = torch.stack(mem_labels_list).to(self.device) if isinstance(mem_labels_list[0], torch.Tensor) else torch.tensor(mem_labels_list).to(self.device)
 
                     # Compute reference gradient on memory
                     ref_grad = self.compute_gradient(mem_data, mem_labels)
@@ -128,7 +131,7 @@ class AGEMHandler:
 
         return current_loss
 
-def evaluate_all_tasks(model, criterion, task_dataloaders):
+def evaluate_all_tasks(model, criterion, task_dataloaders, device):
     """Evaluate model on all tasks using test data and return average accuracy"""
     model.eval()
     total_correct = 0
@@ -137,6 +140,7 @@ def evaluate_all_tasks(model, criterion, task_dataloaders):
     with torch.no_grad():
         for task_dataloader in task_dataloaders:
             for data, labels in task_dataloader:
+                data, labels = data.to(device), labels.to(device)
                 outputs = model(data)
                 _, predicted = torch.max(outputs.data, 1)
                 total_samples += labels.size(0)
@@ -144,7 +148,7 @@ def evaluate_all_tasks(model, criterion, task_dataloaders):
 
     return total_correct / total_samples if total_samples > 0 else 0.0
 
-def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
+def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id, device):
     """Evaluate model only on tasks seen so far using test data"""
     model.eval()
     total_correct = 0
@@ -154,6 +158,7 @@ def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
         for task_id in range(current_task_id + 1):
             task_dataloader = task_dataloaders[task_id]
             for data, labels in task_dataloader:
+                data, labels = data.to(device), labels.to(device)
                 outputs = model(data)
                 _, predicted = torch.max(outputs.data, 1)
                 total_samples += labels.size(0)
@@ -161,7 +166,7 @@ def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
 
     return total_correct / total_samples if total_samples > 0 else 0.0
 
-def evaluate_single_task(model, criterion, task_dataloader):
+def evaluate_single_task(model, criterion, task_dataloader, device):
     """Evaluate model on a single task using test data and return accuracy"""
     model.eval()
     total_correct = 0
@@ -169,6 +174,7 @@ def evaluate_single_task(model, criterion, task_dataloader):
 
     with torch.no_grad():
         for data, labels in task_dataloader:
+            data, labels = data.to(device), labels.to(device)
             outputs = model(data)
             _, predicted = torch.max(outputs.data, 1)
             total_samples += labels.size(0)

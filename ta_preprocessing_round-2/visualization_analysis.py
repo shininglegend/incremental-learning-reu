@@ -473,12 +473,11 @@ class TAGemVisualizer:
                 print("No clustering pools available for visualization")
                 return
 
-            print(f"Visualizing {len(pools)} clustering pools:")
+            print(f"Visualizing {clusters_to_show}/{len(pools)} clustering pools:")
             i=0
             for label, pool in pools.items():
                 if i >= clusters_to_show:
                     break
-                print(f"Pool for label {label}:")
                 pool.visualize()
                 i += 1
         except Exception as e:
