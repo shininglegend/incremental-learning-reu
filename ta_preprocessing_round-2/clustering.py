@@ -70,7 +70,7 @@ class ClusteringMemory():
             sample_label: Label associated with the sample (determines which pool)
         """
 
-        assert isinstance(sample_data, np.ndarray), "sample_data must be a numpy array or tensor"
+        assert not isinstance(sample_data, np.ndarray), "sample_data must be a numpy array or tensor"
         # Convert tensor to numpy if needed
         if hasattr(sample_data, 'detach'):
             sample_data = sample_data.detach().cpu().numpy()
