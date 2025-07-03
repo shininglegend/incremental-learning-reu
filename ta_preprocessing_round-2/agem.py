@@ -129,7 +129,7 @@ class AGEMHandler:
         return current_loss
 
 def evaluate_all_tasks(model, criterion, task_dataloaders):
-    """Evaluate model on all tasks and return average accuracy"""
+    """Evaluate model on all tasks using test data and return average accuracy"""
     model.eval()
     total_correct = 0
     total_samples = 0
@@ -145,7 +145,7 @@ def evaluate_all_tasks(model, criterion, task_dataloaders):
     return total_correct / total_samples if total_samples > 0 else 0.0
 
 def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
-    """Evaluate model only on tasks seen so far"""
+    """Evaluate model only on tasks seen so far using test data"""
     model.eval()
     total_correct = 0
     total_samples = 0
@@ -162,7 +162,7 @@ def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id):
     return total_correct / total_samples if total_samples > 0 else 0.0
 
 def evaluate_single_task(model, criterion, task_dataloader):
-    """Evaluate model on a single task and return accuracy"""
+    """Evaluate model on a single task using test data and return accuracy"""
     model.eval()
     total_correct = 0
     total_samples = 0

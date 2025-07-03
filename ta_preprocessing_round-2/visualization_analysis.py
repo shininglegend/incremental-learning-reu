@@ -465,7 +465,7 @@ class TAGemVisualizer:
                       range_y=[0.0, 1.0])
         return fig
 
-    def create_cluster_visualization(self, clustering_memory):
+    def create_cluster_visualization(self, clustering_memory, clusters_to_show):
         """Create 3D visualization of cluster storage using multi-pool ClusteringMechanism.visualize()"""
         try:
             pools = clustering_memory.get_clustering_mechanism()
@@ -474,9 +474,13 @@ class TAGemVisualizer:
                 return
 
             print(f"Visualizing {len(pools)} clustering pools:")
+            i=0
             for label, pool in pools.items():
+                if i >= clusters_to_show:
+                    break
                 print(f"Pool for label {label}:")
                 pool.visualize()
+                i += 1
         except Exception as e:
             print(f"Error creating cluster visualization: {e}")
 
@@ -492,7 +496,7 @@ class TAGemVisualizer:
                      range_y=[0.0, 1.0])
         return fig
 
-    def generate_simple_report(self, clustering_memory, save_path=None):
+    def generate_simple_report(self, clustering_memory, clusters_to_show=1, save_path=None):
         """Generate simplified analysis with just 3 graphs"""
         if not any([self.task_accuracies, self.per_task_accuracies]):
             print("No data available for report generation")
@@ -514,7 +518,7 @@ class TAGemVisualizer:
         # Graph 2: Cluster storage visualization
         try:
             print("Displaying cluster storage visualization...")
-            self.create_cluster_visualization(clustering_memory)
+            self.create_cluster_visualization(clustering_memory, clusters_to_show)
         except Exception as e:
             print(f"Error creating cluster visualization: {e}")
 

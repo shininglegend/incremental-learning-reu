@@ -65,7 +65,7 @@ class MnistDataloader(object):
 def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_test=False):
     """Load and prepare MNIST data for domain-incremental learning
     This function would encapsulate the permutation, rotation, or class split logic.
-    It returns a list of data loaders, one for each task/domain
+    It returns lists of train and test data loaders, one for each task/domain
 
     Args:
         task_type (str): One of 'permutation', 'rotation', 'class_split'
@@ -74,7 +74,7 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
         quick_test (bool): If True, use reduced dataset for faster testing
 
     Returns:
-        list: List of DataLoader objects, one for each task
+        tuple: (train_dataloaders, test_dataloaders) - Lists of DataLoader objects
     """
     # Load MNIST data
     _mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath, test_images_filepath, test_labels_filepath)
@@ -83,24 +83,39 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
     # Convert list of numpy arrays to single numpy array before tensor conversion
     x_train_array = np.array(x_train)
     y_train_array = np.array(y_train)
+    x_test_array = np.array(x_test)
+    y_test_array = np.array(y_test)
 
     # Convert numpy arrays to tensors and normalize
     x_train_tensor = torch.FloatTensor(x_train_array) / 255.0  # Normalize to [0,1]
     y_train_tensor = torch.LongTensor(y_train_array)
+    x_test_tensor = torch.FloatTensor(x_test_array) / 255.0  # Normalize to [0,1]
+    y_test_tensor = torch.LongTensor(y_test_array)
 
     # For quick testing, use only first 1000 samples per class
     if quick_test:
-        quick_indices = []
+        quick_train_indices = []
+        quick_test_indices = []
         for class_id in range(10):  # MNIST has 10 classes
+            # Training data
             class_mask = (y_train_tensor == class_id)
             class_indices = torch.where(class_mask)[0][:1000]  # First 1000 samples
-            quick_indices.extend(class_indices.tolist())
+            quick_train_indices.extend(class_indices.tolist())
 
-        quick_indices = torch.tensor(quick_indices)
-        x_train_tensor = x_train_tensor[quick_indices]
-        y_train_tensor = y_train_tensor[quick_indices]
+            # Test data
+            class_mask = (y_test_tensor == class_id)
+            class_indices = torch.where(class_mask)[0][:200]  # First 200 test samples
+            quick_test_indices.extend(class_indices.tolist())
 
-    task_dataloaders = []
+        quick_train_indices = torch.tensor(quick_train_indices)
+        quick_test_indices = torch.tensor(quick_test_indices)
+        x_train_tensor = x_train_tensor[quick_train_indices]
+        y_train_tensor = y_train_tensor[quick_train_indices]
+        x_test_tensor = x_test_tensor[quick_test_indices]
+        y_test_tensor = y_test_tensor[quick_test_indices]
+
+    train_dataloaders = []
+    test_dataloaders = []
 
     if task_type == 'permutation':
         # Generate unique permutations for each task
@@ -112,14 +127,21 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
             perm = torch.randperm(num_pixels)
             permutations.append(perm)
 
-            # Flatten images and apply permutation
-            x_task = x_train_tensor.view(-1, num_pixels)  # Flatten to (N, 784)
-            x_task = x_task[:, perm]  # Apply permutation
+            # Flatten images and apply permutation - TRAIN
+            x_train_task = x_train_tensor.view(-1, num_pixels)  # Flatten to (N, 784)
+            x_train_task = x_train_task[:, perm]  # Apply permutation
 
-            # Create dataset and dataloader
-            dataset = TensorDataset(x_task, y_train_tensor)
-            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-            task_dataloaders.append(dataloader)
+            # Flatten images and apply permutation - TEST
+            x_test_task = x_test_tensor.view(-1, num_pixels)  # Flatten to (N, 784)
+            x_test_task = x_test_task[:, perm]  # Apply permutation
+
+            # Create datasets and dataloaders
+            train_dataset = TensorDataset(x_train_task, y_train_tensor)
+            test_dataset = TensorDataset(x_test_task, y_test_tensor)
+            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataloaders.append(train_dataloader)
+            test_dataloaders.append(test_dataloader)
 
     elif task_type == 'rotation':
         # Generate rotation angles for each task
@@ -128,23 +150,39 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
         for task_id in range(num_tasks):
             angle = angles[task_id]
 
-            # Rotate images - need to convert to proper format for rotation
-            x_task = x_train_tensor.unsqueeze(1)  # Add channel dimension (N, 1, 28, 28)
+            # Rotate train images - need to convert to proper format for rotation
+            x_train_task = x_train_tensor.unsqueeze(1)  # Add channel dimension (N, 1, 28, 28)
 
-            # Apply rotation to all images
-            rotated_images = []
-            for img in x_task:
+            # Apply rotation to all train images
+            rotated_train_images = []
+            for img in x_train_task:
                 rotated_img = TF.rotate(img, angle)
-                rotated_images.append(rotated_img)
+                rotated_train_images.append(rotated_img)
 
-            x_task = torch.stack(rotated_images)
+            x_train_task = torch.stack(rotated_train_images)
             # Flatten for consistent model input
-            x_task = x_task.view(x_task.size(0), -1)  # (N, 784)
+            x_train_task = x_train_task.view(x_train_task.size(0), -1)  # (N, 784)
 
-            # Create dataset and dataloader
-            dataset = TensorDataset(x_task, y_train_tensor)
-            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-            task_dataloaders.append(dataloader)
+            # Rotate test images
+            x_test_task = x_test_tensor.unsqueeze(1)  # Add channel dimension (N, 1, 28, 28)
+
+            # Apply rotation to all test images
+            rotated_test_images = []
+            for img in x_test_task:
+                rotated_img = TF.rotate(img, angle)
+                rotated_test_images.append(rotated_img)
+
+            x_test_task = torch.stack(rotated_test_images)
+            # Flatten for consistent model input
+            x_test_task = x_test_task.view(x_test_task.size(0), -1)  # (N, 784)
+
+            # Create datasets and dataloaders
+            train_dataset = TensorDataset(x_train_task, y_train_tensor)
+            test_dataset = TensorDataset(x_test_task, y_test_tensor)
+            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataloaders.append(train_dataloader)
+            test_dataloaders.append(test_dataloader)
 
     elif task_type == 'class_split':
         # Check if num_tasks evenly divides 10
@@ -159,29 +197,41 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
             end_class = start_class + classes_per_task
             task_classes = list(range(start_class, end_class))
 
-            # Filter data for this task's classes
-            task_mask = torch.zeros(len(y_train_tensor), dtype=torch.bool)
+            # Filter train data for this task's classes
+            train_task_mask = torch.zeros(len(y_train_tensor), dtype=torch.bool)
             for cls in task_classes:
-                task_mask |= (y_train_tensor == cls)
+                train_task_mask |= (y_train_tensor == cls)
 
-            x_task = x_train_tensor[task_mask]
-            y_task = y_train_tensor[task_mask]
+            x_train_task = x_train_tensor[train_task_mask]
+            y_train_task = y_train_tensor[train_task_mask]
+
+            # Filter test data for this task's classes
+            test_task_mask = torch.zeros(len(y_test_tensor), dtype=torch.bool)
+            for cls in task_classes:
+                test_task_mask |= (y_test_tensor == cls)
+
+            x_test_task = x_test_tensor[test_task_mask]
+            y_test_task = y_test_tensor[test_task_mask]
 
             # Keep original labels (0-9) for consistent model output
             # No remapping needed - model should handle all 10 classes
 
             # Flatten for consistent model input
-            x_task = x_task.view(x_task.size(0), -1)  # (N, 784)
+            x_train_task = x_train_task.view(x_train_task.size(0), -1)  # (N, 784)
+            x_test_task = x_test_task.view(x_test_task.size(0), -1)  # (N, 784)
 
-            # Create dataset and dataloader
-            dataset = TensorDataset(x_task, y_task)
-            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-            task_dataloaders.append(dataloader)
+            # Create datasets and dataloaders
+            train_dataset = TensorDataset(x_train_task, y_train_task)
+            test_dataset = TensorDataset(x_test_task, y_test_task)
+            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataloaders.append(train_dataloader)
+            test_dataloaders.append(test_dataloader)
 
     else:
         raise ValueError(f"Unknown task_type: {task_type}")
 
-    return task_dataloaders
+    return train_dataloaders, test_dataloaders
 
 #
 # Load MINST dataset

@@ -92,8 +92,8 @@ agem_handler = agem.AGEMHandler(model, criterion, optimizer)
 
 # Load and prepare MNIST data for domain-incremental learning
 # This function would encapsulate the permutation, rotation, or class split logic
-# It returns a list of data loaders, one for each task/domain
-task_dataloaders = mnist.prepare_domain_incremental_mnist(
+# It returns lists of train and test data loaders, one for each task/domain
+train_dataloaders, test_dataloaders = mnist.prepare_domain_incremental_mnist(
     task_type=TASK_TYPE, num_tasks=NUM_TASKS, batch_size=BATCH_SIZE,
     quick_test=QUICK_TEST_MODE
 )
@@ -103,7 +103,7 @@ visualizer = TAGemVisualizer()
 
 # --- 2. Training Loop ---
 print("Starting TA-A-GEM training...")
-for task_id, task_dataloader in enumerate(task_dataloaders):
+for task_id, train_dataloader in enumerate(train_dataloaders):
     print(f"\n--- Training on Task {task_id} ---")
 
     task_start_time = time.time()
@@ -114,7 +114,7 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
         epoch_loss = 0.0
         num_batches = 0
 
-        for batch_idx, (data, labels) in enumerate(task_dataloader):
+        for batch_idx, (data, labels) in enumerate(train_dataloader):
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
@@ -137,12 +137,12 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
             num_batches += 1
 
             # Update progress bar every 50 batches or on last batch
-            if not QUICK_TEST_MODE and (batch_idx % 50 == 0 or batch_idx == len(task_dataloader) - 1):
-                progress = (batch_idx + 1) / len(task_dataloader)
+            if not QUICK_TEST_MODE and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1):
+                progress = (batch_idx + 1) / len(train_dataloader)
                 bar_length = 30
                 filled_length = int(bar_length * progress)
                 bar = '█' * filled_length + '-' * (bar_length - filled_length)
-                print(f'\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(task_dataloader)})', end='', flush=True)
+                print(f'\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})', end='', flush=True)
 
         # Print newline after progress bar completion
         if not QUICK_TEST_MODE: print()
@@ -155,14 +155,14 @@ for task_id, task_dataloader in enumerate(task_dataloaders):
         if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
             print(f'  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}')
 
-    # Evaluate performance after each task
+    # Evaluate performance after each task on TEST DATA
     model.eval()
-    avg_accuracy = agem.evaluate_tasks_up_to(model, criterion, task_dataloaders, task_id)
+    avg_accuracy = agem.evaluate_tasks_up_to(model, criterion, test_dataloaders, task_id)
 
     # Evaluate on individual tasks for detailed tracking
     individual_accuracies = []
     for eval_task_id in range(task_id + 1):
-        eval_dataloader = task_dataloaders[eval_task_id]
+        eval_dataloader = test_dataloaders[eval_task_id]
         task_acc = agem.evaluate_single_task(model, criterion, eval_dataloader)
         individual_accuracies.append(task_acc)
 
