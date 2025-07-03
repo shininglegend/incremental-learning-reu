@@ -7,6 +7,7 @@ class AGEMHandler:
         self.criterion = criterion
         self.optimizer = optimizer
         self.eps_mem_batch = batch_size  # Memory batch size for gradient computation
+        self.device = device
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
