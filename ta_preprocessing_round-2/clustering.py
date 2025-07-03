@@ -1,5 +1,5 @@
 from clustering_gemini import ClusteringMechanism
-# import numpy as np
+import numpy as np
 
 class ClusteringMemory():
     def __init__(self, Q, P, input_type, device, num_pools=10):
@@ -69,6 +69,8 @@ class ClusteringMemory():
             sample_data: The sample to add (tensor or array)
             sample_label: Label associated with the sample (determines which pool)
         """
+
+        assert not isinstance(sample_data, np.ndarray), "sample_data must be a numpy array or tensor"
         # Convert tensor to numpy if needed
         if hasattr(sample_data, 'detach'):
             sample_data = sample_data.detach().cpu().numpy()
