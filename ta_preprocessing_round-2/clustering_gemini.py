@@ -3,13 +3,17 @@ import numpy as np
 import pandas
 from collections import deque
 
+
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
+
     def __init__(self, initial_sample, initial_label=None):
-        self.samples = deque([initial_sample]) # Stores samples in insertion order
-        self.labels = deque([initial_label]) if initial_label is not None else deque([None]) # Stores labels in insertion order
+        self.samples = deque([initial_sample])  # Stores samples in insertion order
+        self.labels = (
+            deque([initial_label]) if initial_label is not None else deque([None])
+        )  # Stores labels in insertion order
         self.mean = np.array(initial_sample)
-        self.sum_samples = np.array(initial_sample) # To efficiently update mean
+        self.sum_samples = np.array(initial_sample)  # To efficiently update mean
 
     def add_sample(self, sample, label=None):
         """Adds a new sample to the cluster and updates its mean."""
@@ -23,7 +27,6 @@ class Cluster:
         Removes a sample from the cluster and updates its mean.
         """
         return self.remove_oldest()
-
 
     def remove_based_on_mean(self):
         """
@@ -68,7 +71,6 @@ class Cluster:
 
         return removed_sample, removed_label
 
-
     def remove_oldest(self):
         """
         Removes a sample from the cluster and updates its mean.
@@ -76,15 +78,19 @@ class Cluster:
         """
         if len(self.samples) > 0:
             oldest_sample = self.samples.popleft()
-            self.labels.popleft() # Also remove the corresponding label
+            self.labels.popleft()  # Also remove the corresponding label
             self.sum_samples -= np.array(oldest_sample)
             if len(self.samples) > 0:
                 self.mean = self.sum_samples / len(self.samples)
             else:
-                self.mean = np.zeros_like(self.mean) # If cluster becomes empty
+                self.mean = np.zeros_like(self.mean)  # If cluster becomes empty
 
     def __str__(self):
         return f"""Cluster with mean {self.mean} and samples {self.samples}"""
+
+    def size(self):
+        return len(self.samples)
+
 
 class ClusteringMechanism:
     """Implements the clustering mechanism described in Algorithm 3."""
@@ -99,11 +105,11 @@ class ClusteringMechanism:
             dimensionality_reducer (DimensionalityReducer): Dimensionality reduction method. If None, no reduction is applied.
         """
         self.clusters = []  # List of Cluster objects
-        self.Q = Q          # Max number of clusters
-        self.P = P          # Max cluster size
+        self.Q = Q  # Max number of clusters
+        self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
 
-    def add(self, z:np.ndarray, label=None):
+    def add(self, z: np.ndarray, label=None):
         """
         Adds a sample z to the appropriate cluster or forms a new one.
 
@@ -116,8 +122,11 @@ class ClusteringMechanism:
         # Apply dimensionality reduction if configured
         if self.dimensionality_reducer is not None:
             if not self.dimensionality_reducer.fitted:
-                raise ValueError("Dimensionality reducer must be fitted before adding samples. Call fit_reducer() first.")
+                raise ValueError(
+                    "Dimensionality reducer must be fitted before adding samples. Call fit_reducer() first."
+                )
             z = self.dimensionality_reducer.transform(z)
+
         # if z is a set of samples, add it one by one
         if len(self.clusters) < self.Q:
             # If the number of clusters is less than Q, create a new cluster
@@ -127,11 +136,16 @@ class ClusteringMechanism:
         else:
             # If the number of clusters has reached Q, find the closest cluster
             # based on Euclidean distance to its mean.
-            min_distance = float('inf')
+            min_distance = float("inf")
             closest_cluster_idx = -1
 
             for i, cluster in enumerate(self.clusters):
                 # Calculate Euclidean distance
+                print("clustering_gemini 145+") 
+                print("z", type(z))
+                print("cluster.mean", type(cluster.mean))
+                print("shape z", np.shape(z))
+                print("shape cluster.mean", np.shape(cluster.mean))
                 distance = np.linalg.norm(z - cluster.mean)
                 if distance < min_distance:
                     min_distance = distance
@@ -144,7 +158,6 @@ class ClusteringMechanism:
             # If the cluster size exceeds P, remove the oldest sample
             if len(q_star.samples) > self.P:
                 q_star.remove_one()
-
 
     def fit_reducer(self, z_list):
         """
@@ -174,7 +187,9 @@ class ClusteringMechanism:
             return z
 
         if not self.dimensionality_reducer.fitted:
-            raise ValueError("Dimensionality reducer must be fitted before transforming data. Call fit_reducer() first.")
+            raise ValueError(
+                "Dimensionality reducer must be fitted before transforming data. Call fit_reducer() first."
+            )
 
         return self.dimensionality_reducer.transform(z)
 
@@ -254,30 +269,49 @@ class ClusteringMechanism:
             pca = PCA(n_components=3)
             X_reduced = pca.fit_transform(X)
             # Create column names for the PCA components
-            x_col, y_col, z_col = 'PC1', 'PC2', 'PC3'
+            x_col, y_col, z_col = "PC1", "PC2", "PC3"
         else:
             X_reduced = X
             # Pad with zeros if less than 3 dimensions
             if X_reduced.shape[1] == 1:
-                X_reduced = np.column_stack([X_reduced, np.zeros(X_reduced.shape[0]), np.zeros(X_reduced.shape[0])])
+                X_reduced = np.column_stack(
+                    [
+                        X_reduced,
+                        np.zeros(X_reduced.shape[0]),
+                        np.zeros(X_reduced.shape[0]),
+                    ]
+                )
             elif X_reduced.shape[1] == 2:
                 X_reduced = np.column_stack([X_reduced, np.zeros(X_reduced.shape[0])])
-            x_col, y_col, z_col = 'X', 'Y', 'Z'
+            x_col, y_col, z_col = "X", "Y", "Z"
 
         # Create DataFrame for plotly
-        df = pandas.DataFrame({
-            x_col: X_reduced[:, 0],
-            y_col: X_reduced[:, 1],
-            z_col: X_reduced[:, 2],
-            'Cluster': cluster_labels,
-            'Label': true_labels
-        })
+        df = pandas.DataFrame(
+            {
+                x_col: X_reduced[:, 0],
+                y_col: X_reduced[:, 1],
+                z_col: X_reduced[:, 2],
+                "Cluster": cluster_labels,
+                "Label": true_labels,
+            }
+        )
 
         # Create 3D scatter plot
-        fig = px.scatter_3d(df, x=x_col, y=y_col, z=z_col,
-                           color='Cluster',
-                           symbol='Label',
-                           title='Cluster Visualization (Color=Cluster, Symbol=Label)',
-                           hover_data={'Cluster': True, 'Label': True})
+        fig = px.scatter_3d(
+            df,
+            x=x_col,
+            y=y_col,
+            z=z_col,
+            color="Cluster",
+            symbol="Label",
+            title="Cluster Visualization (Color=Cluster, Symbol=Label)",
+            hover_data={"Cluster": True, "Label": True},
+        )
 
         fig.show()
+
+    def size_per_cluster(self):
+        return {i: self.clusters[i].size() for i in len(self.clusters)}
+
+    def size(self):
+        return sum([self.clusters[i].size() for i in len(self.clusters)])

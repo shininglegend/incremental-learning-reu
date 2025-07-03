@@ -96,7 +96,7 @@ clustering_memory = clustering.ClusteringMemory(
 # It needs to access the memory managed by clustering_memory
 agem_handler = agem.AGEMHandler(model, criterion, optimizer, device=device)
 
-# Load and prepare MNIST data for domain-incremental learning
+# Load and prepare data for domain-incremental learning
 # This function encapsulates the permutation, rotation, or class split logic
 # It returns lists of train and test data loaders, one for each task/domain
 print("Loading dataset and preparing data loaders...")

@@ -1,7 +1,10 @@
 from clustering_gemini import ClusteringMechanism
+
+import torch
 import numpy as np
 
-class ClusteringMemory():
+
+class ClusteringMemory:
     def __init__(self, Q, P, input_type, device, num_pools=10):
         """
         Initialize multi-pool clustering memory wrapper.
@@ -23,7 +26,7 @@ class ClusteringMemory():
         self.pools = {}
         self.pool_labels = set()  # Track which labels we've seen
 
-    def _get_or_create_pool(self, label):
+    def _get_or_create_pool(self, label) -> ClusteringMechanism:
         """Get clustering mechanism for a label, creating if needed.
 
         Args:
@@ -34,7 +37,12 @@ class ClusteringMemory():
         """
         if label not in self.pools:
             # Create new pool for this label
-            self.pools[label] = ClusteringMechanism(Q=self.Q, P=self.P, dimensionality_reducer=None)
+            self.pools[label] = ClusteringMechanism(
+                Q=self.Q, P=self.P, dimensionality_reducer=None
+            )
+            assert (
+                len(self.pools) <= self.num_pools
+            ), "Maximum number of pools exceeded. Ensure num_pools is set correctly."
             self.pool_labels.add(label)
 
         return self.pools[label]
@@ -54,11 +62,25 @@ class ClusteringMemory():
                 continue
 
             # Convert numpy arrays back to tensors and pair with labels
-            import torch
-            for sample, sample_label in zip(samples, labels):
+            def add_sample(sample, sample_label):
                 sample_tensor = torch.FloatTensor(sample).to(self.device)
-                label_tensor = torch.tensor(sample_label).to(self.device) if sample_label is not None else torch.tensor(label).to(self.device)
-                all_memory_samples.append((sample_tensor, label_tensor))
+                label_tensor = (
+                    torch.tensor(sample_label).to(self.device)
+                    if sample_label is not None
+                    else torch.tensor(label).to(self.device)
+                )
+                return (sample_tensor, label_tensor)
+
+            all_memory_samples.extend(
+                [
+                    add_sample(sample, sample_label)
+                    for sample, sample_label in zip(samples, labels)
+                ]
+            )
+            # for sample, sample_label in zip(samples, labels):
+            #     sample_tensor = torch.FloatTensor(sample).to(self.device)
+            #     label_tensor = torch.tensor(sample_label).to(self.device) if sample_label is not None else torch.tensor(label).to(self.device)
+            #     all_memory_samples.append((sample_tensor, label_tensor))
 
         return all_memory_samples
 
@@ -70,21 +92,25 @@ class ClusteringMemory():
             sample_label: Label associated with the sample (determines which pool)
         """
 
-        assert not isinstance(sample_data, np.ndarray), "sample_data must be a numpy array or tensor"
+        assert isinstance(sample_data, np.ndarray) or isinstance(
+            sample_data, torch.Tensor
+        ), "sample_data must be a numpy array or tensor"
+
         # Convert tensor to numpy if needed
-        if hasattr(sample_data, 'detach'):
+        if hasattr(sample_data, "detach"):
             sample_data = sample_data.detach().cpu().numpy()
 
-        # Flatten if needed for MNIST
+        # Flatten if needed
         if len(sample_data.shape) > 1:
             sample_data = sample_data.flatten()
 
         # Convert label to int if tensor
-        if hasattr(sample_label, 'item'):
+        if hasattr(sample_label, "item"):
             sample_label = sample_label.item()
 
         # Get the appropriate pool for this label and add the sample
         pool = self._get_or_create_pool(sample_label)
+        # print("clustering.py 113 sample data", type(sample_data))
         pool.add(sample_data, sample_label)
 
     def get_memory_size(self):
@@ -93,11 +119,7 @@ class ClusteringMemory():
         Returns:
             int: Total number of samples currently stored across all pools
         """
-        total_samples = 0
-        for pool in self.pools.values():
-            samples, _ = pool.get_clusters_with_labels()
-            total_samples += len(samples)
-        return total_samples
+        return sum(pool.size() for _, pool in self.pools)
 
     def get_pool_sizes(self):
         """Get the number of samples in each pool.
@@ -105,11 +127,7 @@ class ClusteringMemory():
         Returns:
             dict: Mapping from label to number of samples in that pool
         """
-        pool_sizes = {}
-        for label, pool in self.pools.items():
-            samples, _ = pool.get_clusters_with_labels()
-            pool_sizes[label] = len(samples)
-        return pool_sizes
+        return {label: pool.size() for label, pool in self.pools}
 
     def get_clustering_mechanism(self):
         """Get access to all clustering mechanisms for visualization.

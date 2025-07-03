@@ -127,7 +127,7 @@ class AGEMHandler:
                 print(f"Memory processing failed: {e}")
                 self.optimizer.step()
         else:
-            # No memory samples, just do regular update
+            # No memory samples yet, just do regular update
             self.optimizer.step()
 
         return current_loss
