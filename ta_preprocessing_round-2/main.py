@@ -1,7 +1,7 @@
 # Code written by Gemini 2.5 Flash. Edited by Titus
 import agem
 import clustering
-import mnist
+from load_dataset import load_dataset
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -29,6 +29,7 @@ LEARNING_RATE = 1e-3
 NUM_EPOCHS = 20
 NUM_TASKS = 2 if QUICK_TEST_MODE else 5 # Example: for permutation or rotation based tasks
 TASK_TYPE = 'permutation'  # 'permutation', 'rotation', or 'class_split'
+DATASET_NAME = 'mnist'  # Dataset to use: 'mnist' or 'fashion_mnist'
 
 # Determine number of pools based on task type (as per paper)
 if TASK_TYPE in ['permutation', 'rotation']:
@@ -53,7 +54,8 @@ params = {  # Store all parameters for easy access
     'learning_rate': LEARNING_RATE,
     'num_epochs': NUM_EPOCHS,
     'num_tasks': NUM_TASKS,
-    'quick_test_mode': QUICK_TEST_MODE
+    'quick_test_mode': QUICK_TEST_MODE,
+    'dataset_name': DATASET_NAME,
 }
 
 # Define a simple MLP model
@@ -95,9 +97,11 @@ clustering_memory = clustering.ClusteringMemory(
 agem_handler = agem.AGEMHandler(model, criterion, optimizer, device=device)
 
 # Load and prepare MNIST data for domain-incremental learning
-# This function would encapsulate the permutation, rotation, or class split logic
+# This function encapsulates the permutation, rotation, or class split logic
 # It returns lists of train and test data loaders, one for each task/domain
-train_dataloaders, test_dataloaders = mnist.prepare_domain_incremental_mnist(
+print("Loading dataset and preparing data loaders...")
+datasetLoader = load_dataset(DATASET_NAME)
+train_dataloaders, test_dataloaders = datasetLoader.prepare_domain_incremental_data(
     task_type=TASK_TYPE, num_tasks=NUM_TASKS, batch_size=BATCH_SIZE,
     quick_test=QUICK_TEST_MODE
 )
