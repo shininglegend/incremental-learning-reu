@@ -1,20 +1,25 @@
 # This loads and visualizes MNIST data.
 # Original here: https://www.kaggle.com/code/hojjatk/read-mnist-dataset
 # Modified!
-import numpy as np # linear algebra
+import numpy as np  # linear algebra
 import struct
 from array import array
-from os.path  import join
+from os.path import join
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms.functional as TF
+
+try:
+    from .load_dataset import DatasetLoader
+except ImportError:
+    from load_dataset import DatasetLoader
 
 # Set file paths based on added MNIST Datasets
 import kagglehub
 
 # Download latest version (Uncomment if you're getting file not found errors)
-# path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-path = "/home/reuadodd/.cache/kagglehub/datasets/hojjatk/mnist-dataset/versions/1"
+path = kagglehub.dataset_download("hojjatk/mnist-dataset")
+# path = "/home/reuadodd/.cache/kagglehub/datasets/hojjatk/mnist-dataset/versions/1"
 print(f"Dataset is at {path}")
 input_path = path
 training_images_filepath = join(input_path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
@@ -27,7 +32,7 @@ test_labels_filepath = join(input_path, 't10k-labels-idx1-ubyte/t10k-labels-idx1
 # MNIST Data Loader Class
 #
 class MnistDataloader(object):
-    def __init__(self, training_images_filepath,training_labels_filepath,
+    def __init__(self, training_images_filepath, training_labels_filepath,
                  test_images_filepath, test_labels_filepath):
         self.training_images_filepath = training_images_filepath
         self.training_labels_filepath = training_labels_filepath
@@ -49,91 +54,97 @@ class MnistDataloader(object):
             image_data = array("B", file.read())
         images = []
         for i in range(size):
-            images.append([0] * rows * cols)
-        for i in range(size):
             img = np.array(image_data[i * rows * cols:(i + 1) * rows * cols])
             img = img.reshape(28, 28)
-            images[i][:] = img
+            images.append(img)
 
         return images, labels
 
     def load_data(self):
         x_train, y_train = self.read_images_labels(self.training_images_filepath, self.training_labels_filepath)
         x_test, y_test = self.read_images_labels(self.test_images_filepath, self.test_labels_filepath)
-        return (x_train, y_train),(x_test, y_test)
+        return (x_train, y_train), (x_test, y_test)
 
-def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_test=False):
-    """Load and prepare MNIST data for domain-incremental learning
-    This function would encapsulate the permutation, rotation, or class split logic.
-    It returns lists of train and test data loaders, one for each task/domain
 
-    Args:
-        task_type (str): One of 'permutation', 'rotation', 'class_split'
-        num_tasks (int): Number of tasks to create
-        batch_size (int): Batch size for DataLoaders
-        quick_test (bool): If True, use reduced dataset for faster testing
+class MnistDatasetLoader(DatasetLoader):
+    """MNIST dataset loader implementing the DatasetLoader interface."""
 
-    Returns:
-        tuple: (train_dataloaders, test_dataloaders) - Lists of DataLoader objects
-    """
-    # Load MNIST data
-    _mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath, test_images_filepath, test_labels_filepath)
-    (x_train, y_train), (x_test, y_test) = _mnist_dataloader.load_data()
+    def __init__(self):
+        super().__init__()
+        # Set file paths based on MNIST datasets
+        path = kagglehub.dataset_download("hojjatk/mnist-dataset")
+        self.training_images_filepath = join(path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
+        self.training_labels_filepath = join(path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
+        self.test_images_filepath = join(path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
+        self.test_labels_filepath = join(path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
 
-    # Convert list of numpy arrays to single numpy array before tensor conversion
-    x_train_array = np.array(x_train)
-    y_train_array = np.array(y_train)
-    x_test_array = np.array(x_test)
-    y_test_array = np.array(y_test)
+    def load_raw_data(self):
+        """Load raw MNIST data."""
+        mnist_loader = MnistDataloader(
+            self.training_images_filepath,
+            self.training_labels_filepath,
+            self.test_images_filepath,
+            self.test_labels_filepath
+        )
+        (x_train, y_train), (x_test, y_test) = mnist_loader.load_data()
+        return x_train, y_train, x_test, y_test
 
-    # Convert numpy arrays to tensors and normalize
-    x_train_tensor = torch.FloatTensor(x_train_array) / 255.0  # Normalize to [0,1]
-    y_train_tensor = torch.LongTensor(y_train_array)
-    x_test_tensor = torch.FloatTensor(x_test_array) / 255.0  # Normalize to [0,1]
-    y_test_tensor = torch.LongTensor(y_test_array)
+    def preprocess_data(self, x_train, y_train, x_test, y_test, quick_test=False):
+        """Preprocess MNIST data into PyTorch tensors."""
+        # Convert list of numpy arrays to single numpy array before tensor conversion
+        x_train_array = np.array(x_train)
+        y_train_array = np.array(y_train)
+        x_test_array = np.array(x_test)
+        y_test_array = np.array(y_test)
 
-    # For quick testing, use only first 1000 samples per class
-    if quick_test:
-        quick_train_indices = []
-        quick_test_indices = []
-        for class_id in range(10):  # MNIST has 10 classes
-            # Training data
-            class_mask = (y_train_tensor == class_id)
-            class_indices = torch.where(class_mask)[0][:1000]  # First 1000 samples
-            quick_train_indices.extend(class_indices.tolist())
+        # Convert numpy arrays to tensors and normalize
+        x_train_tensor = torch.FloatTensor(x_train_array) / 255.0
+        y_train_tensor = torch.LongTensor(y_train_array)
+        x_test_tensor = torch.FloatTensor(x_test_array) / 255.0
+        y_test_tensor = torch.LongTensor(y_test_array)
 
-            # Test data
-            class_mask = (y_test_tensor == class_id)
-            class_indices = torch.where(class_mask)[0][:200]  # First 200 test samples
-            quick_test_indices.extend(class_indices.tolist())
+        # For quick testing, use only first 1000 samples per class
+        if quick_test:
+            quick_train_indices = []
+            quick_test_indices = []
+            for class_id in range(10):
+                # Training data
+                class_mask = (y_train_tensor == class_id)
+                class_indices = torch.where(class_mask)[0][:1000]
+                quick_train_indices.extend(class_indices.tolist())
 
-        quick_train_indices = torch.tensor(quick_train_indices)
-        quick_test_indices = torch.tensor(quick_test_indices)
-        x_train_tensor = x_train_tensor[quick_train_indices]
-        y_train_tensor = y_train_tensor[quick_train_indices]
-        x_test_tensor = x_test_tensor[quick_test_indices]
-        y_test_tensor = y_test_tensor[quick_test_indices]
+                # Test data
+                class_mask = (y_test_tensor == class_id)
+                class_indices = torch.where(class_mask)[0][:200]
+                quick_test_indices.extend(class_indices.tolist())
 
-    train_dataloaders = []
-    test_dataloaders = []
+            quick_train_indices = torch.tensor(quick_train_indices)
+            quick_test_indices = torch.tensor(quick_test_indices)
+            x_train_tensor = x_train_tensor[quick_train_indices]
+            y_train_tensor = y_train_tensor[quick_train_indices]
+            x_test_tensor = x_test_tensor[quick_test_indices]
+            y_test_tensor = y_test_tensor[quick_test_indices]
 
-    if task_type == 'permutation':
-        # Generate unique permutations for each task
+        return x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor
+
+    def _create_permutation_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks,
+                                  batch_size):
+        """Create permutation-based tasks for MNIST."""
+        train_dataloaders = []
+        test_dataloaders = []
         num_pixels = 28 * 28
-        permutations = []
 
         for task_id in range(num_tasks):
             # Generate a random permutation for this task
             perm = torch.randperm(num_pixels)
-            permutations.append(perm)
 
             # Flatten images and apply permutation - TRAIN
-            x_train_task = x_train_tensor.view(-1, num_pixels)  # Flatten to (N, 784)
-            x_train_task = x_train_task[:, perm]  # Apply permutation
+            x_train_task = x_train_tensor.view(-1, num_pixels)
+            x_train_task = x_train_task[:, perm]
 
             # Flatten images and apply permutation - TEST
-            x_test_task = x_test_tensor.view(-1, num_pixels)  # Flatten to (N, 784)
-            x_test_task = x_test_task[:, perm]  # Apply permutation
+            x_test_task = x_test_tensor.view(-1, num_pixels)
+            x_test_task = x_test_task[:, perm]
 
             # Create datasets and dataloaders
             train_dataset = TensorDataset(x_train_task, y_train_tensor)
@@ -143,38 +154,35 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
-    elif task_type == 'rotation':
-        # Generate rotation angles for each task
+        return train_dataloaders, test_dataloaders
+
+    def _create_rotation_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks,
+                               batch_size):
+        """Create rotation-based tasks for MNIST."""
+        train_dataloaders = []
+        test_dataloaders = []
         angles = [i * (360 / num_tasks) for i in range(num_tasks)]
 
         for task_id in range(num_tasks):
             angle = angles[task_id]
 
-            # Rotate train images - need to convert to proper format for rotation
-            x_train_task = x_train_tensor.unsqueeze(1)  # Add channel dimension (N, 1, 28, 28)
-
-            # Apply rotation to all train images
+            # Rotate train images
+            x_train_task = x_train_tensor.unsqueeze(1)
             rotated_train_images = []
             for img in x_train_task:
                 rotated_img = TF.rotate(img, angle)
                 rotated_train_images.append(rotated_img)
-
             x_train_task = torch.stack(rotated_train_images)
-            # Flatten for consistent model input
-            x_train_task = x_train_task.view(x_train_task.size(0), -1)  # (N, 784)
+            x_train_task = x_train_task.view(x_train_task.size(0), -1)
 
             # Rotate test images
-            x_test_task = x_test_tensor.unsqueeze(1)  # Add channel dimension (N, 1, 28, 28)
-
-            # Apply rotation to all test images
+            x_test_task = x_test_tensor.unsqueeze(1)
             rotated_test_images = []
             for img in x_test_task:
                 rotated_img = TF.rotate(img, angle)
                 rotated_test_images.append(rotated_img)
-
             x_test_task = torch.stack(rotated_test_images)
-            # Flatten for consistent model input
-            x_test_task = x_test_task.view(x_test_task.size(0), -1)  # (N, 784)
+            x_test_task = x_test_task.view(x_test_task.size(0), -1)
 
             # Create datasets and dataloaders
             train_dataset = TensorDataset(x_train_task, y_train_tensor)
@@ -184,7 +192,14 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
-    elif task_type == 'class_split':
+        return train_dataloaders, test_dataloaders
+
+    def _create_class_split_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks,
+                                  batch_size):
+        """Create class-split-based tasks for MNIST."""
+        train_dataloaders = []
+        test_dataloaders = []
+
         # Check if num_tasks evenly divides 10
         if 10 % num_tasks != 0:
             raise ValueError(f"num_tasks ({num_tasks}) must evenly divide 10 for class_split")
@@ -213,9 +228,6 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
             x_test_task = x_test_tensor[test_task_mask]
             y_test_task = y_test_tensor[test_task_mask]
 
-            # Keep original labels (0-9) for consistent model output
-            # No remapping needed - model should handle all 10 classes
-
             # Flatten for consistent model input
             x_train_task = x_train_task.view(x_train_task.size(0), -1)  # (N, 784)
             x_test_task = x_test_task.view(x_test_task.size(0), -1)  # (N, 784)
@@ -228,28 +240,35 @@ def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_tes
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
-    else:
-        raise ValueError(f"Unknown task_type: {task_type}")
+        return train_dataloaders, test_dataloaders
 
-    return train_dataloaders, test_dataloaders
 
-#
-# Load MINST dataset
-#
-_mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath, test_images_filepath, test_labels_filepath)
-(x_train, y_train), (x_test, y_test) = _mnist_dataloader.load_data()
+# Backward compatibility function
+# def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_test=False):
+#     """Load and prepare MNIST data for domain-incremental learning (backward compatibility)."""
+#     loader = MnistDatasetLoader()
+#     return loader.prepare_domain_incremental_data(task_type, num_tasks, batch_size, quick_test)
+
 
 if __name__ == "__main__":
     import random
     import matplotlib.pyplot as plt
 
     #
+    # Load MINST dataset
+    #
+    _mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath, test_images_filepath,
+                                        test_labels_filepath)
+    (x_train, y_train), (x_test, y_test) = _mnist_dataloader.load_data()
+
+
+    #
     # Helper function to show a list of images with their relating titles
     #
     def show_images(images, title_texts):
         cols = 5
-        rows = int(len(images)/cols) + 1
-        plt.figure(figsize=(30,20))
+        rows = int(len(images) / cols) + 1
+        plt.figure(figsize=(30, 20))
         index = 1
         for x in zip(images, title_texts):
             image = x[0]
@@ -257,8 +276,9 @@ if __name__ == "__main__":
             plt.subplot(rows, cols, index)
             plt.imshow(image, cmap='gray')
             if (title_text != ''):
-                plt.title(title_text, fontsize = 15);
+                plt.title(title_text, fontsize=15);
             index += 1
+
 
     #
     # Show some random training and test images

@@ -1,3 +1,4 @@
+import multiprocessing as mp
 """
 Abstract base class for dataset loading with domain-incremental learning support.
 This module provides a common interface for loading different datasets and preparing
@@ -158,3 +159,23 @@ def prepare_domain_incremental_data(dataset_name: str, task_type: str, num_tasks
     """
     loader = load_dataset(dataset_name)
     return loader.prepare_domain_incremental_data(task_type, num_tasks, batch_size, quick_test)
+
+
+def optimize_dataloader(dataloader, params):
+    """Optimize DataLoader for better performance"""
+    # Get the dataset from the dataloader
+    dataset = dataloader.dataset
+
+    # Create optimized DataLoader
+    optimized_dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=min(dataloader.batch_size * 2, 128),  # Larger batches if possible
+        shuffle=dataloader.shuffle if hasattr(dataloader, 'shuffle') else True,
+        num_workers=min(4, mp.cpu_count()),  # Parallel data loading
+        pin_memory=torch.cuda.is_available(),  # Fast GPU transfer
+        persistent_workers=True,  # Keep workers alive between epochs
+        prefetch_factor=2,  # Prefetch batches
+        drop_last=False
+    )
+
+    return optimized_dataloader

@@ -79,7 +79,7 @@ def create_model_from_state(state_dict):
     hidden_dim = state_dict['fc1.weight'].shape[0]
     num_classes = state_dict['fc3.weight'].shape[0]
 
-    from main import SimpleMLP  # Import your model class
+    from simple_mlp import SimpleMLP  # Import your model class
     model = SimpleMLP(input_dim, hidden_dim, num_classes)
     model.load_state_dict(state_dict)
     return model
