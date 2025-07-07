@@ -465,7 +465,7 @@ class TAGemVisualizer:
                       range_y=[0.0, 1.0])
         return fig
 
-    def create_cluster_visualization(self, clustering_memory, clusters_to_show):
+    def create_cluster_visualization(self, clustering_memory):
         """Create 3D visualization of cluster storage using multi-pool ClusteringMechanism.visualize()"""
         try:
             pools = clustering_memory.get_clustering_mechanism()
@@ -473,13 +473,10 @@ class TAGemVisualizer:
                 print("No clustering pools available for visualization")
                 return
 
-            print(f"Visualizing {clusters_to_show}/{len(pools)} clustering pools:")
-            i=0
+            print(f"Visualizing {len(pools)} clustering pools:")
             for label, pool in pools.items():
-                if i >= clusters_to_show:
-                    break
+                print(f"Pool for label {label}:")
                 pool.visualize()
-                i += 1
         except Exception as e:
             print(f"Error creating cluster visualization: {e}")
 
@@ -495,7 +492,7 @@ class TAGemVisualizer:
                      range_y=[0.0, 1.0])
         return fig
 
-    def generate_simple_report(self, clustering_memory, clusters_to_show=1, show_images=True, save_path=None):
+    def generate_simple_report(self, clustering_memory, save_path=None):
         """Generate simplified analysis with just 3 graphs"""
         if not any([self.task_accuracies, self.per_task_accuracies]):
             print("No data available for report generation")
@@ -507,9 +504,8 @@ class TAGemVisualizer:
         try:
             per_task_fig = self.create_per_task_accuracy_graph()
             if per_task_fig:
-                if show_images: 
-                    per_task_fig.show()
-                if save_path is not None:
+                per_task_fig.show()
+                if save_path:
                     per_task_fig.write_html(f"{save_path}_per_task_accuracy.html")
                     print(f"Per-task accuracy graph saved to {save_path}_per_task_accuracy.html")
         except Exception as e:
@@ -518,7 +514,7 @@ class TAGemVisualizer:
         # Graph 2: Cluster storage visualization
         try:
             print("Displaying cluster storage visualization...")
-            if show_images: self.create_cluster_visualization(clustering_memory, clusters_to_show)
+            self.create_cluster_visualization(clustering_memory)
         except Exception as e:
             print(f"Error creating cluster visualization: {e}")
 
@@ -526,8 +522,8 @@ class TAGemVisualizer:
         try:
             overall_fig = self.create_overall_accuracy_graph()
             if overall_fig:
-                if show_images: overall_fig.show()
-                if save_path is not None:
+                overall_fig.show()
+                if save_path:
                     overall_fig.write_html(f"{save_path}_overall_accuracy.html")
                     print(f"Overall accuracy graph saved to {save_path}_overall_accuracy.html")
         except Exception as e:

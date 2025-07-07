@@ -72,6 +72,77 @@ class AGEMHandler:
                 param.grad.data = grad_vector[pointer:pointer + num_param].view(param.shape)
                 pointer += num_param
 
+    def compute_and_project_batch_gradient(self, data, labels, memory_samples=None):
+        """
+        Computes the gradient for a single batch and projects it using memory samples.
+        Returns the projected gradient (flattened) and the loss for the batch.
+        DOES NOT call optimizer.step() or modify model.grad directly.
+        """
+        # Compute current task gradient and loss
+        # Use a temporary model for compute_gradient to avoid conflicts with global model.grad if possible,
+        # but given `compute_gradient`'s save/restore logic, it should be fine.
+        current_grad_flat, batch_loss = self.compute_gradient(data, labels)
+
+        # If we have memory samples, compute reference gradient and project
+        if memory_samples is not None and len(memory_samples) > 0:
+            mem_data_list = []
+            mem_labels_list = []
+
+            try:
+                # Use min to avoid index out of bounds if memory is smaller than eps_mem_batch
+                for sample_data, sample_label in memory_samples[:self.eps_mem_batch]:
+                    mem_data_list.append(sample_data)
+                    mem_labels_list.append(sample_label)
+
+                if mem_data_list:
+                    mem_data = torch.stack(mem_data_list).to(self.device)
+                    # Handle labels which could be tensors or integers
+                    mem_labels = torch.stack(mem_labels_list).to(self.device) if isinstance(mem_labels_list[0],
+                                                                                            torch.Tensor) else torch.tensor(
+                        mem_labels_list).to(self.device)
+
+                    ref_grad_flat, _ = self.compute_gradient(mem_data, mem_labels)  # We only need the gradient here
+
+                    projected_grad_flat = self.project_gradient(current_grad_flat, ref_grad_flat)
+                    return projected_grad_flat, batch_loss
+                else:
+                    # No valid memory samples after filtering, return original gradient
+                    return current_grad_flat, batch_loss
+            except Exception as e:
+                print(f"Memory processing failed during gradient projection: {e}")
+                # If an error occurs with memory, proceed without projection
+                return current_grad_flat, batch_loss
+        else:
+            # No memory samples, return original gradient
+            return current_grad_flat, batch_loss
+
+    def apply_accumulated_gradients(self, accumulated_projected_grad_vector):
+        """
+        Sets the model's gradients from an accumulated (and projected) gradient vector
+        and then calls optimizer.step().
+        This method should be called ONCE per update step (e.g., per epoch or accumulation steps).
+        """
+        if accumulated_projected_grad_vector.numel() == 0:
+            print("Warning: No accumulated gradients to apply.")
+            return
+
+        self.model.zero_grad()  # Clear any existing gradients before setting new ones
+
+        pointer = 0
+        for param in self.model.parameters():
+            num_param = param.numel()
+            if pointer + num_param > accumulated_projected_grad_vector.numel():
+                print(
+                    f"Error: Gradient vector size mismatch for parameter. Expected {num_param}, available {accumulated_projected_grad_vector.numel() - pointer}")
+                # Handle gracefully, e.g., break or raise error
+                break
+
+            # Reshape and assign the accumulated gradient
+            param.grad = accumulated_projected_grad_vector[pointer:pointer + num_param].view(param.shape)
+            pointer += num_param
+
+        self.optimizer.step()
+
     def optimize(self, data, labels, memory_samples=None):
         """A-GEM optimization with gradient projection"""
         # Compute loss for tracking
@@ -131,6 +202,7 @@ class AGEMHandler:
             self.optimizer.step()
 
         return current_loss
+
 
 def evaluate_all_tasks(model, criterion, task_dataloaders, device):
     """Evaluate model on all tasks using test data and return average accuracy"""

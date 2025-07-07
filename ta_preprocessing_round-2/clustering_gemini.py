@@ -1,21 +1,36 @@
-# Initial Code by gemini. 1x2 matrix per item
-import numpy as np
-import pandas
+# no numpy conversions
+import torch
 from collections import deque
+
 
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
-    def __init__(self, initial_sample, initial_label=None):
-        self.samples = deque([initial_sample]) # Stores samples in insertion order
-        self.labels = deque([initial_label]) if initial_label is not None else deque([None]) # Stores labels in insertion order
-        self.mean = np.array(initial_sample)
-        self.sum_samples = np.array(initial_sample) # To efficiently update mean
+
+    def __init__(self, initial_sample, initial_label=None, device='cpu'):
+        self.device = device
+
+        # Ensure initial_sample is a tensor on the correct device
+        if not isinstance(initial_sample, torch.Tensor):
+            initial_sample = torch.tensor(initial_sample, dtype=torch.float32, device=device)
+        else:
+            initial_sample = initial_sample.to(device)
+
+        self.samples = deque([initial_sample])  # Stores samples in insertion order
+        self.labels = deque([initial_label]) if initial_label is not None else deque([None])
+        self.mean = initial_sample.clone()
+        self.sum_samples = initial_sample.clone()  # To efficiently update mean
 
     def add_sample(self, sample, label=None):
         """Adds a new sample to the cluster and updates its mean."""
+        # Ensure sample is a tensor on the correct device
+        if not isinstance(sample, torch.Tensor):
+            sample = torch.tensor(sample, dtype=torch.float32, device=self.device)
+        else:
+            sample = sample.to(self.device)
+
         self.samples.append(sample)
         self.labels.append(label)
-        self.sum_samples += np.array(sample)
+        self.sum_samples += sample
         self.mean = self.sum_samples / len(self.samples)
 
     def remove_one(self):
@@ -23,7 +38,6 @@ class Cluster:
         Removes a sample from the cluster and updates its mean.
         """
         return self.remove_oldest()
-
 
     def remove_based_on_mean(self):
         """
@@ -39,7 +53,7 @@ class Cluster:
         # Only consider samples except the newest (last one)
         for i in range(len(self.samples) - 1):
             sample = self.samples[i]
-            distance = np.linalg.norm(np.array(sample) - self.mean)
+            distance = torch.norm(sample - self.mean)
             if distance > max_distance:
                 max_distance = distance
                 furthest_idx = i
@@ -60,79 +74,80 @@ class Cluster:
         self.labels = deque(labels_list)
 
         # Update sum and mean
-        self.sum_samples -= np.array(removed_sample)
+        self.sum_samples -= removed_sample
         if len(self.samples) > 0:
             self.mean = self.sum_samples / len(self.samples)
         else:
-            self.mean = np.zeros_like(self.mean)
+            self.mean = torch.zeros_like(self.mean)
 
         return removed_sample, removed_label
 
-
     def remove_oldest(self):
         """
-        Removes a sample from the cluster and updates its mean.
-        Currently removes the oldest sample.
+        Removes the oldest sample from the cluster and updates its mean.
         """
         if len(self.samples) > 0:
             oldest_sample = self.samples.popleft()
-            self.labels.popleft() # Also remove the corresponding label
-            self.sum_samples -= np.array(oldest_sample)
+            oldest_label = self.labels.popleft()
+            self.sum_samples -= oldest_sample
             if len(self.samples) > 0:
                 self.mean = self.sum_samples / len(self.samples)
             else:
-                self.mean = np.zeros_like(self.mean) # If cluster becomes empty
+                self.mean = torch.zeros_like(self.mean)
+            return oldest_sample, oldest_label
+        return None, None
 
     def __str__(self):
-        return f"""Cluster with mean {self.mean} and samples {self.samples}"""
+        return f"""Cluster with mean {self.mean} and {len(self.samples)} samples"""
+
 
 class ClusteringMechanism:
     """Implements the clustering mechanism described in Algorithm 3."""
 
-    def __init__(self, Q=100, P=3, dimensionality_reducer=None):
+    def __init__(self, Q=100, P=3, device='cpu'):
         """
         Initializes the clustering mechanism.
 
         Args:
             Q (int): Maximum number of clusters.
             P (int): Maximum size of each cluster.
-            dimensionality_reducer (DimensionalityReducer): Dimensionality reduction method. If None, no reduction is applied.
+            device: PyTorch device to use for tensor operations.
         """
         self.clusters = []  # List of Cluster objects
-        self.Q = Q          # Max number of clusters
-        self.P = P          # Max cluster size
-        self.dimensionality_reducer = dimensionality_reducer
+        self.Q = Q  # Max number of clusters
+        self.P = P  # Max cluster size
+        self.device = device
 
-    def add(self, z:np.ndarray, label=None):
+    def add(self, z, label=None):
         """
         Adds a sample z to the appropriate cluster or forms a new one.
 
         Args:
-            z (np.ndarray): The sample (e.g., activation vector) to add.
+            z (torch.Tensor): The sample (e.g., activation vector) to add.
             label: Optional label associated with the sample (does not affect clustering).
         """
-        assert len(z.shape) == 1, "Sample should only have one axis."
+        # Ensure z is a tensor on the correct device
+        if not isinstance(z, torch.Tensor):
+            z = torch.tensor(z, dtype=torch.float32, device=self.device)
+        else:
+            z = z.to(self.device)
 
-        # Apply dimensionality reduction if configured
-        if self.dimensionality_reducer is not None:
-            if not self.dimensionality_reducer.fitted:
-                raise ValueError("Dimensionality reducer must be fitted before adding samples. Call fit_reducer() first.")
-            z = self.dimensionality_reducer.transform(z)
-        # if z is a set of samples, add it one by one
+        # Ensure z is 1D
+        if len(z.shape) != 1:
+            z = z.flatten()
+
         if len(self.clusters) < self.Q:
             # If the number of clusters is less than Q, create a new cluster
-            # and add z to it.
-            new_cluster = Cluster(z, label)
+            new_cluster = Cluster(z, label, device=self.device)
             self.clusters.append(new_cluster)
         else:
-            # If the number of clusters has reached Q, find the closest cluster
-            # based on Euclidean distance to its mean.
+            # Find the closest cluster based on Euclidean distance to its mean
             min_distance = float('inf')
             closest_cluster_idx = -1
 
             for i, cluster in enumerate(self.clusters):
-                # Calculate Euclidean distance
-                distance = np.linalg.norm(z - cluster.mean)
+                # Calculate Euclidean distance using PyTorch
+                distance = torch.norm(z - cluster.mean)
                 if distance < min_distance:
                     min_distance = distance
                     closest_cluster_idx = i
@@ -145,70 +160,42 @@ class ClusteringMechanism:
             if len(q_star.samples) > self.P:
                 q_star.remove_one()
 
-
-    def fit_reducer(self, z_list):
-        """
-        Fit dimensionality reducer on a set of samples. Must be called before adding samples if reducer is configured.
-
-        Args:
-            z_list (list or np.ndarray): List of samples to fit reducer on
-        """
-        if self.dimensionality_reducer.fitted:
-            return
-        if self.dimensionality_reducer is None:
-            return
-
-        self.dimensionality_reducer.fit(z_list)
-
-    def transform(self, z):
-        """
-        Apply dimensionality reduction transformation to external data (e.g., test data).
-
-        Args:
-            z (np.ndarray): Sample or batch of samples to transform
-
-        Returns:
-            np.ndarray: Transformed data
-        """
-        if self.dimensionality_reducer is None:
-            return z
-
-        if not self.dimensionality_reducer.fitted:
-            raise ValueError("Dimensionality reducer must be fitted before transforming data. Call fit_reducer() first.")
-
-        return self.dimensionality_reducer.transform(z)
-
     def add_multi(self, z_list, labels=None):
         """
-        This adds a list of samples to the system. TM
+        Adds a list of samples to the system.
 
         Args:
-            z_list (ndp_array): list of samples to add
+            z_list: List of samples to add (should be tensors or convertible to tensors)
             labels: Optional list of labels corresponding to samples
         """
-        self.fit_reducer(z_list)
         if labels is not None:
-            [self.add(z, label) for z, label in zip(z_list, labels)]
+            for z, label in zip(z_list, labels):
+                self.add(z, label)
         else:
-            [self.add(z) for z in z_list]
+            for z in z_list:
+                self.add(z)
 
-    def get_clusters_for_training(self) -> np.ndarray:
+    def get_clusters_for_training(self):
         """Gets the samples currently stored in the clusters
 
         Returns:
-            np.ndarray: an array of samples currently stored in the clusters
+            torch.Tensor: A tensor of samples currently stored in the clusters
         """
         all_samples = []
         for cluster in self.clusters:
             for sample in cluster.samples:
                 all_samples.append(sample)
-        return np.array(all_samples) if all_samples else np.array([])
+
+        if all_samples:
+            return torch.stack(all_samples)
+        else:
+            return torch.empty(0, device=self.device)
 
     def get_clusters_with_labels(self):
         """Gets the samples and their labels currently stored in the clusters
 
         Returns:
-            tuple: (np.ndarray of samples, list of labels)
+            tuple: (list of tensor samples, list of labels)
         """
         all_samples = []
         all_labels = []
@@ -216,16 +203,21 @@ class ClusteringMechanism:
             for sample, label in zip(cluster.samples, cluster.labels):
                 all_samples.append(sample)
                 all_labels.append(label)
-        samples_array = np.array(all_samples) if all_samples else np.array([])
-        return samples_array, all_labels
+
+        return all_samples, all_labels
 
     def visualize(self):
         """
-        Show what's stored inside!
+        Show what's stored inside using tensor operations!
         """
-        # Show each cluster in it's own color
-        import plotly.express as px
-        from sklearn.decomposition import PCA
+        # Show each cluster in its own color
+        try:
+            import plotly.express as px
+            import pandas as pd
+            from sklearn.decomposition import PCA
+        except ImportError:
+            print("Visualization requires plotly, pandas, and sklearn")
+            return
 
         if not self.clusters:
             print("No clusters to visualize")
@@ -246,26 +238,32 @@ class ClusteringMechanism:
             print("No samples to visualize")
             return
 
-        # Convert to numpy array
-        X = np.array(all_samples)
+        # Stack tensors and convert to numpy for sklearn PCA
+        X_tensor = torch.stack(all_samples)
+        X_numpy = X_tensor.cpu().numpy()  # Only convert to numpy for visualization
 
         # Apply PCA to reduce to 3 dimensions if needed
-        if X.shape[1] > 3:
+        if X_numpy.shape[1] > 3:
             pca = PCA(n_components=3)
-            X_reduced = pca.fit_transform(X)
-            # Create column names for the PCA components
+            X_reduced = pca.fit_transform(X_numpy)
             x_col, y_col, z_col = 'PC1', 'PC2', 'PC3'
         else:
-            X_reduced = X
+            X_reduced = X_numpy
             # Pad with zeros if less than 3 dimensions
             if X_reduced.shape[1] == 1:
-                X_reduced = np.column_stack([X_reduced, np.zeros(X_reduced.shape[0]), np.zeros(X_reduced.shape[0])])
+                X_reduced = torch.cat([
+                    torch.from_numpy(X_reduced),
+                    torch.zeros(X_reduced.shape[0], 2)
+                ], dim=1).numpy()
             elif X_reduced.shape[1] == 2:
-                X_reduced = np.column_stack([X_reduced, np.zeros(X_reduced.shape[0])])
+                X_reduced = torch.cat([
+                    torch.from_numpy(X_reduced),
+                    torch.zeros(X_reduced.shape[0], 1)
+                ], dim=1).numpy()
             x_col, y_col, z_col = 'X', 'Y', 'Z'
 
         # Create DataFrame for plotly
-        df = pandas.DataFrame({
+        df = pd.DataFrame({
             x_col: X_reduced[:, 0],
             y_col: X_reduced[:, 1],
             z_col: X_reduced[:, 2],
@@ -275,9 +273,9 @@ class ClusteringMechanism:
 
         # Create 3D scatter plot
         fig = px.scatter_3d(df, x=x_col, y=y_col, z=z_col,
-                           color='Cluster',
-                           symbol='Label',
-                           title='Cluster Visualization (Color=Cluster, Symbol=Label)',
-                           hover_data={'Cluster': True, 'Label': True})
+                            color='Cluster',
+                            symbol='Label',
+                            title='Cluster Visualization (Color=Cluster, Symbol=Label)',
+                            hover_data={'Cluster': True, 'Label': True})
 
         fig.show()

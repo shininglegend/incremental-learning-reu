@@ -1,5 +1,6 @@
+import torch
 from clustering_gemini import ClusteringMechanism
-import numpy as np
+
 
 class ClusteringMemory():
     def __init__(self, Q, P, input_type, device, num_pools=10):
@@ -11,7 +12,7 @@ class ClusteringMemory():
             P (int): Maximum samples per cluster
             input_type (str): Type of input ('samples' for TA-A-GEM)
             num_pools (int): Number of separate pools (10 for permutation/rotation, 2 for class split)
-            device: PyTorch device to use for tensor creation
+            device: PyTorch device to use for tensor operations
         """
         self.device = device
         self.Q = Q
@@ -33,54 +34,52 @@ class ClusteringMemory():
             ClusteringMechanism: The clustering mechanism for this label
         """
         if label not in self.pools:
-            # Create new pool for this label
-            self.pools[label] = ClusteringMechanism(Q=self.Q, P=self.P, dimensionality_reducer=None)
+            # Create new pool for this label - pass device to ClusteringMechanism
+            self.pools[label] = ClusteringMechanism(Q=self.Q, P=self.P, device=self.device)
             self.pool_labels.add(label)
 
         return self.pools[label]
 
     def get_memory_samples(self):
-        """Returns all samples currently stored across all pools as tuples of (sample, label).
-
-        Returns:
-            list: List of (sample, label) tuples from all pools
-        """
-        all_memory_samples = []
-
-        # Collect samples from all pools
-        for label, pool in self.pools.items():
+        """Returns all samples currently stored across all pools as tuples of (sample, label)."""
+        all_samples = []
+        for pool in self.pools.values():
             samples, labels = pool.get_clusters_with_labels()
-            if len(samples) == 0:
-                continue
+            # samples and labels should already be tensors from ClusteringMechanism
+            for s, l in zip(samples, labels):
+                # Ensure tensors are on correct device
+                if isinstance(s, torch.Tensor):
+                    s = s.to(self.device)
+                else:
+                    s = torch.tensor(s, dtype=torch.float32, device=self.device)
 
-            # Convert numpy arrays back to tensors and pair with labels
-            import torch
-            for sample, sample_label in zip(samples, labels):
-                sample_tensor = torch.FloatTensor(sample).to(self.device)
-                label_tensor = torch.tensor(sample_label).to(self.device) if sample_label is not None else torch.tensor(label).to(self.device)
-                all_memory_samples.append((sample_tensor, label_tensor))
+                if isinstance(l, torch.Tensor):
+                    l = l.to(self.device)
+                else:
+                    l = torch.tensor(l, dtype=torch.long, device=self.device)
 
-        return all_memory_samples
+                all_samples.append((s, l))
+        return all_samples
 
     def add_sample(self, sample_data, sample_label):
         """Add a sample to the appropriate pool based on its label.
 
         Args:
-            sample_data: The sample to add (tensor or array)
+            sample_data: The sample to add (should be a tensor)
             sample_label: Label associated with the sample (determines which pool)
         """
-
-        assert not isinstance(sample_data, np.ndarray), "sample_data must be a numpy array or tensor"
-        # Convert tensor to numpy if needed
-        if hasattr(sample_data, 'detach'):
-            sample_data = sample_data.detach().cpu().numpy()
+        # Ensure sample_data is a tensor on the correct device
+        if not isinstance(sample_data, torch.Tensor):
+            sample_data = torch.tensor(sample_data, dtype=torch.float32, device=self.device)
+        else:
+            sample_data = sample_data.to(self.device)
 
         # Flatten if needed for MNIST
         if len(sample_data.shape) > 1:
             sample_data = sample_data.flatten()
 
         # Convert label to int if tensor
-        if hasattr(sample_label, 'item'):
+        if isinstance(sample_label, torch.Tensor):
             sample_label = sample_label.item()
 
         # Get the appropriate pool for this label and add the sample
