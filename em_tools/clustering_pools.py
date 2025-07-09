@@ -1,6 +1,10 @@
 # Handles the pools of clusters
-from em_tools.clustering_mechs import ClusteringMechanism
-import numpy as np
+try:
+    from clustering_mechs import ClusteringMechanism
+except ImportError:
+    from em_tools.clustering_mechs import ClusteringMechanism
+
+import torch
 
 
 class ClusteringMemory:
@@ -43,35 +47,39 @@ class ClusteringMemory:
 
         return self.pools[label]
 
-    def get_memory_samples(self):
+    def get_memory_samples(self, timer=None):
         """Returns all samples currently stored across all pools as tuples of (sample, label).
 
         Returns:
             list: List of (sample, label) tuples from all pools
         """
+        ts = lambda k: timer.start(k) if timer is not None else None
+        te = lambda k: timer.end(k) if timer is not None else None
         all_memory_samples = []
 
         # Collect samples from all pools
+        ts("total")
         for label, pool in self.pools.items():
+            ts("from pool")
             samples, labels = pool.get_clusters_with_labels()
+            te("from pool")
             if len(samples) == 0:
                 continue
 
-            # Convert numpy arrays back to tensors and pair with labels
-            import torch
-
+            # Convert tensors to device and pair with labels
+            ts("convert")
             for sample, sample_label in zip(samples, labels):
-                sample_tensor = torch.FloatTensor(sample).to(self.device)
+                sample_tensor = sample.to(self.device)
                 label_tensor = (
-                    torch.tensor(sample_label).to(self.device)
-                    if sample_label is not None
-                    else torch.tensor(label).to(self.device)
-                )
+                                    torch.tensor(sample_label).to(self.device)
+                                    if sample_label is not None
+                                    else torch.tensor(label).to(self.device))
                 all_memory_samples.append((sample_tensor, label_tensor))
-
+            te("convert")
+        te("total")
         return all_memory_samples
 
-    def add_sample(self, sample_data: np.ndarray, sample_label):
+    def add_sample(self, sample_data, sample_label):
         """Add a sample to the appropriate pool based on its label.
 
         Args:
@@ -79,17 +87,17 @@ class ClusteringMemory:
             sample_label: Label associated with the sample (determines which pool)
         """
 
-        # Convert tensor to numpy if needed
+        # Convert to tensor if needed
         if hasattr(sample_data, "detach"):
-            sample_data = np.asarray(sample_data.detach().cpu().numpy())
-            # sample_data = np.asarray() # Convert z to proper numpy array to fix corruption issues
+            # Already a tensor, just ensure it's on CPU for storage
+            sample_tensor = sample_data.detach().cpu()
+        else:
+            # Convert from numpy or other formats to tensor
+            sample_tensor = torch.tensor(sample_data, dtype=torch.float32)
 
-        assert isinstance(
-            sample_data, np.ndarray
-        ), f"Expected numpy.ndarray, got {type(sample_data)}"
         # Flatten if needed for MNIST
-        if len(sample_data.shape) > 1:
-            sample_data = sample_data.flatten()
+        if len(sample_tensor.shape) > 1:
+            sample_tensor = sample_tensor.flatten()
 
         # Convert label to int if tensor
         if hasattr(sample_label, "item"):
@@ -97,7 +105,7 @@ class ClusteringMemory:
 
         # Get the appropriate pool for this label and add the sample
         pool = self._get_or_create_pool(sample_label)
-        pool.add(sample_data, sample_label)
+        pool.add(sample_tensor, sample_label)
 
     def get_memory_size(self):
         """Get the current number of samples stored across all pools.
