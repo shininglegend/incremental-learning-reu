@@ -15,11 +15,11 @@ from pathlib import Path
 
 class TAGEMEvaluator:
     """
-    Comprehensive evaluator for TA-AGEM models
+    Evaluator for TA-AGEM models
     Handles test data preparation, evaluation, and reporting
     """
 
-    def __init__(self, params, save_dir="./test_results"):
+    def __init__(self, params, test_dataloaders=None, save_dir="./test_results"):
         """
         Initialize evaluator with training parameters
 
@@ -31,6 +31,8 @@ class TAGEMEvaluator:
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
         self.timestamp = time.strftime("%Y%m%d_%H%M%S")
+        self.test_dataloaders = test_dataloaders
+        self.permutations = params['permutations']
 
     def prepare_test_data(self, batch_size=100):
         """
@@ -46,38 +48,51 @@ class TAGEMEvaluator:
         from mnist import MnistDataloader, training_images_filepath, training_labels_filepath, test_images_filepath, \
             test_labels_filepath
 
+        if self.test_dataloaders is not None:
+            # print("Using pre-prepared test dataloaders")
+            return self.test_dataloaders
+
         # Load test data
         _mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath,
                                             test_images_filepath, test_labels_filepath)
         (x_train, y_train), (x_test, y_test) = _mnist_dataloader.load_data()
 
+        '''
         # Convert test data to tensors
         x_test_array = np.array(x_test)
         y_test_array = np.array(y_test)
         x_test_tensor = torch.FloatTensor(x_test_array) / 255.0
         y_test_tensor = torch.LongTensor(y_test_array)
+        '''
 
         # For quick testing, use subset of test data
         if self.params.get('quick_test_mode', False):
             # Use first 1000 test samples for quick testing
-            x_test_tensor = x_test_tensor[:1000]
-            y_test_tensor = y_test_tensor[:1000]
+            x_test = x_test[:1000]
+            y_test = y_test[:1000]
 
-        return self._apply_task_transformations(x_test_tensor, y_test_tensor, batch_size)
+        return self._apply_task_transformations(x_test, y_test, batch_size)
 
     def _apply_task_transformations(self, x_test_tensor, y_test_tensor, batch_size):
         """Apply task-specific transformations to test data"""
         test_dataloaders = []
         task_type = self.params['task_type']
         num_tasks = self.params['num_tasks']
+        num_pixels = self.params['input_dim']
 
         if task_type == 'permutation':
-            # Use same seed as training to ensure consistent permutations
-            torch.manual_seed(42)
-            num_pixels = 28 * 28
+            # Use the provided permutations if available, otherwise generate new ones (less ideal for evaluation)
+            if self.permutations is None or len(self.permutations) != num_tasks:
+                print(
+                    "Warning: Permutations not provided or count mismatch. Generating new permutations for evaluation.")
+                torch.manual_seed(42)  # Ensure reproducibility if generating new ones
+                generated_permutations = [torch.randperm(num_pixels) for _ in range(num_tasks)]
+                perms_to_use = generated_permutations
+            else:
+                perms_to_use = self.permutations
 
             for task_id in range(num_tasks):
-                perm = torch.randperm(num_pixels)
+                perm = perms_to_use[task_id]
                 x_task = x_test_tensor.view(-1, num_pixels)
                 x_task = x_task[:, perm]
 
@@ -147,8 +162,8 @@ class TAGEMEvaluator:
 
         results = {
             'task_accuracies': [],
-            'task_predictions': [],
-            'task_true_labels': [],
+            'task_predictions': [],  # Will store numpy arrays for sklearn compatibility
+            'task_true_labels': [],  # Will store numpy arrays for sklearn compatibility
             'overall_accuracy': 0.0,
             'per_class_accuracy': {},
             'confusion_matrices': [],
@@ -156,8 +171,8 @@ class TAGEMEvaluator:
             'timestamp': self.timestamp
         }
 
-        all_predictions = []
-        all_true_labels = []
+        all_predictions_list = []  # Store as list of tensors initially
+        all_true_labels_list = []  # Store as list of tensors initially
 
         print("Evaluating model on test data...")
 
@@ -165,8 +180,8 @@ class TAGEMEvaluator:
             for task_id, test_dataloader in enumerate(test_dataloaders):
                 print(f"Evaluating Task {task_id}...")
 
-                task_predictions = []
-                task_true_labels = []
+                task_predictions_tensors = []  # Collect predictions as tensors
+                task_true_labels_tensors = []  # Collect true labels as tensors
                 correct = 0
                 total = 0
 
@@ -178,9 +193,9 @@ class TAGEMEvaluator:
                     outputs = model(batch_data)
                     _, predicted = torch.max(outputs.data, 1)
 
-                    # Collect predictions and labels
-                    task_predictions.extend(predicted.cpu().numpy())
-                    task_true_labels.extend(batch_labels.cpu().numpy())
+                    # Collect predictions and labels as tensors
+                    task_predictions_tensors.append(predicted.cpu())
+                    task_true_labels_tensors.append(batch_labels.cpu())
 
                     # Calculate accuracy
                     total += batch_labels.size(0)
@@ -188,35 +203,52 @@ class TAGEMEvaluator:
 
                 task_accuracy = correct / total if total > 0 else 0.0
                 results['task_accuracies'].append(task_accuracy)
-                results['task_predictions'].append(task_predictions)
-                results['task_true_labels'].append(task_true_labels)
 
-                # Add to overall results
-                all_predictions.extend(task_predictions)
-                all_true_labels.extend(task_true_labels)
+                # Convert to numpy arrays ONCE per task for storage and later sklearn use
+                task_predictions_np = torch.cat(
+                    task_predictions_tensors).numpy() if task_predictions_tensors else np.array([])
+                task_true_labels_np = torch.cat(
+                    task_true_labels_tensors).numpy() if task_true_labels_tensors else np.array([])
+
+                results['task_predictions'].append(task_predictions_np)
+                results['task_true_labels'].append(task_true_labels_np)
+
+                # Add to overall results (still as tensors for efficient concatenation)
+                all_predictions_list.extend(task_predictions_tensors)
+                all_true_labels_list.extend(task_true_labels_tensors)
 
                 # Generate confusion matrix for this task
-                if len(set(task_true_labels)) > 1:
-                    cm = confusion_matrix(task_true_labels, task_predictions)
+                if len(set(task_true_labels_np)) > 1:  # Use numpy array for set conversion
+                    cm = confusion_matrix(task_true_labels_np, task_predictions_np)
                     results['confusion_matrices'].append(cm)
 
                 print(f"Task {task_id} Accuracy: {task_accuracy:.4f}")
 
-        # Calculate overall metrics
-        if len(all_true_labels) > 0:
-            results['overall_accuracy'] = sum(np.array(all_predictions) == np.array(all_true_labels)) / len(
-                all_true_labels)
+        # Concatenate all predictions and true labels into single tensors, then convert to numpy ONCE
+        if all_true_labels_list:
+            all_predictions_tensor = torch.cat(all_predictions_list)
+            all_true_labels_tensor = torch.cat(all_true_labels_list)
+
+            # Calculate overall accuracy directly with tensors
+            results['overall_accuracy'] = (all_predictions_tensor == all_true_labels_tensor).float().mean().item()
+
+            # Convert to numpy for sklearn functions and per-class accuracy
+            all_predictions_np = all_predictions_tensor.numpy()
+            all_true_labels_np = all_true_labels_tensor.numpy()
 
             # Per-class accuracy
-            unique_classes = sorted(set(all_true_labels))
+            unique_classes = sorted(np.unique(all_true_labels_np))  # Use numpy unique
             for cls in unique_classes:
-                cls_mask = np.array(all_true_labels) == cls
+                cls_mask = (all_true_labels_np == cls)
                 if cls_mask.sum() > 0:
-                    cls_accuracy = sum((np.array(all_predictions)[cls_mask]) == cls) / cls_mask.sum()
+                    cls_accuracy = np.sum((all_predictions_np[cls_mask]) == cls) / cls_mask.sum()
                     results['per_class_accuracy'][cls] = cls_accuracy
 
-        results['all_predictions'] = all_predictions
-        results['all_true_labels'] = all_true_labels
+            results['all_predictions'] = all_predictions_np
+            results['all_true_labels'] = all_true_labels_np
+        else:
+            results['all_predictions'] = np.array([])
+            results['all_true_labels'] = np.array([])
 
         return results
 
