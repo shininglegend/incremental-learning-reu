@@ -37,7 +37,7 @@ class Cluster:
         """
         Removes a sample from the cluster and updates its mean.
         """
-        return self.remove_oldest()
+        return self.remove_based_on_mean()
 
     def remove_based_on_mean(self):
         """

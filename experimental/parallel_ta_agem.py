@@ -15,6 +15,8 @@ import sys
 from tqdm import tqdm
 
 # Set multiprocessing start method for PyTorch compatibility
+from experimental.simple_mlp import SimpleMLP
+
 try:
     torch_mp.set_start_method('spawn', force=True)
 except RuntimeError:
@@ -79,7 +81,7 @@ def create_model_from_state(state_dict):
     hidden_dim = state_dict['fc1.weight'].shape[0]
     num_classes = state_dict['fc3.weight'].shape[0]
 
-    from main import SimpleMLP  # Import your model class
+    from simple_mlp import SimpleMLP  # Import your model class
     model = SimpleMLP(input_dim, hidden_dim, num_classes)
     model.load_state_dict(state_dict)
     return model
@@ -631,3 +633,62 @@ def run_parallel_ta_agem(params, model, optimizer, criterion, clustering_memory,
         task_dataloaders, agem_handler, visualizer
     )
 
+
+def merge_task_models(task_results, params):
+    """Merge models from different tasks"""
+    if not task_results:
+        return None
+
+    # Create base model
+    merged_model = SimpleMLP(params['input_dim'], params['hidden_dim'], params['num_classes'])
+
+    # Use the last task's model as the base (most recent learning)
+    if task_results:
+        last_task_state = task_results[-1]['model_state']
+        merged_model.load_state_dict(last_task_state)
+
+    return merged_model
+
+
+def process_batch_parallel(agem_handler, data, labels, memory):
+    """Process a single batch in parallel - thread-safe version"""
+    try:
+        # Create a copy of agem_handler for thread safety
+        # This is crucial - sharing the same handler across threads causes issues
+        import copy
+        local_agem_handler = copy.deepcopy(agem_handler)
+
+        # Move data to correct device
+        data = data.to(local_agem_handler.device)
+        labels = labels.to(local_agem_handler.device)
+
+        # Get memory samples (thread-safe access)
+        memory_samples = memory.get_memory_samples()
+        memory_samples_on_device = [
+            (s.to(local_agem_handler.device), l.to(local_agem_handler.device))
+            for s, l in memory_samples
+        ]
+
+        # Compute projected gradients and batch loss
+        projected_grads_flat, batch_loss = local_agem_handler.compute_and_project_batch_gradient(
+            data, labels, memory_samples_on_device
+        )
+
+        return {
+            'loss': batch_loss,
+            'projected_gradients_flat': projected_grads_flat,
+            'data': data.to('cpu'),
+            'labels': labels.to('cpu'),
+            'success': True
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            'loss': None,
+            'projected_gradients_flat': None,
+            'data': data.to('cpu') if 'data' in locals() else None,
+            'labels': labels.to('cpu') if 'labels' in locals() else None,
+            'success': False,
+            'error': str(e)
+        }

@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 import clustering
 import agem
+from experimental.evaluation import TAGEMEvaluator
 from simple_mlp import SimpleMLP
 from load_dataset import optimize_dataloader
 
@@ -16,7 +17,7 @@ from config import params
 DEVICE = params['device']
 
 
-def run_sequential_training(params, task_dataloaders_nested):
+def run_sequential_training(params, task_dataloaders_nested, test_dataloaders):
     """Baseline sequential training"""
     print("Running sequential training...")
 
@@ -62,6 +63,8 @@ def run_sequential_training(params, task_dataloaders_nested):
     else:
         raise TypeError(f"Expected a list or tuple of DataLoaders, but got {type(task_dataloaders_nested)}.")
 
+    intermediate_eval_accuracies_history = []
+
     # Now iterate over the correctly flattened list of DataLoaders
     for task_id, task_dataloader in enumerate(flat_task_dataloaders):
         print(f"\nTask {task_id + 1}/{params['num_tasks']}")
@@ -83,8 +86,19 @@ def run_sequential_training(params, task_dataloaders_nested):
                 for i in range(len(data)):
                     memory.add_sample(data[i], labels[i])
 
+        # --- Perform intermediate evaluation after each task is trained ---
+        print(f"  Evaluating model after training Task {task_id + 1}...")
+        # Create a temporary evaluator instance for intermediate evaluation
+        temp_evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders)
+        # Evaluate on all tasks from 0 up to the current task_id (inclusive)
+        current_accuracies = temp_evaluator.evaluate_tasks_up_to(model, task_id, test_dataloaders,
+                                                                         device=params['device'])
+        intermediate_eval_accuracies_history.append(current_accuracies)
+        print(f"  Intermediate accuracies after Task {task_id + 1}: {current_accuracies}")
+        # --- End intermediate evaluation ---
+
     training_time = time.time() - start_time
-    return model, memory, training_time
+    return model, memory, training_time, intermediate_eval_accuracies_history
 
 
 def train_single_task(args):
@@ -196,51 +210,7 @@ def train_single_task(args):
     }
 
 
-def process_batch_parallel(agem_handler, data, labels, memory):
-    """Process a single batch in parallel - thread-safe version"""
-    try:
-        # Create a copy of agem_handler for thread safety
-        # This is crucial - sharing the same handler across threads causes issues
-        import copy
-        local_agem_handler = copy.deepcopy(agem_handler)
-
-        # Move data to correct device
-        data = data.to(local_agem_handler.device)
-        labels = labels.to(local_agem_handler.device)
-
-        # Get memory samples (thread-safe access)
-        memory_samples = memory.get_memory_samples()
-        memory_samples_on_device = [
-            (s.to(local_agem_handler.device), l.to(local_agem_handler.device))
-            for s, l in memory_samples
-        ]
-
-        # Compute projected gradients and batch loss
-        projected_grads_flat, batch_loss = local_agem_handler.compute_and_project_batch_gradient(
-            data, labels, memory_samples_on_device
-        )
-
-        return {
-            'loss': batch_loss,
-            'projected_gradients_flat': projected_grads_flat,
-            'data': data.to('cpu'),
-            'labels': labels.to('cpu'),
-            'success': True
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {
-            'loss': None,
-            'projected_gradients_flat': None,
-            'data': data.to('cpu') if 'data' in locals() else None,
-            'labels': labels.to('cpu') if 'labels' in locals() else None,
-            'success': False,
-            'error': str(e)
-        }
-
-
-def run_optimized_training(params, task_dataloaders):
+def run_optimized_training(params, task_dataloaders, test_dataloaders):
     """Run training with optimizations"""
 
     start_time = time.time()
@@ -253,6 +223,7 @@ def run_optimized_training(params, task_dataloaders):
     main_model = SimpleMLP(params['input_dim'], params['hidden_dim'], params['num_classes']).to(DEVICE)
     all_results = []
     accumulated_memory = []
+    intermediate_eval_accuracies_history = []
 
     for task_id, task_dataloader in enumerate(optimized_dataloaders):
         print(f"\nProcessing Task {task_id + 1}/{params['num_tasks']}...")
@@ -282,6 +253,16 @@ def run_optimized_training(params, task_dataloaders):
                 accumulated_memory = accumulated_memory[-params['memory_size_p'] * params['num_pools']:]
 
             print(f"Task {task_id + 1} completed successfully!")
+
+            # --- Perform intermediate evaluation after each task is trained ---
+            print(f"  Evaluating model after training Task {task_id + 1}...")
+            temp_evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders)
+            current_accuracies = temp_evaluator.evaluate_tasks_up_to(main_model, task_id, test_dataloaders,
+                                                                     device=params['device'])
+            intermediate_eval_accuracies_history.append(current_accuracies)
+            print(f"  Intermediate accuracies after Task {task_id + 1}: {current_accuracies}")
+            # --- End intermediate evaluation ---
+
         else:
             print(f"Task {task_id + 1} failed!")
 
@@ -290,25 +271,9 @@ def run_optimized_training(params, task_dataloaders):
     # Create final memory
     final_memory = clustering.ClusteringMemory(
         Q=params['memory_size_q'], P=params['memory_size_p'],
-        input_type='samples', num_pools=params['num_pools']
+        input_type='samples', num_pools=params['num_pools'], device=params['device']
     )
     for sample_data, sample_label in accumulated_memory:
         final_memory.add_sample(sample_data, sample_label)
 
-    return main_model, final_memory, all_results, training_time
-
-
-def merge_task_models(task_results, params):
-    """Merge models from different tasks"""
-    if not task_results:
-        return None
-
-    # Create base model
-    merged_model = SimpleMLP(params['input_dim'], params['hidden_dim'], params['num_classes'])
-
-    # Use the last task's model as the base (most recent learning)
-    if task_results:
-        last_task_state = task_results[-1]['model_state']
-        merged_model.load_state_dict(last_task_state)
-
-    return merged_model
+    return main_model, final_memory, all_results, training_time, intermediate_eval_accuracies_history
