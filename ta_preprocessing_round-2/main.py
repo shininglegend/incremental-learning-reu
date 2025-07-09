@@ -5,9 +5,11 @@ from load_dataset import load_dataset
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 # import numpy as np
 # import pandas as pd
 from visualization_analysis import TAGemVisualizer
+from learning_rate import TALearningRateScheduler
 import time
 
 # --- 1. Configuration and Initialization ---
@@ -19,44 +21,52 @@ print(f"Using device: {device}")
 # If set to False, will run full MNIST with 5 tasks and 10 epochs with normal progress bar
 QUICK_TEST_MODE = False
 
-NUM_CLASSES = 10 # For MNIST
+# If set to True, will use the TA-OGD adaptive learning rate scheduler
+# If set to False, will use fixed learning rate
+USE_LEARNING_RATE_SCHEDULER = True
+
+NUM_CLASSES = 10  # For MNIST
 INPUT_DIM = 784  # For MNIST (28*28)
-HIDDEN_DIM = 200 # As per paper
-MEMORY_SIZE_Q = 10 # Number of clusters per pool (Q)
+HIDDEN_DIM = 200  # As per paper
+MEMORY_SIZE_Q = 10  # Number of clusters per pool (Q)
 MEMORY_SIZE_P = 3  # Max samples per cluster (P) - as per paper
-BATCH_SIZE = 50 if QUICK_TEST_MODE else 10    # As per paper
+BATCH_SIZE = 50 if QUICK_TEST_MODE else 10  # As per paper
 LEARNING_RATE = 1e-3
 NUM_EPOCHS = 20
-NUM_TASKS = 2 if QUICK_TEST_MODE else 5 # Example: for permutation or rotation based tasks
-TASK_TYPE = 'permutation'  # 'permutation', 'rotation', or 'class_split'
-DATASET_NAME = 'mnist'  # Dataset to use: 'mnist' or 'fashion_mnist'
+NUM_TASKS = (
+    2 if QUICK_TEST_MODE else 5
+)  # Example: for permutation or rotation based tasks
+TASK_TYPE = "permutation"  # 'permutation', 'rotation', or 'class_split'
+DATASET_NAME = "mnist"  # Dataset to use: 'mnist' or 'fashion_mnist'
 
 # Determine number of pools based on task type (as per paper)
-if TASK_TYPE in ['permutation', 'rotation']:
+if TASK_TYPE in ["permutation", "rotation"]:
     NUM_POOLS = 10  # 10 pools for permutation/rotation tasks
     CLUSTERS_PER_POOL = 10  # Q = 10 per pool
-elif TASK_TYPE == 'class_split':
-    NUM_POOLS = 2   # 2 pools for class split tasks
+elif TASK_TYPE == "class_split":
+    NUM_POOLS = 2  # 2 pools for class split tasks
     CLUSTERS_PER_POOL = 50  # Q = 50 per pool
 else:
     NUM_POOLS = NUM_CLASSES  # Default fallback
     CLUSTERS_PER_POOL = MEMORY_SIZE_Q
 
 params = {  # Store all parameters for easy access
-    'input_dim': INPUT_DIM,
-    'hidden_dim': HIDDEN_DIM,
-    'num_classes': NUM_CLASSES,
-    'memory_size_q': CLUSTERS_PER_POOL,
-    'memory_size_p': MEMORY_SIZE_P,
-    'num_pools': NUM_POOLS,
-    'task_type': TASK_TYPE,
-    'batch_size': BATCH_SIZE,
-    'learning_rate': LEARNING_RATE,
-    'num_epochs': NUM_EPOCHS,
-    'num_tasks': NUM_TASKS,
-    'quick_test_mode': QUICK_TEST_MODE,
-    'dataset_name': DATASET_NAME,
+    "input_dim": INPUT_DIM,
+    "hidden_dim": HIDDEN_DIM,
+    "num_classes": NUM_CLASSES,
+    "memory_size_q": CLUSTERS_PER_POOL,
+    "memory_size_p": MEMORY_SIZE_P,
+    "num_pools": NUM_POOLS,
+    "task_type": TASK_TYPE,
+    "batch_size": BATCH_SIZE,
+    "learning_rate": LEARNING_RATE,
+    "num_epochs": NUM_EPOCHS,
+    "num_tasks": NUM_TASKS,
+    "quick_test_mode": QUICK_TEST_MODE,
+    "dataset_name": DATASET_NAME,
+    "use_lr_scheduler": USE_LEARNING_RATE_SCHEDULER,
 }
+
 
 # Define a simple MLP model
 class SimpleMLP(nn.Module):
@@ -81,20 +91,34 @@ class SimpleMLP(nn.Module):
         x = self.fc3(x)
         return x
 
+
 # Initialize model, optimizer, and loss function
 model = SimpleMLP(INPUT_DIM, HIDDEN_DIM, NUM_CLASSES).to(device)
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
 
+# Initialize learning rate scheduler (if enabled)
+lr_scheduler = (
+    TALearningRateScheduler(lr_init=LEARNING_RATE)
+    if USE_LEARNING_RATE_SCHEDULER
+    else None
+)
+
 # Initialize TA-A-GEM components with multi-pool architecture
 # Clustering_memory will manage the episodic memory with separate pools per class
 clustering_memory = clustering.ClusteringMemory(
-    Q=CLUSTERS_PER_POOL, P=MEMORY_SIZE_P, input_type='samples', device=device, num_pools=NUM_POOLS
+    Q=CLUSTERS_PER_POOL,
+    P=MEMORY_SIZE_P,
+    input_type="samples",
+    device=device,
+    num_pools=NUM_POOLS,
 )
 
 # A-GEM wrapper/class for gradient projection logic
 # It needs to access the memory managed by clustering_memory
-agem_handler = agem.AGEMHandler(model, criterion, optimizer, device=device)
+agem_handler = agem.AGEMHandler(
+    model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
+)
 
 # Load and prepare MNIST data for domain-incremental learning
 # This function encapsulates the permutation, rotation, or class split logic
@@ -102,8 +126,10 @@ agem_handler = agem.AGEMHandler(model, criterion, optimizer, device=device)
 print("Loading dataset and preparing data loaders...")
 datasetLoader = load_dataset(DATASET_NAME)
 train_dataloaders, test_dataloaders = datasetLoader.prepare_domain_incremental_data(
-    task_type=TASK_TYPE, num_tasks=NUM_TASKS, batch_size=BATCH_SIZE,
-    quick_test=QUICK_TEST_MODE
+    task_type=TASK_TYPE,
+    num_tasks=NUM_TASKS,
+    batch_size=BATCH_SIZE,
+    quick_test=QUICK_TEST_MODE,
 )
 
 # --- Initialize comprehensive visualizer ---
@@ -129,34 +155,43 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
-            batch_loss = agem_handler.optimize(data, labels, clustering_memory.get_memory_samples())
+            batch_loss = agem_handler.optimize(
+                data, labels, clustering_memory.get_memory_samples()
+            )
 
             # Track batch loss
             if batch_loss is not None:
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
-
-
             # Step 2: Update the clustered memory with current batch samples
             # This is where the core clustering for TA-A-GEM happens
             for i in range(len(data)):
                 sample_data = data[i].cpu()  # Move to CPU for memory storage
                 sample_label = labels[i].cpu()  # Move to CPU for memory storage
-                clustering_memory.add_sample(sample_data, sample_label) # Add sample to clusters
+                clustering_memory.add_sample(
+                    sample_data, sample_label
+                )  # Add sample to clusters
 
             num_batches += 1
 
             # Update progress bar every 50 batches or on last batch
-            if not QUICK_TEST_MODE and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1):
+            if not QUICK_TEST_MODE and (
+                batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1
+            ):
                 progress = (batch_idx + 1) / len(train_dataloader)
                 bar_length = 30
                 filled_length = int(bar_length * progress)
-                bar = '█' * filled_length + '-' * (bar_length - filled_length)
-                print(f'\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})', end='', flush=True)
+                bar = "█" * filled_length + "-" * (bar_length - filled_length)
+                print(
+                    f"\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
+                    end="",
+                    flush=True,
+                )
 
         # Print newline after progress bar completion
-        if not QUICK_TEST_MODE: print()
+        if not QUICK_TEST_MODE:
+            print()
 
         # Track epoch loss
         avg_epoch_loss = epoch_loss / max(num_batches, 1)
@@ -164,17 +199,21 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
         # Print epoch summary
         if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
-            print(f'  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}')
+            print(f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}")
 
     # Evaluate performance after each task on TEST DATA
     model.eval()
-    avg_accuracy = agem.evaluate_tasks_up_to(model, criterion, test_dataloaders, task_id, device=device)
+    avg_accuracy = agem.evaluate_tasks_up_to(
+        model, criterion, test_dataloaders, task_id, device=device
+    )
 
     # Evaluate on individual tasks for detailed tracking
     individual_accuracies = []
     for eval_task_id in range(task_id + 1):
         eval_dataloader = test_dataloaders[eval_task_id]
-        task_acc = agem.evaluate_single_task(model, criterion, eval_dataloader, device=device)
+        task_acc = agem.evaluate_single_task(
+            model, criterion, eval_dataloader, device=device
+        )
         individual_accuracies.append(task_acc)
 
     # Calculate training time for this task
@@ -184,6 +223,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     memory_size = clustering_memory.get_memory_size()
     pool_sizes = clustering_memory.get_pool_sizes()
     num_active_pools = clustering_memory.get_num_active_pools()
+    current_lr = lr_scheduler.get_lr() if USE_LEARNING_RATE_SCHEDULER else LEARNING_RATE
 
     visualizer.update_metrics(
         task_id=task_id,
@@ -191,7 +231,8 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         individual_accuracies=individual_accuracies,
         epoch_losses=task_epoch_losses,
         memory_size=memory_size,
-        training_time=task_time
+        training_time=task_time,
+        learning_rate=current_lr,
     )
 
     print(f"After Task {task_id}, Average Accuracy: {avg_accuracy:.4f}")

@@ -3,16 +3,29 @@ import numpy as np
 import pandas
 from collections import deque
 
+DEBUG = False
+
+triggered = set()
+dprint = lambda s: triggered.add(s) if DEBUG else None
+
+
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
-    def __init__(self, initial_sample, initial_label=None):
-        self.samples = deque([initial_sample]) # Stores samples in insertion order
-        self.labels = deque([initial_label]) if initial_label is not None else deque([None]) # Stores labels in insertion order
-        self.mean = np.array(initial_sample)
-        self.sum_samples = np.array(initial_sample) # To efficiently update mean
 
-    def add_sample(self, sample, label=None):
+    def __init__(self, initial_sample, initial_label=None):
+        dprint("cl init triggered")
+
+        self.samples = deque([initial_sample])  # Stores samples in insertion order
+        self.labels = (
+            deque([initial_label]) if initial_label is not None else deque([None])
+        )  # Stores labels in insertion order
+        self.mean = np.array(initial_sample)
+        self.sum_samples = np.array(initial_sample)  # To efficiently update mean
+
+    def add_sample(self, sample: np.ndarray, label=None):
         """Adds a new sample to the cluster and updates its mean."""
+        dprint("cl add_sample triggered")
+
         self.samples.append(sample)
         self.labels.append(label)
         self.sum_samples += np.array(sample)
@@ -22,13 +35,16 @@ class Cluster:
         """
         Removes a sample from the cluster and updates its mean.
         """
-        return self.remove_oldest()
+        dprint("cl remove_one triggered")
 
+        return self.remove_oldest()
 
     def remove_based_on_mean(self):
         """
         Removes the sample furthest from the mean, excluding the newest sample.
         """
+        dprint("cl remove_based_on_mean triggered")
+
         if len(self.samples) <= 1:
             return self.remove_oldest()
 
@@ -68,23 +84,25 @@ class Cluster:
 
         return removed_sample, removed_label
 
-
     def remove_oldest(self):
         """
         Removes a sample from the cluster and updates its mean.
         Currently removes the oldest sample.
         """
+        dprint("cl remove_oldest triggered")
+
         if len(self.samples) > 0:
             oldest_sample = self.samples.popleft()
-            self.labels.popleft() # Also remove the corresponding label
+            self.labels.popleft()  # Also remove the corresponding label
             self.sum_samples -= np.array(oldest_sample)
             if len(self.samples) > 0:
                 self.mean = self.sum_samples / len(self.samples)
             else:
-                self.mean = np.zeros_like(self.mean) # If cluster becomes empty
+                self.mean = np.zeros_like(self.mean)  # If cluster becomes empty
 
     def __str__(self):
         return f"""Cluster with mean {self.mean} and samples {self.samples}"""
+
 
 class ClusteringMechanism:
     """Implements the clustering mechanism described in Algorithm 3."""
@@ -98,12 +116,14 @@ class ClusteringMechanism:
             P (int): Maximum size of each cluster.
             dimensionality_reducer (DimensionalityReducer): Dimensionality reduction method. If None, no reduction is applied.
         """
-        self.clusters = []  # List of Cluster objects
-        self.Q = Q          # Max number of clusters
-        self.P = P          # Max cluster size
+        dprint("clm init triggered")
+
+        self.clusters: list[Cluster] = []  # List of Cluster objects
+        self.Q = Q  # Max number of clusters
+        self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
 
-    def add(self, z:np.ndarray, label=None):
+    def add(self, z: np.ndarray, label=None):
         """
         Adds a sample z to the appropriate cluster or forms a new one.
 
@@ -111,12 +131,16 @@ class ClusteringMechanism:
             z (np.ndarray): The sample (e.g., activation vector) to add.
             label: Optional label associated with the sample (does not affect clustering).
         """
+        dprint("clm add triggered")
+
         assert len(z.shape) == 1, "Sample should only have one axis."
 
         # Apply dimensionality reduction if configured
         if self.dimensionality_reducer is not None:
             if not self.dimensionality_reducer.fitted:
-                raise ValueError("Dimensionality reducer must be fitted before adding samples. Call fit_reducer() first.")
+                raise ValueError(
+                    "Dimensionality reducer must be fitted before adding samples. Call fit_reducer() first."
+                )
             z = self.dimensionality_reducer.transform(z)
         # if z is a set of samples, add it one by one
         if len(self.clusters) < self.Q:
@@ -127,7 +151,7 @@ class ClusteringMechanism:
         else:
             # If the number of clusters has reached Q, find the closest cluster
             # based on Euclidean distance to its mean.
-            min_distance = float('inf')
+            min_distance = float("inf")
             closest_cluster_idx = -1
 
             for i, cluster in enumerate(self.clusters):
@@ -145,7 +169,6 @@ class ClusteringMechanism:
             if len(q_star.samples) > self.P:
                 q_star.remove_one()
 
-
     def fit_reducer(self, z_list):
         """
         Fit dimensionality reducer on a set of samples. Must be called before adding samples if reducer is configured.
@@ -153,6 +176,8 @@ class ClusteringMechanism:
         Args:
             z_list (list or np.ndarray): List of samples to fit reducer on
         """
+        dprint("clm fit_reducer triggered")
+
         if self.dimensionality_reducer.fitted:
             return
         if self.dimensionality_reducer is None:
@@ -170,11 +195,15 @@ class ClusteringMechanism:
         Returns:
             np.ndarray: Transformed data
         """
+        dprint("clm transform triggered")
+
         if self.dimensionality_reducer is None:
             return z
 
         if not self.dimensionality_reducer.fitted:
-            raise ValueError("Dimensionality reducer must be fitted before transforming data. Call fit_reducer() first.")
+            raise ValueError(
+                "Dimensionality reducer must be fitted before transforming data. Call fit_reducer() first."
+            )
 
         return self.dimensionality_reducer.transform(z)
 
@@ -186,6 +215,8 @@ class ClusteringMechanism:
             z_list (ndp_array): list of samples to add
             labels: Optional list of labels corresponding to samples
         """
+        dprint("clm add_multi triggered")
+
         self.fit_reducer(z_list)
         if labels is not None:
             [self.add(z, label) for z, label in zip(z_list, labels)]
@@ -198,6 +229,8 @@ class ClusteringMechanism:
         Returns:
             np.ndarray: an array of samples currently stored in the clusters
         """
+        dprint("clm get_clusters_for_training triggered")
+
         all_samples = []
         for cluster in self.clusters:
             for sample in cluster.samples:
@@ -210,6 +243,8 @@ class ClusteringMechanism:
         Returns:
             tuple: (np.ndarray of samples, list of labels)
         """
+        dprint("clm get_clusters_with_labels triggered")
+
         all_samples = []
         all_labels = []
         for cluster in self.clusters:
@@ -223,6 +258,7 @@ class ClusteringMechanism:
         """
         Show what's stored inside!
         """
+        dprint("clm visualize triggered")
         # Show each cluster in it's own color
         import plotly.express as px
         from sklearn.decomposition import PCA
@@ -254,30 +290,69 @@ class ClusteringMechanism:
             pca = PCA(n_components=3)
             X_reduced = pca.fit_transform(X)
             # Create column names for the PCA components
-            x_col, y_col, z_col = 'PC1', 'PC2', 'PC3'
+            x_col, y_col, z_col = "PC1", "PC2", "PC3"
         else:
             X_reduced = X
             # Pad with zeros if less than 3 dimensions
             if X_reduced.shape[1] == 1:
-                X_reduced = np.column_stack([X_reduced, np.zeros(X_reduced.shape[0]), np.zeros(X_reduced.shape[0])])
+                X_reduced = np.column_stack(
+                    [
+                        X_reduced,
+                        np.zeros(X_reduced.shape[0]),
+                        np.zeros(X_reduced.shape[0]),
+                    ]
+                )
             elif X_reduced.shape[1] == 2:
                 X_reduced = np.column_stack([X_reduced, np.zeros(X_reduced.shape[0])])
-            x_col, y_col, z_col = 'X', 'Y', 'Z'
+            x_col, y_col, z_col = "X", "Y", "Z"
 
         # Create DataFrame for plotly
-        df = pandas.DataFrame({
-            x_col: X_reduced[:, 0],
-            y_col: X_reduced[:, 1],
-            z_col: X_reduced[:, 2],
-            'Cluster': cluster_labels,
-            'Label': true_labels
-        })
+        df = pandas.DataFrame(
+            {
+                x_col: X_reduced[:, 0],
+                y_col: X_reduced[:, 1],
+                z_col: X_reduced[:, 2],
+                "Cluster": cluster_labels,
+                "Label": true_labels,
+            }
+        )
 
         # Create 3D scatter plot
-        fig = px.scatter_3d(df, x=x_col, y=y_col, z=z_col,
-                           color='Cluster',
-                           symbol='Label',
-                           title='Cluster Visualization (Color=Cluster, Symbol=Label)',
-                           hover_data={'Cluster': True, 'Label': True})
+        fig = px.scatter_3d(
+            df,
+            x=x_col,
+            y=y_col,
+            z=z_col,
+            color="Cluster",
+            symbol="Label",
+            title="Cluster Visualization (Color=Cluster, Symbol=Label)",
+            hover_data={"Cluster": True, "Label": True},
+        )
 
         fig.show()
+
+
+if __name__ == "__main__":
+    print("Testing Cluster Storage")
+    NUM_SAMPLES = 20
+    VISUALIZE = False
+    if VISUALIZE:
+        import time
+
+    storage = ClusteringMechanism(Q=2, P=3)
+    samples = [np.random.randint(0, 100, 3) for _ in range(NUM_SAMPLES)]
+    print(storage.get_clusters_with_labels())
+    for sample in samples:
+        storage.add(sample, label=np.random.randint(1, 4))
+        if VISUALIZE:
+            storage.visualize()
+            print(storage.get_clusters_with_labels())
+            time.sleep(5)
+
+    if len(storage.clusters) == 0:
+        raise Exception("No samples successfully added")
+    if VISUALIZE:
+        storage.visualize()
+
+    print(storage.get_clusters_with_labels())
+    print(sorted(list(triggered))) if len(triggered) > 0 else None

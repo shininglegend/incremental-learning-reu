@@ -1,13 +1,22 @@
 import torch
-import torch.nn.functional as F
+
 
 class AGEMHandler:
-    def __init__(self, model, criterion, optimizer, device, batch_size=256):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        criterion,
+        optimizer,
+        device,
+        batch_size=256,
+        lr_scheduler=None,
+    ):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
         self.eps_mem_batch = batch_size  # Memory batch size for gradient computation
         self.device = device
+        self.lr_scheduler = lr_scheduler
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
@@ -55,7 +64,9 @@ class AGEMHandler:
         if dot_product < 0:
             ref_grad_norm_sq = torch.dot(ref_grad, ref_grad)
             if ref_grad_norm_sq > 0:
-                projected_grad = current_grad - (dot_product / ref_grad_norm_sq) * ref_grad
+                projected_grad = (
+                    current_grad - (dot_product / ref_grad_norm_sq) * ref_grad
+                )
                 return projected_grad
 
         return current_grad
@@ -69,7 +80,9 @@ class AGEMHandler:
         for param in self.model.parameters():
             if param.grad is not None:
                 num_param = param.numel()
-                param.grad.data = grad_vector[pointer:pointer + num_param].view(param.shape)
+                param.grad.data = grad_vector[pointer : pointer + num_param].view(
+                    param.shape
+                )
                 pointer += num_param
 
     def optimize(self, data, labels, memory_samples=None):
@@ -79,6 +92,12 @@ class AGEMHandler:
         outputs = self.model(data)
         loss = self.criterion(outputs, labels)
         current_loss = loss.item()
+
+        # Update learning rate if scheduler is provided
+        if self.lr_scheduler is not None:
+            new_lr = self.lr_scheduler.step(current_loss)
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = new_lr
 
         # Compute gradient on current task
         loss.backward()
@@ -96,7 +115,7 @@ class AGEMHandler:
 
             # Handle memory samples correctly
             try:
-                for sample_item in memory_samples[:self.eps_mem_batch]:
+                for sample_item in memory_samples[: self.eps_mem_batch]:
                     if isinstance(sample_item, (list, tuple)) and len(sample_item) >= 2:
                         sample_data, sample_label = sample_item[0], sample_item[1]
                     else:
@@ -108,7 +127,11 @@ class AGEMHandler:
 
                 if mem_data_list:
                     mem_data = torch.stack(mem_data_list).to(self.device)
-                    mem_labels = torch.stack(mem_labels_list).to(self.device) if isinstance(mem_labels_list[0], torch.Tensor) else torch.tensor(mem_labels_list).to(self.device)
+                    mem_labels = (
+                        torch.stack(mem_labels_list).to(self.device)
+                        if isinstance(mem_labels_list[0], torch.Tensor)
+                        else torch.tensor(mem_labels_list).to(self.device)
+                    )
 
                     # Compute reference gradient on memory
                     ref_grad = self.compute_gradient(mem_data, mem_labels)
@@ -132,6 +155,7 @@ class AGEMHandler:
 
         return current_loss
 
+
 def evaluate_all_tasks(model, criterion, task_dataloaders, device):
     """Evaluate model on all tasks using test data and return average accuracy"""
     model.eval()
@@ -148,6 +172,7 @@ def evaluate_all_tasks(model, criterion, task_dataloaders, device):
                 total_correct += (predicted == labels).sum().item()
 
     return total_correct / total_samples if total_samples > 0 else 0.0
+
 
 def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id, device):
     """Evaluate model only on tasks seen so far using test data"""
@@ -166,6 +191,7 @@ def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id, de
                 total_correct += (predicted == labels).sum().item()
 
     return total_correct / total_samples if total_samples > 0 else 0.0
+
 
 def evaluate_single_task(model, criterion, task_dataloader, device):
     """Evaluate model on a single task using test data and return accuracy"""
