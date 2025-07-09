@@ -132,21 +132,36 @@ class MnistDatasetLoader(DatasetLoader):
         test_dataloaders = []
         num_pixels = 28 * 28
 
+        # Split data into disjoint subsets for each task
+        train_size_per_task = len(x_train_tensor) // num_tasks
+        test_size_per_task = len(x_test_tensor) // num_tasks
+
         for task_id in range(num_tasks):
+            # Get disjoint data subset for this task
+            train_start = task_id * train_size_per_task
+            train_end = (task_id + 1) * train_size_per_task if task_id < num_tasks - 1 else len(x_train_tensor)
+            test_start = task_id * test_size_per_task
+            test_end = (task_id + 1) * test_size_per_task if task_id < num_tasks - 1 else len(x_test_tensor)
+
+            x_train_subset = x_train_tensor[train_start:train_end]
+            y_train_subset = y_train_tensor[train_start:train_end]
+            x_test_subset = x_test_tensor[test_start:test_end]
+            y_test_subset = y_test_tensor[test_start:test_end]
+
             # Generate a random permutation for this task
             perm = torch.randperm(num_pixels)
 
             # Flatten images and apply permutation - TRAIN
-            x_train_task = x_train_tensor.view(-1, num_pixels)
+            x_train_task = x_train_subset.view(-1, num_pixels)
             x_train_task = x_train_task[:, perm]
 
             # Flatten images and apply permutation - TEST
-            x_test_task = x_test_tensor.view(-1, num_pixels)
+            x_test_task = x_test_subset.view(-1, num_pixels)
             x_test_task = x_test_task[:, perm]
 
             # Create datasets and dataloaders
-            train_dataset = TensorDataset(x_train_task, y_train_tensor)
-            test_dataset = TensorDataset(x_test_task, y_test_tensor)
+            train_dataset = TensorDataset(x_train_task, y_train_subset)
+            test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             train_dataloaders.append(train_dataloader)
@@ -160,11 +175,26 @@ class MnistDatasetLoader(DatasetLoader):
         test_dataloaders = []
         angles = [i * (360 / num_tasks) for i in range(num_tasks)]
 
+        # Split data into disjoint subsets for each task
+        train_size_per_task = len(x_train_tensor) // num_tasks
+        test_size_per_task = len(x_test_tensor) // num_tasks
+
         for task_id in range(num_tasks):
+            # Get disjoint data subset for this task
+            train_start = task_id * train_size_per_task
+            train_end = (task_id + 1) * train_size_per_task if task_id < num_tasks - 1 else len(x_train_tensor)
+            test_start = task_id * test_size_per_task
+            test_end = (task_id + 1) * test_size_per_task if task_id < num_tasks - 1 else len(x_test_tensor)
+
+            x_train_subset = x_train_tensor[train_start:train_end]
+            y_train_subset = y_train_tensor[train_start:train_end]
+            x_test_subset = x_test_tensor[test_start:test_end]
+            y_test_subset = y_test_tensor[test_start:test_end]
+
             angle = angles[task_id]
 
             # Rotate train images
-            x_train_task = x_train_tensor.unsqueeze(1)
+            x_train_task = x_train_subset.unsqueeze(1)
             rotated_train_images = []
             for img in x_train_task:
                 rotated_img = TF.rotate(img, angle)
@@ -173,7 +203,7 @@ class MnistDatasetLoader(DatasetLoader):
             x_train_task = x_train_task.view(x_train_task.size(0), -1)
 
             # Rotate test images
-            x_test_task = x_test_tensor.unsqueeze(1)
+            x_test_task = x_test_subset.unsqueeze(1)
             rotated_test_images = []
             for img in x_test_task:
                 rotated_img = TF.rotate(img, angle)
@@ -182,8 +212,8 @@ class MnistDatasetLoader(DatasetLoader):
             x_test_task = x_test_task.view(x_test_task.size(0), -1)
 
             # Create datasets and dataloaders
-            train_dataset = TensorDataset(x_train_task, y_train_tensor)
-            test_dataset = TensorDataset(x_test_task, y_test_tensor)
+            train_dataset = TensorDataset(x_train_task, y_train_subset)
+            test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             train_dataloaders.append(train_dataloader)
@@ -196,16 +226,14 @@ class MnistDatasetLoader(DatasetLoader):
         train_dataloaders = []
         test_dataloaders = []
 
-        # Check if num_tasks evenly divides 10
-        if 10 % num_tasks != 0:
-            raise ValueError(f"num_tasks ({num_tasks}) must evenly divide 10 for class_split")
-
-        classes_per_task = 10 // num_tasks
+        # Check if num_tasks is 5 (for 2 classes per task)
+        if num_tasks != 5:
+            raise ValueError(f"num_tasks ({num_tasks}) must be 5 for class_split (2 classes per task)")
 
         for task_id in range(num_tasks):
-            # Determine which classes belong to this task
-            start_class = task_id * classes_per_task
-            end_class = start_class + classes_per_task
+            # Determine which classes belong to this task (2 classes per task)
+            start_class = task_id * 2
+            end_class = start_class + 2
             task_classes = list(range(start_class, end_class))
 
             # Filter train data for this task's classes
@@ -223,6 +251,10 @@ class MnistDatasetLoader(DatasetLoader):
 
             x_test_task = x_test_tensor[test_task_mask]
             y_test_task = y_test_tensor[test_task_mask]
+
+            # Remap labels: even labels -> 0, odd labels -> 1
+            y_train_task = y_train_task % 2
+            y_test_task = y_test_task % 2
 
             # Flatten for consistent model input
             x_train_task = x_train_task.view(x_train_task.size(0), -1)  # (N, 784)
@@ -249,7 +281,7 @@ class MnistDatasetLoader(DatasetLoader):
 if __name__ == "__main__":
     import random
     import matplotlib.pyplot as plt
-    
+
     #
     # Load MINST dataset
     #
