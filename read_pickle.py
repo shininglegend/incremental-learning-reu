@@ -1,7 +1,15 @@
 import pickle, os
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import pandas as pd
 
 
-filename = 'ta_agem_metrics_20250701_154544.pkl'
+SAVE_DIR = "test_results"
+if not os.path.exists(SAVE_DIR):
+    os.makedirs(SAVE_DIR)
+
+filename = input("Enter the filename to load (e.g., 'ta_agem_metrics_2025-07-01T15:45:44.660534.pkl'): ")
 
 with open(os.path.join("test_results", filename), 'rb') as file:
     data = pickle.load(file)
@@ -36,6 +44,236 @@ for key in data.keys():
         print(f"{key}: {data[key]}")  # Print the value directly for non-list types
 
 # TODO: Plot the data
+# Create visualizations for accuracy and loss data
+
+# 1. Task Accuracies Over Time (Individual Task Performance)
+if 'per_task_accuracies' in data and data['per_task_accuracies']:
+    fig_task_acc = go.Figure()
+    
+    # Create a line for each task showing its accuracy over time
+    for task_id in range(len(data['per_task_accuracies'])):
+        # Extract accuracy for this specific task across all training stages
+        task_performance = []
+        x_values = []
+        
+        # For each training stage, get the accuracy of this specific task
+        for stage, stage_accuracies in enumerate(data['per_task_accuracies']):
+            if task_id < len(stage_accuracies):  # Only if this task has been evaluated
+                task_performance.append(stage_accuracies[task_id])
+                x_values.append(stage + 1)  # Task numbers start from 1
+        
+        # Add line for this task
+        fig_task_acc.add_trace(go.Scatter(
+            x=x_values,
+            y=task_performance,
+            mode='lines+markers',
+            name=f'Task {task_id + 1}',
+            line=dict(width=2.5),
+            marker=dict(size=6)
+        ))
+    
+    fig_task_acc.update_layout(
+        title='Individual Task Accuracies Over Time',
+        xaxis_title='Tasks Completed',
+        yaxis_title='Accuracy',
+        yaxis=dict(range=[0, 1]),
+        legend_title='Task',
+        hovermode='x unified'
+    )
+    fig_task_acc.write_html(os.path.join(SAVE_DIR, 'task_accuracies.html'), auto_open=True)
+    #fig_task_acc.show()
+
+# 2. Per-Task Accuracies (Matrix/Heatmap)
+if 'per_task_accuracies' in data and data['per_task_accuracies']:
+    # Create a matrix showing accuracy for each task on each previous task
+    max_tasks = len(data['per_task_accuracies'])
+    accuracy_matrix = []
+    
+    for i, task_accs in enumerate(data['per_task_accuracies']):
+        row = task_accs + [None] * (max_tasks - len(task_accs))
+        accuracy_matrix.append(row)
+    
+    fig_per_task = px.imshow(
+        accuracy_matrix,
+        title='Per-Task Accuracies Matrix',
+        labels={'x': 'Task Being Evaluated', 'y': 'Current Task', 'color': 'Accuracy'},
+        aspect='auto',
+        color_continuous_scale='Viridis'
+    )
+    fig_per_task.update_layout(
+        xaxis_title='Task Being Evaluated',
+        yaxis_title='Current Task'
+    )
+    fig_per_task.write_html(os.path.join(SAVE_DIR, 'per_task_accuracies.html'), auto_open=True)
+    #fig_per_task.show()
+
+# 3. Epoch Losses for Each Task
+if 'epoch_losses' in data and data['epoch_losses']:
+    fig_epoch_losses = go.Figure()
+    
+    for i, task_losses in enumerate(data['epoch_losses']):
+        fig_epoch_losses.add_trace(go.Scatter(
+            x=list(range(1, len(task_losses) + 1)),
+            y=task_losses,
+            mode='lines+markers',
+            name=f'Task {i+1}',
+            line=dict(width=2)
+        ))
+    
+    fig_epoch_losses.update_layout(
+        title='Epoch Losses for Each Task',
+        xaxis_title='Epoch',
+        yaxis_title='Loss',
+        legend_title='Task'
+    )
+    fig_epoch_losses.write_html(os.path.join(SAVE_DIR, 'epoch_losses.html'))
+    #fig_epoch_losses.show()
+
+# 4. Batch Losses Over Time (if available)
+if 'batch_losses' in data and data['batch_losses']:
+    # Create a dataframe for batch losses
+    batch_df = pd.DataFrame(data['batch_losses'])
+    
+    if not batch_df.empty:
+        fig_batch_losses = px.line(
+            batch_df,
+            x=batch_df.index,
+            y='loss',
+            color='task',
+            title='Batch Losses Over Time',
+            labels={'index': 'Batch Number', 'loss': 'Loss', 'task': 'Task'}
+        )
+        fig_batch_losses.update_layout(
+            xaxis_title='Batch Number',
+            yaxis_title='Loss'
+        )
+        fig_batch_losses.write_html('batch_losses.html')
+        #fig_batch_losses.show()
+
+# 5. Training Times Per Task
+if 'training_times' in data and data['training_times']:
+    fig_training_times = px.bar(
+        x=list(range(1, len(data['training_times']) + 1)),
+        y=data['training_times'],
+        title='Training Times Per Task',
+        labels={'x': 'Task Number', 'y': 'Training Time (seconds)'}
+    )
+    fig_training_times.update_layout(
+        xaxis_title='Task Number',
+        yaxis_title='Training Time (seconds)'
+    )
+    fig_training_times.write_html('training_times.html')
+    #fig_training_times.show()
+
+# 6. Memory Efficiency Over Tasks
+if 'memory_efficiency' in data and data['memory_efficiency']:
+    fig_memory_eff = px.line(
+        x=list(range(1, len(data['memory_efficiency']) + 1)),
+        y=data['memory_efficiency'],
+        title='Memory Efficiency Over Tasks',
+        labels={'x': 'Task Number', 'y': 'Memory Efficiency'},
+        markers=True
+    )
+    fig_memory_eff.update_layout(
+        xaxis_title='Task Number',
+        yaxis_title='Memory Efficiency'
+    )
+    fig_memory_eff.write_html('memory_efficiency.html')
+    #fig_memory_eff.show()
+
+# 7. Combined Accuracy and Loss Dashboard
+if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracies'] and data['epoch_losses']:
+    # Create subplots
+    fig_combined = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=('Task Accuracies', 'Average Epoch Loss per Task', 'Individual Task Performance', 'Training Times'),
+        specs=[[{"secondary_y": False}, {"secondary_y": False}],
+               [{"secondary_y": False}, {"secondary_y": False}]]
+    )
+    
+    # Task accuracies
+    fig_combined.add_trace(
+        go.Scatter(
+            x=list(range(1, len(data['task_accuracies']) + 1)),
+            y=data['task_accuracies'],
+            mode='lines+markers',
+            name='Task Accuracy',
+            line=dict(color='blue', width=3)
+        ),
+        row=1, col=1
+    )
+    
+    # Average epoch loss per task
+    avg_losses = [sum(task_losses)/len(task_losses) for task_losses in data['epoch_losses']]
+    fig_combined.add_trace(
+        go.Scatter(
+            x=list(range(1, len(avg_losses) + 1)),
+            y=avg_losses,
+            mode='lines+markers',
+            name='Avg Loss',
+            line=dict(color='red', width=3)
+        ),
+        row=1, col=2
+    )
+    
+    # Per-task accuracies (individual task performance over time)
+    for task_id in range(len(data['per_task_accuracies'])):
+        # Extract accuracy for this specific task across all training stages
+        task_performance = []
+        x_values = []
+        
+        # For each training stage, get the accuracy of this specific task
+        for stage, stage_accuracies in enumerate(data['per_task_accuracies']):
+            if task_id < len(stage_accuracies):  # Only if this task has been evaluated
+                task_performance.append(stage_accuracies[task_id])
+                x_values.append(stage + 1)  # Task numbers start from 1
+        
+        # Add line for this task
+        fig_combined.add_trace(
+            go.Scatter(
+                x=x_values,
+                y=task_performance,
+                mode='lines+markers',
+                name=f'Task {task_id + 1}',
+                showlegend=True,
+                line=dict(width=2)
+            ),
+            row=2, col=1
+        )
+    
+    # Training times
+    if 'training_times' in data and data['training_times']:
+        fig_combined.add_trace(
+            go.Bar(
+                x=list(range(1, len(data['training_times']) + 1)),
+                y=data['training_times'],
+                name='Training Time',
+                marker_color='green',
+                showlegend=False
+            ),
+            row=2, col=2
+        )
+    
+    fig_combined.update_layout(
+        title_text="Incremental Learning Performance Dashboard",
+        showlegend=True,
+        height=800
+    )
+    
+    # Update axis labels
+    fig_combined.update_xaxes(title_text="Task Number", row=1, col=1)
+    fig_combined.update_yaxes(title_text="Accuracy", row=1, col=1)
+    fig_combined.update_xaxes(title_text="Task Number", row=1, col=2)
+    fig_combined.update_yaxes(title_text="Average Loss", row=1, col=2)
+    fig_combined.update_xaxes(title_text="Task Number", row=2, col=1)
+    fig_combined.update_yaxes(title_text="Accuracy", row=2, col=1)
+    fig_combined.update_xaxes(title_text="Task Number", row=2, col=2)
+    fig_combined.update_yaxes(title_text="Time (seconds)", row=2, col=2)
+
+    fig_combined.write_html('incremental_learning_dashboard.html', auto_open=True)
+    #fig_combined.show()
+
+print("\nVisualization complete! All plots have been displayed.")
 # Here's whats there
 # Loaded data contains 9 keys:
 #  - task_accuracies: <class 'list'>
