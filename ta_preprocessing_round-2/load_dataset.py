@@ -6,9 +6,10 @@ them for incremental learning tasks.
 """
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Any
+from typing import Tuple, List, Any, Optional
 import torch
 from torch.utils.data import DataLoader
+from config import params
 
 class DatasetLoader(ABC):
     """Abstract base class for dataset loaders supporting domain-incremental learning."""
@@ -18,6 +19,7 @@ class DatasetLoader(ABC):
         self.y_train = None
         self.x_test = None
         self.y_test = None
+        self.permutations: Optional[List[torch.Tensor]] = None
 
     @abstractmethod
     def load_raw_data(self) -> Tuple[Any, Any, Any, Any]:
@@ -46,7 +48,7 @@ class DatasetLoader(ABC):
         pass
 
     def prepare_domain_incremental_data(self, task_type: str, num_tasks: int, batch_size: int,
-                                      quick_test: bool = False) -> Tuple[List[DataLoader], List[DataLoader]]:
+                                      quick_test: bool = False) -> Tuple[List[DataLoader], List[DataLoader], Optional[List[torch.Tensor]]]:
         """Prepare data for domain-incremental learning.
 
         Args:
@@ -71,10 +73,12 @@ class DatasetLoader(ABC):
         self.y_test = y_test_tensor
 
         # Create task-specific data loaders
-        return self._create_task_dataloaders(
+        train_dataloaders, test_dataloaders = self._create_task_dataloaders(
             x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor,
             task_type, num_tasks, batch_size
         )
+
+        return train_dataloaders, test_dataloaders, self.permutations
 
     def _create_task_dataloaders(self, x_train_tensor: torch.Tensor, y_train_tensor: torch.Tensor,
                                 x_test_tensor: torch.Tensor, y_test_tensor: torch.Tensor,
@@ -100,6 +104,7 @@ class DatasetLoader(ABC):
                                  x_test_tensor: torch.Tensor, y_test_tensor: torch.Tensor,
                                  num_tasks: int, batch_size: int) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create permutation-based tasks."""
+
         pass
 
     @abstractmethod
@@ -143,8 +148,9 @@ def load_dataset(dataset_name: str) -> DatasetLoader:
 
 
 # Convenience function for backward compatibility
-def prepare_domain_incremental_data(dataset_name: str, task_type: str, num_tasks: int,
-                                  batch_size: int, quick_test: bool = False) -> Tuple[List[DataLoader], List[DataLoader]]:
+def prepare_domain_incremental_data(dataset_name: str, task_type: str, num_tasks: int, batch_size: int,
+                                    quick_test: bool = False)\
+        -> Tuple[List[DataLoader], List[DataLoader], Optional[List[torch.Tensor]]]:
     """Prepare domain-incremental data for any supported dataset.
 
     Args:

@@ -8,6 +8,7 @@ from os.path import join
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms.functional as TF
+from config import params
 
 try:
     from .load_dataset import DatasetLoader
@@ -77,6 +78,7 @@ class MnistDatasetLoader(DatasetLoader):
         self.training_labels_filepath = join(path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
         self.test_images_filepath = join(path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
         self.test_labels_filepath = join(path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
+        self.permutations = [] # to store permutation values, in case we're doing permutations
 
     def load_raw_data(self):
         """Load raw MNIST data."""
@@ -132,11 +134,13 @@ class MnistDatasetLoader(DatasetLoader):
         """Create permutation-based tasks for MNIST."""
         train_dataloaders = []
         test_dataloaders = []
-        num_pixels = 28 * 28
+        num_pixels = params['input_dim']
+        self.permutations = [] # reset for this call
 
         for task_id in range(num_tasks):
             # Generate a random permutation for this task
             perm = torch.randperm(num_pixels)
+            self.permutations.append(perm)
 
             # Flatten images and apply permutation - TRAIN
             x_train_task = x_train_tensor.view(-1, num_pixels)

@@ -24,7 +24,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE}")
 # ---------------------------------
 
-# Updated main function with corrected parallelization
+# Main function
 if __name__ == '__main__':
     mp.set_start_method('spawn', force=True)
 
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     # Load data
     print("Loading dataset and preparing data loaders...")
     datasetLoader = load_dataset(params['dataset_name'])
-    train_dataloaders, test_dataloaders = datasetLoader.prepare_domain_incremental_data(
+    train_dataloaders, test_dataloaders, permutations_for_tasks = datasetLoader.prepare_domain_incremental_data(
         task_type=params['task_type'], num_tasks=params['num_tasks'], batch_size=params['batch_size'],
         quick_test=params['quick_test_mode']
     )
@@ -71,8 +71,17 @@ if __name__ == '__main__':
 
     # Evaluation
     print("\nStarting evaluation...")
+
+    if params['task_type'] == 'permutation' and permutations_for_tasks is not None:
+        params['permutations'] = permutations_for_tasks
+    else:
+        # If it's not a permutation task, or permutations are unexpectedly None,
+        # ensure 'permutations' key is absent or set to None in params
+        params['permutations'] = None
+
+
     if model is not None: # Ensure model exists before evaluation
-        evaluator = TAGEMEvaluator(params, save_dir="./test_results")
+        evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders, save_dir="./test_results")
         test_results = evaluator.run_full_evaluation(model, device='cpu', save_results=True)
 
         print(f"Final test accuracy: {test_results['overall_accuracy']:.4f}")

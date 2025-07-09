@@ -110,7 +110,7 @@ def train_single_task(args):
 
     if shared_memory_samples:
         for sample_data, sample_label in shared_memory_samples:
-            local_memory.add_sample(sample_data.to('cpu'), sample_label.to('cpu'))
+            local_memory.add_sample(sample_data, sample_label)
 
     agem_handler = agem.AGEMHandler(model, criterion, optimizer, batch_size=params['batch_size'],
                                     device=params['device'])
@@ -148,7 +148,7 @@ def train_single_task(args):
             else:
                 memory_samples = local_memory.get_memory_samples()
                 memory_samples_on_device = [
-                    (s.to(DEVICE), l.to(DEVICE)) for s, l in memory_samples
+                    (s, l) for s, l in memory_samples
                 ]
 
                 projected_grads_flat, batch_loss = agem_handler.compute_and_project_batch_gradient(
@@ -274,7 +274,7 @@ def run_optimized_training(params, task_dataloaders):
 
             # Update accumulated memory
             accumulated_memory.extend([
-                (s.to('cpu'), l.to('cpu')) for s, l in task_result['memory_samples']
+                (s.to(params['device']), l.to(params['device'])) for s, l in task_result['memory_samples']
             ])
 
             # Limit memory size

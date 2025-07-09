@@ -88,11 +88,8 @@ class AGEMHandler:
         # Move data to device
         data, labels = data.to(self.device), labels.to(self.device)
 
-        self.model.eval()  # Temporarily set to eval mode to ensure no accidental gradient tracking
         outputs = self.model(data)
-
         batch_loss = self.criterion(outputs, labels).item()
-        self.model.train()
 
         # Compute current task gradient and loss
         # Use a temporary model for compute_gradient to avoid conflicts with global model.grad if possible,
