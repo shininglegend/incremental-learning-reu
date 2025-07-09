@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 
+
 class AGEMHandler:
     def __init__(self, model, criterion, optimizer, device, batch_size=256):
         self.model = model

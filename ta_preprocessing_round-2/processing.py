@@ -29,7 +29,8 @@ def run_sequential_training(params, task_dataloaders_nested):
         Q=params['memory_size_q'], P=params['memory_size_p'],
         input_type='samples', num_pools=params['num_pools'], device=params['device']
     )
-    agem_handler = agem.AGEMHandler(model, criterion, optimizer, device=params['device'])
+    agem_handler = agem.AGEMHandler(model, criterion, optimizer, batch_size=params['batch_size'],
+                                    device=params['device'])
 
     start_time = time.time()
 
@@ -86,7 +87,7 @@ def run_sequential_training(params, task_dataloaders_nested):
     return model, memory, training_time
 
 
-def train_single_task_parallel(args):
+def train_single_task(args):
     """Train a single task with reliable optimizations (no threading)"""
     task_id, task_dataloader, params, shared_memory_samples, model_state_dict = args
 
@@ -111,7 +112,8 @@ def train_single_task_parallel(args):
         for sample_data, sample_label in shared_memory_samples:
             local_memory.add_sample(sample_data.to('cpu'), sample_label.to('cpu'))
 
-    agem_handler = agem.AGEMHandler(model, criterion, optimizer, device=params['device'])
+    agem_handler = agem.AGEMHandler(model, criterion, optimizer, batch_size=params['batch_size'],
+                                    device=params['device'])
     task_history = []
 
     # OPTIMIZATION 1: Larger effective batch size through gradient accumulation
@@ -257,14 +259,14 @@ def run_optimized_training(params, task_dataloaders):
 
         task_args = (
             task_id,
-            task_dataloader,  # Just pass the original DataLoader
+            task_dataloader,
             params,
             accumulated_memory,
             main_model.state_dict()
         )
 
         # Call optimized training function
-        task_result = train_single_task_parallel(task_args)
+        task_result = train_single_task(task_args)
 
         if task_result['success']:
             all_results.append(task_result)

@@ -15,7 +15,7 @@ from pathlib import Path
 
 class TAGEMEvaluator:
     """
-    Comprehensive evaluator for TA-AGEM models
+    Evaluator for TA-AGEM models
     Handles test data preparation, evaluation, and reporting
     """
 
