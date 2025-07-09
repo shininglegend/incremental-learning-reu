@@ -91,6 +91,7 @@ class SimpleMLP(nn.Module):
         x = self.fc3(x)
         return x
 
+
 # Set up a timer to keep track of times.
 t = Timer()
 t.start("init")
@@ -161,9 +162,12 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
+            t.start("get samples")
+            _samples = clustering_memory.get_memory_samples()
+            t.end("get samples")
             t.start("optimize")
             batch_loss = agem_handler.optimize(
-                data, labels, clustering_memory.get_memory_samples()
+                data, labels, _samples
             )
             t.end("optimize")
 
