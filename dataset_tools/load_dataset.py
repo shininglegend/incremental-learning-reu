@@ -9,6 +9,7 @@ from typing import Tuple, List, Any
 import torch
 from torch.utils.data import DataLoader
 
+
 class DatasetLoader(ABC):
     """Abstract base class for dataset loaders supporting domain-incremental learning."""
 
@@ -28,8 +29,14 @@ class DatasetLoader(ABC):
         pass
 
     @abstractmethod
-    def preprocess_data(self, x_train: Any, y_train: Any, x_test: Any, y_test: Any,
-                       quick_test: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def preprocess_data(
+        self,
+        x_train: Any,
+        y_train: Any,
+        x_test: Any,
+        y_test: Any,
+        quick_test: bool = False,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Preprocess raw data into PyTorch tensors.
 
         Args:
@@ -44,8 +51,9 @@ class DatasetLoader(ABC):
         """
         pass
 
-    def prepare_domain_incremental_data(self, task_type: str, num_tasks: int, batch_size: int,
-                                      quick_test: bool = False) -> Tuple[List[DataLoader], List[DataLoader]]:
+    def prepare_domain_incremental_data(
+        self, task_type: str, num_tasks: int, batch_size: int, quick_test: bool = False
+    ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Prepare data for domain-incremental learning.
 
         Args:
@@ -59,8 +67,10 @@ class DatasetLoader(ABC):
         """
         # Load and preprocess data
         x_train_raw, y_train_raw, x_test_raw, y_test_raw = self.load_raw_data()
-        x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor = self.preprocess_data(
-            x_train_raw, y_train_raw, x_test_raw, y_test_raw, quick_test
+        x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor = (
+            self.preprocess_data(
+                x_train_raw, y_train_raw, x_test_raw, y_test_raw, quick_test
+            )
         )
 
         # Store for potential future use
@@ -71,47 +81,92 @@ class DatasetLoader(ABC):
 
         # Create task-specific data loaders
         return self._create_task_dataloaders(
-            x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor,
-            task_type, num_tasks, batch_size
+            x_train_tensor,
+            y_train_tensor,
+            x_test_tensor,
+            y_test_tensor,
+            task_type,
+            num_tasks,
+            batch_size,
         )
 
-    def _create_task_dataloaders(self, x_train_tensor: torch.Tensor, y_train_tensor: torch.Tensor,
-                                x_test_tensor: torch.Tensor, y_test_tensor: torch.Tensor,
-                                task_type: str, num_tasks: int, batch_size: int) -> Tuple[List[DataLoader], List[DataLoader]]:
+    def _create_task_dataloaders(
+        self,
+        x_train_tensor: torch.Tensor,
+        y_train_tensor: torch.Tensor,
+        x_test_tensor: torch.Tensor,
+        y_test_tensor: torch.Tensor,
+        task_type: str,
+        num_tasks: int,
+        batch_size: int,
+    ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create task-specific data loaders based on task type."""
-        if task_type == 'permutation':
+        if task_type == "permutation":
             return self._create_permutation_tasks(
-                x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size
+                x_train_tensor,
+                y_train_tensor,
+                x_test_tensor,
+                y_test_tensor,
+                num_tasks,
+                batch_size,
             )
-        elif task_type == 'rotation':
+        elif task_type == "rotation":
             return self._create_rotation_tasks(
-                x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size
+                x_train_tensor,
+                y_train_tensor,
+                x_test_tensor,
+                y_test_tensor,
+                num_tasks,
+                batch_size,
             )
-        elif task_type == 'class_split':
+        elif task_type == "class_split":
             return self._create_class_split_tasks(
-                x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size
+                x_train_tensor,
+                y_train_tensor,
+                x_test_tensor,
+                y_test_tensor,
+                num_tasks,
+                batch_size,
             )
         else:
             raise ValueError(f"Unknown task_type: {task_type}")
 
     @abstractmethod
-    def _create_permutation_tasks(self, x_train_tensor: torch.Tensor, y_train_tensor: torch.Tensor,
-                                 x_test_tensor: torch.Tensor, y_test_tensor: torch.Tensor,
-                                 num_tasks: int, batch_size: int) -> Tuple[List[DataLoader], List[DataLoader]]:
+    def _create_permutation_tasks(
+        self,
+        x_train_tensor: torch.Tensor,
+        y_train_tensor: torch.Tensor,
+        x_test_tensor: torch.Tensor,
+        y_test_tensor: torch.Tensor,
+        num_tasks: int,
+        batch_size: int,
+    ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create permutation-based tasks."""
         pass
 
     @abstractmethod
-    def _create_rotation_tasks(self, x_train_tensor: torch.Tensor, y_train_tensor: torch.Tensor,
-                              x_test_tensor: torch.Tensor, y_test_tensor: torch.Tensor,
-                              num_tasks: int, batch_size: int) -> Tuple[List[DataLoader], List[DataLoader]]:
+    def _create_rotation_tasks(
+        self,
+        x_train_tensor: torch.Tensor,
+        y_train_tensor: torch.Tensor,
+        x_test_tensor: torch.Tensor,
+        y_test_tensor: torch.Tensor,
+        num_tasks: int,
+        batch_size: int,
+    ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create rotation-based tasks."""
         pass
 
     @abstractmethod
-    def _create_class_split_tasks(self, x_train_tensor: torch.Tensor, y_train_tensor: torch.Tensor,
-                                 x_test_tensor: torch.Tensor, y_test_tensor: torch.Tensor,
-                                 num_tasks: int, batch_size: int) -> Tuple[List[DataLoader], List[DataLoader]]:
+    def _create_class_split_tasks(
+        self,
+        x_train_tensor: torch.Tensor,
+        y_train_tensor: torch.Tensor,
+        x_test_tensor: torch.Tensor,
+        y_test_tensor: torch.Tensor,
+        num_tasks: int,
+        batch_size: int,
+    ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create class-split-based tasks."""
         pass
 
@@ -125,13 +180,13 @@ def load_dataset(dataset_name: str) -> DatasetLoader:
     Returns:
         DatasetLoader: Appropriate dataset loader instance
     """
-    if dataset_name.lower() == 'mnist':
+    if dataset_name.lower() == "mnist":
         try:
             from .mnist import MnistDatasetLoader
         except ImportError:
             from mnist import MnistDatasetLoader
         return MnistDatasetLoader()
-    elif dataset_name.lower() == 'fashion_mnist':
+    elif dataset_name.lower() == "fashion_mnist":
         try:
             from .mnist_fashion import FashionMnistDatasetLoader
         except ImportError:
@@ -142,8 +197,13 @@ def load_dataset(dataset_name: str) -> DatasetLoader:
 
 
 # Convenience function for backward compatibility
-def prepare_domain_incremental_data(dataset_name: str, task_type: str, num_tasks: int,
-                                  batch_size: int, quick_test: bool = False) -> Tuple[List[DataLoader], List[DataLoader]]:
+def prepare_domain_incremental_data(
+    dataset_name: str,
+    task_type: str,
+    num_tasks: int,
+    batch_size: int,
+    quick_test: bool = False,
+) -> Tuple[List[DataLoader], List[DataLoader]]:
     """Prepare domain-incremental data for any supported dataset.
 
     Args:
@@ -157,4 +217,6 @@ def prepare_domain_incremental_data(dataset_name: str, task_type: str, num_tasks
         tuple: (train_dataloaders, test_dataloaders) - Lists of DataLoader objects
     """
     loader = load_dataset(dataset_name)
-    return loader.prepare_domain_incremental_data(task_type, num_tasks, batch_size, quick_test)
+    return loader.prepare_domain_incremental_data(
+        task_type, num_tasks, batch_size, quick_test
+    )

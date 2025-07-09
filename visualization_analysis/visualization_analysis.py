@@ -211,21 +211,27 @@ class TAGemVisualizer:
         except Exception as e:
             print(f"Error creating overall accuracy graph: {e}")
 
-class _Time():
+
+class _Time:
     def __init__(self, start):
         self.start = start
         self.finish = None
+
     def __str__(self):
         return str(self.duration()) if self.finish is not None else ""
+
     def end(self, end):
         assert self.finish is None, "End time already set"
         self.finish = end
+
     def duration(self):
         return self.finish - self.start if self.finish is not None else None
 
-class Timer():
+
+class Timer:
     def __init__(self):
         self.times = {}
+
     def __str__(self):
         result = []
         for key in self.times:
@@ -236,7 +242,9 @@ class Timer():
                 avg = total / count
                 low = min(durations)
                 high = max(durations)
-                result.append(f"{key}: total={total:.6f}, count={count}, avg={avg:.6f}, low={low:.6f}, high={high:.6f}")
+                result.append(
+                    f"{key}: total={total:.6f}, count={count}, avg={avg:.6f}, low={low:.6f}, high={high:.6f}"
+                )
             else:
                 result.append(f"{key}: {self.times[key]}")
         return "\n".join(result)
@@ -248,7 +256,9 @@ class Timer():
                 self.times[key].append(_Time(time.time()))
             else:
                 # Key has single measurement, convert to list
-                assert self.times[key].finish is not None, f"Previous timer for key '{key}' not ended"
+                assert (
+                    self.times[key].finish is not None
+                ), f"Previous timer for key '{key}' not ended"
                 self.times[key] = [self.times[key], _Time(time.time())]
         else:
             self.times[key] = _Time(time.time())

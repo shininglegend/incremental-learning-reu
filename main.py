@@ -1,16 +1,19 @@
-# Code written by Gemini 2.5 Flash. Edited by Titus
-import agem
-import clustering
-from load_dataset import load_dataset
+# This is the file pulling it all together. Edit sparingly, if at all!
+import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 # import numpy as np
 # import pandas as pd
-from visualization_analysis import TAGemVisualizer, Timer
-from learning_rate import TALearningRateScheduler
-import time
+
+from agem import agem
+from agem.learning_rate import TALearningRateScheduler
+
+from em_tools import clustering
+from dataset_tools.load_dataset import load_dataset
+
+from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
 
 # --- 1. Configuration and Initialization ---
 # Device configuration - use GPU if available
@@ -19,7 +22,7 @@ print(f"Using device: {device}")
 
 # If set to True, will w run less tasks and less data, and logs loss per batch
 # If set to False, will run full MNIST with 5 tasks and 10 epochs with normal progress bar
-QUICK_TEST_MODE = True
+QUICK_TEST_MODE = False
 
 # If set to True, will use the TA-OGD adaptive learning rate scheduler
 # If set to False, will use fixed learning rate
@@ -166,9 +169,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             _samples = clustering_memory.get_memory_samples()
             t.end("get samples")
             t.start("optimize")
-            batch_loss = agem_handler.optimize(
-                data, labels, _samples
-            )
+            batch_loss = agem_handler.optimize(data, labels, _samples)
             t.end("optimize")
 
             # Track batch loss
