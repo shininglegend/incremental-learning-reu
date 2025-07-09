@@ -232,10 +232,11 @@ class Timer():
             if isinstance(self.times[key], list):
                 durations = [t.duration() for t in self.times[key]]
                 count = len(durations)
-                avg = sum(durations) / count
+                total = sum(durations)
+                avg = total / count
                 low = min(durations)
                 high = max(durations)
-                result.append(f"{key}: count={count}, avg={avg:.6f}, low={low:.6f}, high={high:.6f}")
+                result.append(f"{key}: total={total:.6f}, count={count}, avg={avg:.6f}, low={low:.6f}, high={high:.6f}")
             else:
                 result.append(f"{key}: {self.times[key]}")
         return "\n".join(result)
