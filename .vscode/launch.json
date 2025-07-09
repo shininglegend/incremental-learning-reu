@@ -15,7 +15,7 @@
             "name": "Python Debugger: Main",
             "type": "debugpy",
             "request": "launch",
-            "program": "ta_preprocessing_round-2/main.py",
+            "program": "main.py",
             "console": "integratedTerminal"
         }
     ]
