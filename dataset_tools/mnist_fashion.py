@@ -1,38 +1,30 @@
-# This loads and visualizes MNIST data.
-# Original here: https://www.kaggle.com/code/hojjatk/read-mnist-dataset
-# Modified!
-import numpy as np # linear algebra
+# This loads and visualizes Fashion-MNIST data.
+# Based on the MNIST loader but adapted for Fashion-MNIST dataset
+import numpy as np
 import struct
 from array import array
-from os.path  import join
+from os.path import join
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms.functional as TF
+
 try:
     from .load_dataset import DatasetLoader
 except ImportError:
     from load_dataset import DatasetLoader
 
-# Set file paths based on added MNIST Datasets
+# Set file paths based on Fashion-MNIST Datasets
 import kagglehub
 
-# Download latest version (Uncomment if you're getting file not found errors)
-path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-# path = "/Users/jvcte/.cache/kagglehub/datasets/hojjatk/mnist-dataset/versions/1"
-print(f"Dataset is at {path}")
-input_path = path
-training_images_filepath = join(input_path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
-training_labels_filepath = join(input_path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
-test_images_filepath = join(input_path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
-test_labels_filepath = join(input_path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
 
-
-#
-# MNIST Data Loader Class
-#
-class MnistDataloader(object):
-    def __init__(self, training_images_filepath,training_labels_filepath,
-                 test_images_filepath, test_labels_filepath):
+class FashionMnistDataloader(object):
+    def __init__(
+        self,
+        training_images_filepath,
+        training_labels_filepath,
+        test_images_filepath,
+        test_labels_filepath,
+    ):
         self.training_images_filepath = training_images_filepath
         self.training_labels_filepath = training_labels_filepath
         self.test_images_filepath = test_images_filepath
@@ -40,56 +32,65 @@ class MnistDataloader(object):
 
     def read_images_labels(self, images_filepath, labels_filepath):
         labels = []
-        with open(labels_filepath, 'rb') as file:
+        with open(labels_filepath, "rb") as file:
             magic, size = struct.unpack(">II", file.read(8))
             if magic != 2049:
-                raise ValueError('Magic number mismatch, expected 2049, got {}'.format(magic))
+                raise ValueError(
+                    "Magic number mismatch, expected 2049, got {}".format(magic)
+                )
             labels = array("B", file.read())
 
-        with open(images_filepath, 'rb') as file:
+        with open(images_filepath, "rb") as file:
             magic, size, rows, cols = struct.unpack(">IIII", file.read(16))
             if magic != 2051:
-                raise ValueError('Magic number mismatch, expected 2051, got {}'.format(magic))
+                raise ValueError(
+                    "Magic number mismatch, expected 2051, got {}".format(magic)
+                )
             image_data = array("B", file.read())
         images = []
         for i in range(size):
-            img = np.array(image_data[i * rows * cols:(i + 1) * rows * cols])
+            img = np.array(image_data[i * rows * cols : (i + 1) * rows * cols])
             img = img.reshape(28, 28)
             images.append(img)
 
         return images, labels
 
     def load_data(self):
-        x_train, y_train = self.read_images_labels(self.training_images_filepath, self.training_labels_filepath)
-        x_test, y_test = self.read_images_labels(self.test_images_filepath, self.test_labels_filepath)
-        return (x_train, y_train),(x_test, y_test)
+        x_train, y_train = self.read_images_labels(
+            self.training_images_filepath, self.training_labels_filepath
+        )
+        x_test, y_test = self.read_images_labels(
+            self.test_images_filepath, self.test_labels_filepath
+        )
+        return (x_train, y_train), (x_test, y_test)
 
 
-class MnistDatasetLoader(DatasetLoader):
-    """MNIST dataset loader implementing the DatasetLoader interface."""
+class FashionMnistDatasetLoader(DatasetLoader):
+    """Fashion-MNIST dataset loader implementing the DatasetLoader interface."""
 
     def __init__(self):
         super().__init__()
-        # Set file paths based on MNIST datasets
-        path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-        self.training_images_filepath = join(path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
-        self.training_labels_filepath = join(path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
-        self.test_images_filepath = join(path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
-        self.test_labels_filepath = join(path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
+        # Set file paths based on Fashion-MNIST datasets
+        path = kagglehub.dataset_download("zalando-research/fashionmnist")
+        print(f"Fashion-MNIST dataset is at {path}")
+        self.training_images_filepath = join(path, "train-images-idx3-ubyte")
+        self.training_labels_filepath = join(path, "train-labels-idx1-ubyte")
+        self.test_images_filepath = join(path, "t10k-images-idx3-ubyte")
+        self.test_labels_filepath = join(path, "t10k-labels-idx1-ubyte")
 
     def load_raw_data(self):
-        """Load raw MNIST data."""
-        mnist_loader = MnistDataloader(
+        """Load raw Fashion-MNIST data."""
+        fashion_mnist_loader = FashionMnistDataloader(
             self.training_images_filepath,
             self.training_labels_filepath,
             self.test_images_filepath,
-            self.test_labels_filepath
+            self.test_labels_filepath,
         )
-        (x_train, y_train), (x_test, y_test) = mnist_loader.load_data()
+        (x_train, y_train), (x_test, y_test) = fashion_mnist_loader.load_data()
         return x_train, y_train, x_test, y_test
 
     def preprocess_data(self, x_train, y_train, x_test, y_test, quick_test=False):
-        """Preprocess MNIST data into PyTorch tensors."""
+        """Preprocess Fashion-MNIST data into PyTorch tensors."""
         # Convert list of numpy arrays to single numpy array before tensor conversion
         x_train_array = np.array(x_train)
         y_train_array = np.array(y_train)
@@ -106,14 +107,14 @@ class MnistDatasetLoader(DatasetLoader):
         if quick_test:
             quick_train_indices = []
             quick_test_indices = []
-            for class_id in range(10):
+            for class_id in range(10):  # Fashion-MNIST has 10 classes
                 # Training data
-                class_mask = (y_train_tensor == class_id)
+                class_mask = y_train_tensor == class_id
                 class_indices = torch.where(class_mask)[0][:1000]
                 quick_train_indices.extend(class_indices.tolist())
 
                 # Test data
-                class_mask = (y_test_tensor == class_id)
+                class_mask = y_test_tensor == class_id
                 class_indices = torch.where(class_mask)[0][:200]
                 quick_test_indices.extend(class_indices.tolist())
 
@@ -126,8 +127,16 @@ class MnistDatasetLoader(DatasetLoader):
 
         return x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor
 
-    def _create_permutation_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size):
-        """Create permutation-based tasks for MNIST."""
+    def _create_permutation_tasks(
+        self,
+        x_train_tensor,
+        y_train_tensor,
+        x_test_tensor,
+        y_test_tensor,
+        num_tasks,
+        batch_size,
+    ):
+        """Create permutation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
         test_dataloaders = []
         num_pixels = 28 * 28
@@ -139,9 +148,17 @@ class MnistDatasetLoader(DatasetLoader):
         for task_id in range(num_tasks):
             # Get disjoint data subset for this task
             train_start = task_id * train_size_per_task
-            train_end = (task_id + 1) * train_size_per_task if task_id < num_tasks - 1 else len(x_train_tensor)
+            train_end = (
+                (task_id + 1) * train_size_per_task
+                if task_id < num_tasks - 1
+                else len(x_train_tensor)
+            )
             test_start = task_id * test_size_per_task
-            test_end = (task_id + 1) * test_size_per_task if task_id < num_tasks - 1 else len(x_test_tensor)
+            test_end = (
+                (task_id + 1) * test_size_per_task
+                if task_id < num_tasks - 1
+                else len(x_test_tensor)
+            )
 
             x_train_subset = x_train_tensor[train_start:train_end]
             y_train_subset = y_train_tensor[train_start:train_end]
@@ -162,15 +179,27 @@ class MnistDatasetLoader(DatasetLoader):
             # Create datasets and dataloaders
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
-            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataloader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True
+            )
+            test_dataloader = DataLoader(
+                test_dataset, batch_size=batch_size, shuffle=False
+            )
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
         return train_dataloaders, test_dataloaders
 
-    def _create_rotation_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size):
-        """Create rotation-based tasks for MNIST."""
+    def _create_rotation_tasks(
+        self,
+        x_train_tensor,
+        y_train_tensor,
+        x_test_tensor,
+        y_test_tensor,
+        num_tasks,
+        batch_size,
+    ):
+        """Create rotation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
         test_dataloaders = []
         angles = [i * (360 / num_tasks) for i in range(num_tasks)]
@@ -182,9 +211,17 @@ class MnistDatasetLoader(DatasetLoader):
         for task_id in range(num_tasks):
             # Get disjoint data subset for this task
             train_start = task_id * train_size_per_task
-            train_end = (task_id + 1) * train_size_per_task if task_id < num_tasks - 1 else len(x_train_tensor)
+            train_end = (
+                (task_id + 1) * train_size_per_task
+                if task_id < num_tasks - 1
+                else len(x_train_tensor)
+            )
             test_start = task_id * test_size_per_task
-            test_end = (task_id + 1) * test_size_per_task if task_id < num_tasks - 1 else len(x_test_tensor)
+            test_end = (
+                (task_id + 1) * test_size_per_task
+                if task_id < num_tasks - 1
+                else len(x_test_tensor)
+            )
 
             x_train_subset = x_train_tensor[train_start:train_end]
             y_train_subset = y_train_tensor[train_start:train_end]
@@ -214,21 +251,35 @@ class MnistDatasetLoader(DatasetLoader):
             # Create datasets and dataloaders
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
-            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataloader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True
+            )
+            test_dataloader = DataLoader(
+                test_dataset, batch_size=batch_size, shuffle=False
+            )
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
         return train_dataloaders, test_dataloaders
 
-    def _create_class_split_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size):
-        """Create class-split-based tasks for MNIST."""
+    def _create_class_split_tasks(
+        self,
+        x_train_tensor,
+        y_train_tensor,
+        x_test_tensor,
+        y_test_tensor,
+        num_tasks,
+        batch_size,
+    ):
+        """Create class-split-based tasks for Fashion-MNIST."""
         train_dataloaders = []
         test_dataloaders = []
 
         # Check if num_tasks is 5 (for 2 classes per task)
         if num_tasks != 5:
-            raise ValueError(f"num_tasks ({num_tasks}) must be 5 for class_split (2 classes per task)")
+            raise ValueError(
+                f"num_tasks ({num_tasks}) must be 5 for class_split (2 classes per task)"
+            )
 
         for task_id in range(num_tasks):
             # Determine which classes belong to this task (2 classes per task)
@@ -239,7 +290,7 @@ class MnistDatasetLoader(DatasetLoader):
             # Filter train data for this task's classes
             train_task_mask = torch.zeros(len(y_train_tensor), dtype=torch.bool)
             for cls in task_classes:
-                train_task_mask |= (y_train_tensor == cls)
+                train_task_mask |= y_train_tensor == cls
 
             x_train_task = x_train_tensor[train_task_mask]
             y_train_task = y_train_tensor[train_task_mask]
@@ -247,7 +298,7 @@ class MnistDatasetLoader(DatasetLoader):
             # Filter test data for this task's classes
             test_task_mask = torch.zeros(len(y_test_tensor), dtype=torch.bool)
             for cls in task_classes:
-                test_task_mask |= (y_test_tensor == cls)
+                test_task_mask |= y_test_tensor == cls
 
             x_test_task = x_test_tensor[test_task_mask]
             y_test_task = y_test_tensor[test_task_mask]
@@ -257,67 +308,83 @@ class MnistDatasetLoader(DatasetLoader):
             y_test_task = y_test_task % 2
 
             # Flatten for consistent model input
-            x_train_task = x_train_task.view(x_train_task.size(0), -1)  # (N, 784)
-            x_test_task = x_test_task.view(x_test_task.size(0), -1)  # (N, 784)
+            x_train_task = x_train_task.view(x_train_task.size(0), -1)
+            x_test_task = x_test_task.view(x_test_task.size(0), -1)
 
             # Create datasets and dataloaders
             train_dataset = TensorDataset(x_train_task, y_train_task)
             test_dataset = TensorDataset(x_test_task, y_test_task)
-            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataloader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True
+            )
+            test_dataloader = DataLoader(
+                test_dataset, batch_size=batch_size, shuffle=False
+            )
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
         return train_dataloaders, test_dataloaders
 
-# Backward compatibility function
-# def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_test=False):
-#     """Load and prepare MNIST data for domain-incremental learning (backward compatibility)."""
-#     loader = MnistDatasetLoader()
-#     return loader.prepare_domain_incremental_data(task_type, num_tasks, batch_size, quick_test)
 
+# Fashion-MNIST class labels
+FASHION_MNIST_CLASSES = [
+    "T-shirt/top",
+    "Trouser",
+    "Pullover",
+    "Dress",
+    "Coat",
+    "Sandal",
+    "Shirt",
+    "Sneaker",
+    "Bag",
+    "Ankle boot",
+]
+
+
+# Load Fashion-MNIST dataset for standalone use
+def load_fashion_mnist_data():
+    """Load Fashion-MNIST dataset for standalone use."""
+    loader = FashionMnistDatasetLoader()
+    return loader.load_raw_data()
 
 
 if __name__ == "__main__":
     import random
     import matplotlib.pyplot as plt
 
-    #
-    # Load MINST dataset
-    #
-    _mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath, test_images_filepath, test_labels_filepath)
-    (x_train, y_train), (x_test, y_test) = _mnist_dataloader.load_data()
+    # Load Fashion-MNIST data
+    loader = FashionMnistDatasetLoader()
+    x_train, y_train, x_test, y_test = loader.load_raw_data()
 
-    #
-    # Helper function to show a list of images with their relating titles
-    #
     def show_images(images, title_texts):
+        """Helper function to show a list of images with their relating titles."""
         cols = 5
-        rows = int(len(images)/cols) + 1
-        plt.figure(figsize=(30,20))
+        rows = int(len(images) / cols) + 1
+        plt.figure(figsize=(30, 20))
         index = 1
         for x in zip(images, title_texts):
             image = x[0]
             title_text = x[1]
             plt.subplot(rows, cols, index)
-            plt.imshow(image, cmap='gray')
-            if (title_text != ''):
-                plt.title(title_text, fontsize = 15);
+            plt.imshow(image, cmap="gray")
+            if title_text != "":
+                plt.title(title_text, fontsize=15)
             index += 1
+        plt.show()
 
-    #
     # Show some random training and test images
-    #
     images_2_show = []
     titles_2_show = []
     for i in range(0, 10):
-        r = random.randint(1, 60000)
+        r = random.randint(1, 59999)
         images_2_show.append(x_train[r])
-        titles_2_show.append('training image [' + str(r) + '] = ' + str(y_train[r]))
+        class_name = FASHION_MNIST_CLASSES[y_train[r]]
+        titles_2_show.append(f"train [{r}] = {class_name} ({y_train[r]})")
 
     for i in range(0, 5):
-        r = random.randint(1, 10000)
+        r = random.randint(1, 9999)
         images_2_show.append(x_test[r])
-        titles_2_show.append('test image [' + str(r) + '] = ' + str(y_test[r]))
+        class_name = FASHION_MNIST_CLASSES[y_test[r]]
+        titles_2_show.append(f"test [{r}] = {class_name} ({y_test[r]})")
 
     show_images(images_2_show, titles_2_show)

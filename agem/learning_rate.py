@@ -1,6 +1,7 @@
 # This code gives the learning rate scheduler for TA-A-GEM method.
 # It is not required per se, but it can be helpful.
 
+
 class TALearningRateScheduler:
     """
     Learning rate scheduler for TA-* method.
@@ -9,13 +10,15 @@ class TALearningRateScheduler:
     when loss spikes significantly above best observed loss.
     """
 
-    def __init__(self,
-                 lr_init: float = 1e-3,
-                 factor: float = 0.9999,
-                 min_lr: float = 1e-5,
-                 patience: int = 5,
-                 threshold: float = 1e-4,
-                 reset_threshold: float = 1.0):
+    def __init__(
+        self,
+        lr_init: float = 1e-3,
+        factor: float = 0.9999,
+        min_lr: float = 1e-5,
+        patience: int = 5,
+        threshold: float = 1e-4,
+        reset_threshold: float = 1.0,
+    ):
         """
         Initialize the learning rate scheduler.
 
@@ -36,7 +39,7 @@ class TALearningRateScheduler:
 
         # State variables
         self.current_lr = lr_init
-        self.best_loss = float('inf')
+        self.best_loss = float("inf")
         self.n_stagnant = 0
         self.n_spike = 0
 
@@ -83,6 +86,6 @@ class TALearningRateScheduler:
     def reset(self):
         """Reset scheduler to initial state."""
         self.current_lr = self.lr_init
-        self.best_loss = float('inf')
+        self.best_loss = float("inf")
         self.n_stagnant = 0
         self.n_spike = 0
