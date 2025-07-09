@@ -1,11 +1,10 @@
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pickle
 import os
 from datetime import datetime
+import time
 
 # NOTE: Many functions in this class are unused but kept for reference
 # Only create_per_task_accuracy_graph, create_cluster_visualization,
@@ -212,596 +211,65 @@ class TAGemVisualizer:
         except Exception as e:
             print(f"Error creating overall accuracy graph: {e}")
 
-    def create_main_dashboard(self):  # UNUSED - kept for reference
-        """Create the main analysis dashboard"""
-        # Validate data before creating visualizations
-        if not any([self.task_accuracies, self.memory_sizes, self.epoch_losses]):
-            print("Warning: No data available for main dashboard")
-            return None
+class _Time():
+    def __init__(self, start):
+        self.start = start
+        self.finish = None
+    def __str__(self):
+        return str(self.duration()) if self.finish is not None else ""
+    def end(self, end):
+        assert self.finish is None, "End time already set"
+        self.finish = end
+    def duration(self):
+        return self.finish - self.start if self.finish is not None else None
 
-        fig = make_subplots(
-            rows=3,
-            cols=2,
-            subplot_titles=(
-                "Overall Performance Trajectory",
-                "Task-Specific Accuracy Evolution",
-                "Memory Utilization & Efficiency",
-                "Loss Convergence Analysis",
-                "Catastrophic Forgetting Heatmap",
-                "Training Dynamics",
-            ),
-            specs=[
-                [{"secondary_y": False}, {"secondary_y": False}],
-                [{"secondary_y": True}, {"secondary_y": False}],
-                [{"secondary_y": False}, {"secondary_y": False}],
-            ],
-        )
+class Timer():
+    def __init__(self):
+        self.times = {}
+    def __str__(self):
+        result = []
+        for key in self.times:
+            if isinstance(self.times[key], list):
+                durations = [t.duration() for t in self.times[key]]
+                count = len(durations)
+                avg = sum(durations) / count
+                low = min(durations)
+                high = max(durations)
+                result.append(f"{key}: count={count}, avg={avg:.6f}, low={low:.6f}, high={high:.6f}")
+            else:
+                result.append(f"{key}: {self.times[key]}")
+        return "\n".join(result)
 
-        # 1. Overall performance trajectory with confidence intervals
-        if self.task_accuracies:
-            x_vals = list(range(len(self.task_accuracies)))
-            fig.add_trace(
-                go.Scatter(
-                    x=x_vals,
-                    y=self.task_accuracies,
-                    mode="lines+markers",
-                    name="Overall Accuracy",
-                    line=dict(color="#2E86AB", width=3),
-                    marker=dict(size=8, symbol="circle"),
-                ),
-                row=1,
-                col=1,
-            )
+    def start(self, key):
+        if key in self.times:
+            if isinstance(self.times[key], list):
+                # Key already has multiple measurements
+                self.times[key].append(_Time(time.time()))
+            else:
+                # Key has single measurement, convert to list
+                assert self.times[key].finish is not None, f"Previous timer for key '{key}' not ended"
+                self.times[key] = [self.times[key], _Time(time.time())]
+        else:
+            self.times[key] = _Time(time.time())
 
-            # Add trend line
-            if len(self.task_accuracies) > 2:
-                z = np.polyfit(x_vals, self.task_accuracies, 1)
-                p = np.poly1d(z)
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_vals,
-                        y=p(x_vals),
-                        mode="lines",
-                        name="Trend",
-                        line=dict(color="red", dash="dash"),
-                    ),
-                    row=1,
-                    col=1,
-                )
-
-        # 2. Task-specific accuracy evolution
-        if self.per_task_accuracies and len(self.per_task_accuracies) > 0:
-            colors = px.colors.qualitative.Set1
-            max_tasks = (
-                max(len(accs) for accs in self.per_task_accuracies)
-                if self.per_task_accuracies
-                else 0
-            )
-            for task_id in range(max_tasks):
-                task_accs = [
-                    accs[task_id] if task_id < len(accs) else 0
-                    for accs in self.per_task_accuracies
-                ]
-                if any(
-                    acc > 0 for acc in task_accs
-                ):  # Only plot if there's meaningful data
-                    fig.add_trace(
-                        go.Scatter(
-                            x=list(range(len(task_accs))),
-                            y=task_accs,
-                            mode="lines+markers",
-                            name=f"Task {task_id}",
-                            line=dict(color=colors[task_id % len(colors)], width=2),
-                        ),
-                        row=1,
-                        col=2,
-                    )
-
-        # 3. Memory utilization and efficiency
-        if self.memory_sizes:
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(self.memory_sizes))),
-                    y=self.memory_sizes,
-                    mode="lines+markers",
-                    name="Memory Size",
-                    line=dict(color="#A23B72", width=2),
-                ),
-                row=2,
-                col=1,
-            )
-
-        if self.memory_efficiency:
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(self.memory_efficiency))),
-                    y=self.memory_efficiency,
-                    mode="lines+markers",
-                    name="Memory Efficiency",
-                    line=dict(color="#F18F01", width=2),
-                ),
-                row=2,
-                col=1,
-                secondary_y=True,
-            )
-
-        # 4. Loss convergence analysis
-        if self.epoch_losses:
-            colors = px.colors.qualitative.Pastel1
-            for task_id, losses in enumerate(self.epoch_losses):
-                if losses and len(losses) > 0:
-                    # Ensure losses are valid numbers
-                    valid_losses = [
-                        l
-                        for l in losses
-                        if isinstance(l, (int, float)) and not np.isnan(l)
-                    ]
-                    if valid_losses:
-                        fig.add_trace(
-                            go.Scatter(
-                                x=list(range(len(valid_losses))),
-                                y=valid_losses,
-                                mode="lines",
-                                name=f"Task {task_id} Loss",
-                                line=dict(color=colors[task_id % len(colors)]),
-                            ),
-                            row=2,
-                            col=2,
-                        )
-
-        # 5. Catastrophic forgetting heatmap
-        if len(self.per_task_accuracies) > 1:
-            forgetting_matrix = self._compute_forgetting_matrix()
-            fig.add_trace(
-                go.Heatmap(
-                    z=forgetting_matrix,
-                    colorscale="RdBu",
-                    zmid=0,
-                    showscale=True,
-                    colorbar=dict(title="Forgetting", x=0.48),
-                ),
-                row=3,
-                col=1,
-            )
-
-        # 6. Training dynamics (batch loss smoothed)
-        if self.batch_losses and len(self.batch_losses) > 0:
-            try:
-                batch_df = pd.DataFrame(self.batch_losses)
-                if (
-                    not batch_df.empty
-                    and "task" in batch_df.columns
-                    and "loss" in batch_df.columns
-                ):
-                    for task_id in batch_df["task"].unique():
-                        task_data = batch_df[batch_df["task"] == task_id]
-                        # Smooth with rolling average
-                        if len(task_data) > 10:
-                            # Remove invalid values before smoothing
-                            task_data = task_data[task_data["loss"].notna()]
-                            if len(task_data) > 5:
-                                smoothed = (
-                                    task_data["loss"]
-                                    .rolling(
-                                        window=min(10, len(task_data)), center=True
-                                    )
-                                    .mean()
-                                )
-                                smoothed = smoothed.dropna()
-                                if len(smoothed) > 0:
-                                    fig.add_trace(
-                                        go.Scatter(
-                                            x=list(range(len(smoothed))),
-                                            y=list(smoothed),
-                                            mode="lines",
-                                            name=f"Task {task_id} Smoothed",
-                                            line=dict(width=2),
-                                        ),
-                                        row=3,
-                                        col=2,
-                                    )
-            except Exception as e:
-                print(f"Warning: Could not create batch loss visualization: {e}")
-
-        # Update layout with professional styling
-        fig.update_layout(
-            height=1200,
-            width=1600,
-            title=dict(
-                text="TA-A-GEM Comprehensive Training Analysis",
-                x=0.5,
-                font=dict(size=20, color="#2E4057"),
-            ),
-            showlegend=True,
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-            ),
-            plot_bgcolor="white",
-            paper_bgcolor="#FAFAFA",
-        )
-
-        # Update axes styling
-        for i in range(1, 4):
-            for j in range(1, 3):
-                fig.update_xaxes(
-                    showgrid=True, gridwidth=1, gridcolor="lightgray", row=i, col=j
-                )
-                fig.update_yaxes(
-                    showgrid=True, gridwidth=1, gridcolor="lightgray", row=i, col=j
-                )
-
-        # Specific axis labels
-        fig.update_xaxes(title_text="Training Task", row=1, col=1)
-        fig.update_yaxes(title_text="Accuracy", row=1, col=1)
-        fig.update_xaxes(title_text="Training Task", row=1, col=2)
-        fig.update_yaxes(title_text="Task Accuracy", row=1, col=2)
-        fig.update_xaxes(title_text="Training Task", row=2, col=1)
-        fig.update_yaxes(title_text="Memory Size", row=2, col=1)
-        fig.update_yaxes(
-            title_text="Efficiency (Acc/Memory)", row=2, col=1, secondary_y=True
-        )
-        fig.update_xaxes(title_text="Epoch", row=2, col=2)
-        fig.update_yaxes(title_text="Loss", row=2, col=2)
-        fig.update_xaxes(title_text="Learned Task", row=3, col=1)
-        fig.update_yaxes(title_text="Evaluation Task", row=3, col=1)
-        fig.update_xaxes(title_text="Batch (Smoothed)", row=3, col=2)
-        fig.update_yaxes(title_text="Loss", row=3, col=2)
-
-        return fig
-
-    def create_forgetting_analysis(self):  # UNUSED - kept for reference
-        """Create detailed catastrophic forgetting analysis"""
-        if len(self.per_task_accuracies) < 2:
-            print("Warning: Need at least 2 tasks for forgetting analysis")
-            return None
-
-        forgetting_data = self._compute_detailed_forgetting()
-        if not forgetting_data or all(
-            len(task_data) == 0 for task_data in forgetting_data
-        ):
-            print("Warning: No forgetting data available")
-            return None
-
-        fig = make_subplots(
-            rows=2,
-            cols=2,
-            subplot_titles=(
-                "Forgetting Timeline",
-                "Final vs Initial Performance",
-                "Forgetting Distribution",
-                "Retention Scores",
-            ),
-            specs=[
-                [{"secondary_y": False}, {"secondary_y": False}],
-                [{"secondary_y": False}, {"secondary_y": False}],
-            ],
-        )
-
-        # 1. Forgetting timeline
-        for task_id in range(len(forgetting_data)):
-            task_forget = [fd["forgetting"] for fd in forgetting_data[task_id]]
-            if task_forget:  # Only add if there's data
-                fig.add_trace(
-                    go.Scatter(
-                        x=list(range(len(task_forget))),
-                        y=task_forget,
-                        mode="lines+markers",
-                        name=f"Task {task_id}",
-                    ),
-                    row=1,
-                    col=1,
-                )
-
-        # 2. Final vs Initial performance scatter
-        initial_accs = []
-        final_accs = []
-        task_ids = []
-
-        for task_id in range(len(self.per_task_accuracies) - 1):
-            if task_id < len(self.per_task_accuracies[task_id]):
-                initial_acc = self.per_task_accuracies[task_id][task_id]
-                final_acc = self.per_task_accuracies[-1][task_id]
-                initial_accs.append(initial_acc)
-                final_accs.append(final_acc)
-                task_ids.append(task_id)
-
-        if initial_accs:
-            fig.add_trace(
-                go.Scatter(
-                    x=initial_accs,
-                    y=final_accs,
-                    mode="markers",
-                    name="Tasks",
-                    marker=dict(size=10, opacity=0.7),
-                    text=[f"Task {tid}" for tid in task_ids],
-                    textposition="top center",
-                ),
-                row=1,
-                col=2,
-            )
-            # Add diagonal line
-            max_acc = max(max(initial_accs), max(final_accs))
-            fig.add_trace(
-                go.Scatter(
-                    x=[0, max_acc],
-                    y=[0, max_acc],
-                    mode="lines",
-                    name="No Forgetting",
-                    line=dict(dash="dash", color="red"),
-                ),
-                row=1,
-                col=2,
-            )
-
-        # 3. Forgetting distribution
-        all_forgetting = []
-        for task_data in forgetting_data:
-            all_forgetting.extend([fd["forgetting"] for fd in task_data])
-
-        if all_forgetting:
-            fig.add_trace(
-                go.Histogram(
-                    x=all_forgetting, nbinsx=20, name="Forgetting Distribution"
-                ),
-                row=2,
-                col=1,
-            )
-
-        # 4. Retention scores (1 - forgetting)
-        retention_scores = []
-        for task_id in range(len(forgetting_data)):
-            if forgetting_data[task_id]:
-                final_forgetting = forgetting_data[task_id][-1]["forgetting"]
-                retention = max(0, 1 - final_forgetting)
-                retention_scores.append(retention)
-
-        if retention_scores:
-            fig.add_trace(
-                go.Bar(
-                    x=list(range(len(retention_scores))),
-                    y=retention_scores,
-                    name="Retention Score",
-                    marker_color=[
-                        "green" if rs > 0.8 else "orange" if rs > 0.6 else "red"
-                        for rs in retention_scores
-                    ],
-                ),
-                row=2,
-                col=2,
-            )
-
-        fig.update_layout(
-            height=800,
-            width=1200,
-            title_text="Catastrophic Forgetting Detailed Analysis",
-            showlegend=True,
-        )
-
-        return fig
-
-    def create_memory_analysis(self):  # UNUSED - kept for reference
-        """Create memory utilization analysis"""
-        if not self.memory_sizes or len(self.memory_sizes) == 0:
-            print("Warning: No memory data available for analysis")
-            return None
-
-        fig = make_subplots(
-            rows=2,
-            cols=2,
-            subplot_titles=(
-                "Memory Growth",
-                "Memory Efficiency",
-                "Accuracy vs Memory",
-                "Memory Utilization Rate",
-            ),
-            specs=[
-                [{"secondary_y": False}, {"secondary_y": False}],
-                [{"secondary_y": False}, {"secondary_y": False}],
-            ],
-        )
-
-        # 1. Memory growth
-        fig.add_trace(
-            go.Scatter(
-                x=list(range(len(self.memory_sizes))),
-                y=self.memory_sizes,
-                mode="lines+markers",
-                name="Memory Size",
-                fill="tonexty",
-                line=dict(color="blue"),
-            ),
-            row=1,
-            col=1,
-        )
-
-        # 2. Memory efficiency
-        if self.memory_efficiency:
-            fig.add_trace(
-                go.Scatter(
-                    x=list(range(len(self.memory_efficiency))),
-                    y=self.memory_efficiency,
-                    mode="lines+markers",
-                    name="Efficiency",
-                    line=dict(color="green"),
-                ),
-                row=1,
-                col=2,
-            )
-
-        # 3. Accuracy vs Memory scatter
-        if len(self.task_accuracies) == len(self.memory_sizes):
-            fig.add_trace(
-                go.Scatter(
-                    x=self.memory_sizes,
-                    y=self.task_accuracies,
-                    mode="markers",
-                    name="Accuracy vs Memory",
-                    marker=dict(size=8, opacity=0.7),
-                ),
-                row=2,
-                col=1,
-            )
-
-        # 4. Memory utilization rate (change in memory per task)
-        if len(self.memory_sizes) > 1:
-            mem_changes = [
-                self.memory_sizes[i] - self.memory_sizes[i - 1]
-                for i in range(1, len(self.memory_sizes))
-            ]
-            fig.add_trace(
-                go.Bar(
-                    x=list(range(1, len(self.memory_sizes))),
-                    y=mem_changes,
-                    name="Memory Change per Task",
-                ),
-                row=2,
-                col=2,
-            )
-
-        fig.update_layout(
-            height=800, width=1200, title_text="Memory Utilization Analysis"
-        )
-
-        return fig
-
-    def _compute_forgetting_matrix(self):  # UNUSED - kept for reference
-        """Compute forgetting matrix for heatmap"""
-        n_tasks = len(self.per_task_accuracies)
-        forgetting_matrix = np.zeros((n_tasks, n_tasks))
-
-        for eval_task in range(n_tasks):
-            for learn_task in range(eval_task, n_tasks):
-                if eval_task < len(self.per_task_accuracies[eval_task]):
-                    initial_acc = self.per_task_accuracies[eval_task][eval_task]
-                    if learn_task < len(self.per_task_accuracies) and eval_task < len(
-                        self.per_task_accuracies[learn_task]
-                    ):
-                        current_acc = self.per_task_accuracies[learn_task][eval_task]
-                        forgetting = initial_acc - current_acc
-                        forgetting_matrix[eval_task, learn_task] = forgetting
-
-        return forgetting_matrix
-
-    def _compute_detailed_forgetting(self):  # UNUSED - kept for reference
-        """Compute detailed forgetting data for analysis"""
-        forgetting_data = []
-
-        for task_id in range(len(self.per_task_accuracies) - 1):
-            task_forgetting = []
-            if task_id < len(self.per_task_accuracies[task_id]):
-                initial_acc = self.per_task_accuracies[task_id][task_id]
-
-                for eval_step in range(task_id + 1, len(self.per_task_accuracies)):
-                    if task_id < len(self.per_task_accuracies[eval_step]):
-                        current_acc = self.per_task_accuracies[eval_step][task_id]
-                        forgetting = initial_acc - current_acc
-                        task_forgetting.append(
-                            {
-                                "step": eval_step,
-                                "accuracy": current_acc,
-                                "forgetting": forgetting,
-                            }
-                        )
-
-            forgetting_data.append(task_forgetting)
-
-        return forgetting_data
-
-    def generate_report(self, save_path=None):  # UNUSED - kept for reference
-        """Generate comprehensive analysis report"""
-        if not any([self.task_accuracies, self.memory_sizes, self.epoch_losses]):
-            print("No data available for report generation")
-            return
-
-        print("Generating visualizations...")
-
-        # Create main dashboard
-        try:
-            main_fig = self.create_main_dashboard()
-            if main_fig:
-                main_fig.show()
-                if save_path:
-                    main_fig.write_html(f"{save_path}_main_dashboard.html")
-                    print(f"Main dashboard saved to {save_path}_main_dashboard.html")
-        except Exception as e:
-            print(f"Error creating main dashboard: {e}")
-
-        # Create forgetting analysis
-        try:
-            forget_fig = self.create_forgetting_analysis()
-            if forget_fig:
-                forget_fig.show()
-                if save_path:
-                    forget_fig.write_html(f"{save_path}_forgetting_analysis.html")
-                    print(
-                        f"Forgetting analysis saved to {save_path}_forgetting_analysis.html"
-                    )
-        except Exception as e:
-            print(f"Error creating forgetting analysis: {e}")
-
-        # Create memory analysis
-        try:
-            memory_fig = self.create_memory_analysis()
-            if memory_fig:
-                memory_fig.show()
-                if save_path:
-                    memory_fig.write_html(f"{save_path}_memory_analysis.html")
-                    print(f"Memory analysis saved to {save_path}_memory_analysis.html")
-        except Exception as e:
-            print(f"Error creating memory analysis: {e}")
-
-        # Print summary statistics
-        try:
-            self._print_summary_stats()
-        except Exception as e:
-            print(f"Error printing summary stats: {e}")
-
-    def _print_summary_stats(self):  # UNUSED - kept for reference
-        """Print summary statistics"""
-        print("\n" + "=" * 50)
-        print("TA-A-GEM TRAINING SUMMARY")
-        print("=" * 50)
-
-        if self.task_accuracies:
-            print(f"Final Overall Accuracy: {self.task_accuracies[-1]:.4f}")
-            print(f"Best Overall Accuracy: {max(self.task_accuracies):.4f}")
-            print(
-                f"Accuracy Trend: {np.polyfit(range(len(self.task_accuracies)), self.task_accuracies, 1)[0]:.6f}"
-            )
-
-        if self.memory_sizes:
-            print(f"Final Memory Size: {self.memory_sizes[-1]} samples")
-            print(
-                f"Average Memory Growth: {(self.memory_sizes[-1] - self.memory_sizes[0]) / len(self.memory_sizes):.2f} samples/task"
-            )
-
-        if self.memory_efficiency:
-            print(
-                f"Final Memory Efficiency: {self.memory_efficiency[-1]:.6f} accuracy/sample"
-            )
-
-        if len(self.per_task_accuracies) > 1:
-            # Calculate average forgetting
-            total_forgetting = 0
-            count = 0
-            for task_id in range(len(self.per_task_accuracies) - 1):
-                if task_id < len(self.per_task_accuracies[task_id]) and task_id < len(
-                    self.per_task_accuracies[-1]
-                ):
-                    initial = self.per_task_accuracies[task_id][task_id]
-                    final = self.per_task_accuracies[-1][task_id]
-                    total_forgetting += initial - final
-                    count += 1
-
-            if count > 0:
-                avg_forgetting = total_forgetting / count
-                print(f"Average Catastrophic Forgetting: {avg_forgetting:.4f}")
-
-        print("=" * 50)
+    def end(self, key):
+        if isinstance(self.times[key], list):
+            self.times[key][-1].end(time.time())
+        else:
+            self.times[key].end(time.time())
 
 
 # Example usage and testing
 if __name__ == "__main__":
+    t = Timer()
+    t.start("1")
+    time.sleep(2.5)
+    t.start("2")
+    time.sleep(0.5)
+    t.end("2")
+    t.end("1")
+    print(t)
+
     # Create sample data for testing
     visualizer = TAGemVisualizer()
 

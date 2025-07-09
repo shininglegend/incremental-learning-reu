@@ -8,7 +8,7 @@ import torch.optim as optim
 
 # import numpy as np
 # import pandas as pd
-from visualization_analysis import TAGemVisualizer
+from visualization_analysis import TAGemVisualizer, Timer
 from learning_rate import TALearningRateScheduler
 import time
 
@@ -19,7 +19,7 @@ print(f"Using device: {device}")
 
 # If set to True, will w run less tasks and less data, and logs loss per batch
 # If set to False, will run full MNIST with 5 tasks and 10 epochs with normal progress bar
-QUICK_TEST_MODE = False
+QUICK_TEST_MODE = True
 
 # If set to True, will use the TA-OGD adaptive learning rate scheduler
 # If set to False, will use fixed learning rate
@@ -91,6 +91,9 @@ class SimpleMLP(nn.Module):
         x = self.fc3(x)
         return x
 
+# Set up a timer to keep track of times.
+t = Timer()
+t.start("init")
 
 # Initialize model, optimizer, and loss function
 model = SimpleMLP(INPUT_DIM, HIDDEN_DIM, NUM_CLASSES).to(device)
@@ -135,6 +138,9 @@ train_dataloaders, test_dataloaders = datasetLoader.prepare_domain_incremental_d
 # --- Initialize comprehensive visualizer ---
 visualizer = TAGemVisualizer()
 
+t.end("init")
+t.start("training")
+
 # --- 2. Training Loop ---
 print("Starting TA-A-GEM training...")
 for task_id, train_dataloader in enumerate(train_dataloaders):
@@ -155,9 +161,11 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
+            t.start("optimize")
             batch_loss = agem_handler.optimize(
                 data, labels, clustering_memory.get_memory_samples()
             )
+            t.end("optimize")
 
             # Track batch loss
             if batch_loss is not None:
@@ -166,12 +174,14 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
             # Step 2: Update the clustered memory with current batch samples
             # This is where the core clustering for TA-A-GEM happens
+            t.start("add samples")
             for i in range(len(data)):
                 sample_data = data[i].cpu()  # Move to CPU for memory storage
                 sample_label = labels[i].cpu()  # Move to CPU for memory storage
                 clustering_memory.add_sample(
                     sample_data, sample_label
                 )  # Add sample to clusters
+            t.end("add samples")
 
             num_batches += 1
 
@@ -202,6 +212,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             print(f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}")
 
     # Evaluate performance after each task on TEST DATA
+    t.start("eval")
     model.eval()
     avg_accuracy = agem.evaluate_tasks_up_to(
         model, criterion, test_dataloaders, task_id, device=device
@@ -215,6 +226,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             model, criterion, eval_dataloader, device=device
         )
         individual_accuracies.append(task_acc)
+    t.end("eval")
 
     # Calculate training time for this task
     task_time = time.time() - task_start_time
@@ -240,6 +252,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     print(f"Pool sizes: {pool_sizes}")
     print(f"Task Training Time: {task_time:.2f}s")
 
+t.end("training")
 print("\nTA-A-GEM training complete.")
 
 # --- 3. Comprehensive Visualization and Analysis ---
@@ -253,3 +266,4 @@ visualizer.save_metrics(f"test_results/ta_agem_metrics_{timestamp}.pkl", params=
 visualizer.generate_simple_report(clustering_memory)
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
+print(t)

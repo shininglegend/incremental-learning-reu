@@ -43,7 +43,6 @@ for key in data.keys():
     else:
         print(f"{key}: {data[key]}")  # Print the value directly for non-list types
 
-# TODO: Plot the data
 # Create visualizations for accuracy and loss data
 
 # 1. Task Accuracies Over Time (Individual Task Performance)
@@ -147,7 +146,7 @@ if 'batch_losses' in data and data['batch_losses']:
             xaxis_title='Batch Number',
             yaxis_title='Loss'
         )
-        fig_batch_losses.write_html('batch_losses.html')
+        fig_batch_losses.write_html(os.path.join(SAVE_DIR, 'batch_losses.html'))
         #fig_batch_losses.show()
 
 # 5. Training Times Per Task
@@ -162,7 +161,7 @@ if 'training_times' in data and data['training_times']:
         xaxis_title='Task Number',
         yaxis_title='Training Time (seconds)'
     )
-    fig_training_times.write_html('training_times.html')
+    fig_training_times.write_html(os.path.join(SAVE_DIR, 'training_times.html'))
     #fig_training_times.show()
 
 # 6. Memory Efficiency Over Tasks
@@ -178,7 +177,7 @@ if 'memory_efficiency' in data and data['memory_efficiency']:
         xaxis_title='Task Number',
         yaxis_title='Memory Efficiency'
     )
-    fig_memory_eff.write_html('memory_efficiency.html')
+    fig_memory_eff.write_html(os.path.join(SAVE_DIR, 'memory_efficiency.html'))
     #fig_memory_eff.show()
 
 # 7. Combined Accuracy and Loss Dashboard
@@ -270,7 +269,7 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
     fig_combined.update_xaxes(title_text="Task Number", row=2, col=2)
     fig_combined.update_yaxes(title_text="Time (seconds)", row=2, col=2)
 
-    fig_combined.write_html('incremental_learning_dashboard.html', auto_open=True)
+    fig_combined.write_html(os.path.join(SAVE_DIR, 'incremental_learning_dashboard.html'), auto_open=True)
     #fig_combined.show()
 
 print("\nVisualization complete! All plots have been displayed.")
