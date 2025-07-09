@@ -10,7 +10,7 @@ import torch.optim as optim
 from agem import agem
 from agem.learning_rate import TALearningRateScheduler
 
-from em_tools import clustering
+from em_tools import clustering_pools
 from dataset_tools.load_dataset import load_dataset
 
 from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
@@ -113,7 +113,7 @@ lr_scheduler = (
 
 # Initialize TA-A-GEM components with multi-pool architecture
 # Clustering_memory will manage the episodic memory with separate pools per class
-clustering_memory = clustering.ClusteringMemory(
+clustering_memory = clustering_pools.ClusteringMemory(
     Q=CLUSTERS_PER_POOL,
     P=MEMORY_SIZE_P,
     input_type="samples",

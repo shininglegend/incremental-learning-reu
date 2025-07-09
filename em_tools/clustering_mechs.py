@@ -1,4 +1,4 @@
-# Initial Code by gemini. 1x2 matrix per item
+# Handles the clusters themselves - assigning and removing as needed
 import numpy as np
 import pandas
 from collections import deque

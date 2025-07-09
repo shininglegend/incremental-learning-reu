@@ -1,4 +1,5 @@
-from clustering_gemini import ClusteringMechanism
+# Handles the pools of clusters
+from em_tools.clustering_mechs import ClusteringMechanism
 import numpy as np
 
 
