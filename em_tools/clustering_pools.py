@@ -70,10 +70,7 @@ class ClusteringMemory:
             ts("convert")
             for sample, sample_label in zip(samples, labels):
                 sample_tensor = sample.to(self.device)
-                label_tensor = (
-                                    torch.tensor(sample_label).to(self.device)
-                                    if sample_label is not None
-                                    else torch.tensor(label).to(self.device))
+                label_tensor = torch.tensor(sample_label if sample_label is not None else label).to(self.device)
                 all_memory_samples.append((sample_tensor, label_tensor))
             te("convert")
         te("total")
