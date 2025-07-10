@@ -1,4 +1,4 @@
-name: base
+name: ta-env
 channels:
   - conda-forge
 dependencies:

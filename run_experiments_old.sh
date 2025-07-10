@@ -32,7 +32,7 @@ for task_type in "${TASK_TYPES[@]}"; do
         echo "Started at: $(date)"
 
         # Run the experiment
-        python main.py --task_type $task_type
+        python main.py --task_type $task_type --no_output
 
         # Check if the run was successful
         if [ $? -eq 0 ]; then

@@ -1,8 +1,8 @@
 # Handles the pools of clusters
 try:
-    from clustering_mechs import ClusteringMechanism
-except ImportError:
     from em_tools.clustering_mechs import ClusteringMechanism
+except ImportError:
+    from clustering_mechs import ClusteringMechanism
 
 import torch
 

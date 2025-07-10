@@ -25,6 +25,8 @@ parser.add_argument('--task_type', type=str, default='permutation',
                     help='Type of task transformation (default: permutation)')
 parser.add_argument('--lite', action='store_true', default=False,
                     help='Run in quick test mode with fewer tasks and data')
+parser.add_argument('--no_output', action='store_true', default=False,
+                    help='Reduce output verbosity')
 args = parser.parse_args()
 
 # If set to True, will run less tasks and less data, and logs loss per batch
@@ -203,7 +205,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             num_batches += 1
 
             # Update progress bar every 50 batches or on last batch
-            if not QUICK_TEST_MODE and (
+            if not QUICK_TEST_MODE and not args.no_output and (
                 batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1
             ):
                 progress = (batch_idx + 1) / len(train_dataloader)
@@ -217,8 +219,10 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 )
 
         # Print newline after progress bar completion
-        if not QUICK_TEST_MODE:
+        if not QUICK_TEST_MODE and not args.no_output:
             print()
+        if args.no_output and (epoch % 5 == 4 or epoch == NUM_EPOCHS - 1):
+            print(f"Task {task_id}, Epoch {epoch+1}: Loss = {epoch_loss / max(num_batches, 1):.4f}")
 
         # Track epoch loss
         avg_epoch_loss = epoch_loss / max(num_batches, 1)
