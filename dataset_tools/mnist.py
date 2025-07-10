@@ -65,13 +65,16 @@ class MnistDataloader(object):
                     "Magic number mismatch, expected 2051, got {}".format(magic)
                 )
             image_data = array("B", file.read())
-        images = []
-        for i in range(size):
-            img = np.array(image_data[i * rows * cols : (i + 1) * rows * cols])
-            img = img.reshape(28, 28)
-            images.append(img)
 
-        return images, labels
+        # Convert to tensor format directly
+        images_array = np.array(image_data, dtype=np.uint8).reshape(size, rows, cols)
+        labels_array = np.array(labels, dtype=np.uint8)
+
+        # Convert to PyTorch tensors
+        images_tensor = torch.FloatTensor(images_array)
+        labels_tensor = torch.LongTensor(labels_array)
+
+        return images_tensor, labels_tensor
 
     def load_data(self):
         x_train, y_train = self.read_images_labels(
@@ -116,17 +119,11 @@ class MnistDatasetLoader(DatasetLoader):
 
     def preprocess_data(self, x_train, y_train, x_test, y_test, quick_test=False):
         """Preprocess MNIST data into PyTorch tensors."""
-        # Convert list of numpy arrays to single numpy array before tensor conversion
-        x_train_array = np.array(x_train)
-        y_train_array = np.array(y_train)
-        x_test_array = np.array(x_test)
-        y_test_array = np.array(y_test)
-
-        # Convert numpy arrays to tensors and normalize
-        x_train_tensor = torch.FloatTensor(x_train_array) / 255.0
-        y_train_tensor = torch.LongTensor(y_train_array)
-        x_test_tensor = torch.FloatTensor(x_test_array) / 255.0
-        y_test_tensor = torch.LongTensor(y_test_array)
+        # Data is already in tensor format, just normalize
+        x_train_tensor = x_train / 255.0
+        y_train_tensor = y_train
+        x_test_tensor = x_test / 255.0
+        y_test_tensor = y_test
 
         # For quick testing, use only first 1000 samples per class
         if quick_test:
@@ -396,13 +393,15 @@ if __name__ == "__main__":
     images_2_show = []
     titles_2_show = []
     for i in range(0, 10):
-        r = random.randint(1, 60000)
-        images_2_show.append(x_train[r])
-        titles_2_show.append("training image [" + str(r) + "] = " + str(y_train[r]))
+        r = random.randint(1, len(x_train) - 1)
+        images_2_show.append(x_train[r].numpy())
+        titles_2_show.append(
+            "training image [" + str(r) + "] = " + str(y_train[r].item())
+        )
 
     for i in range(0, 5):
-        r = random.randint(1, 10000)
-        images_2_show.append(x_test[r])
-        titles_2_show.append("test image [" + str(r) + "] = " + str(y_test[r]))
+        r = random.randint(1, len(x_test)-1)
+        images_2_show.append(x_test[r].numpy())
+        titles_2_show.append("test image [" + str(r) + "] = " + str(y_test[r].item()))
 
     show_images(images_2_show, titles_2_show)
