@@ -5,21 +5,6 @@
 
 echo "Starting TA-A-GEM experiments with SLURM..."
 echo "Running 5 iterations for each task type: permutation, rotation, class_split"
-set -e
-
-# Create executable using PyInstaller
-echo "Creating standalone executable..."
-pip install pyinstaller
-pyinstaller --onefile --name taagem_experiment main.py
-EXECUTABLE_PATH="dist/taagem_experiment"
-EXECUTABLE_NAME="taagem_experiment"
-
-if [ ! -f "$EXECUTABLE_PATH" ]; then
-    echo "ERROR: Failed to create executable"
-    exit 1
-fi
-
-echo "Executable created: $EXECUTABLE_PATH"
 
 # Test executable for 15 seconds
 echo "Testing executable for 15 seconds..."
@@ -79,19 +64,29 @@ echo "Running on node: \$(hostname)"
 echo "Job ID: \$SLURM_JOB_ID"
 echo "=========================================="
 
-# Copy executable to job directory
-cp \$SLURM_SUBMIT_DIR/dist/taagem_experiment ./taagem_experiment_local
-chmod +x ./taagem_experiment_local
+# Setup Python environment
+set -e
+echo "Setting up Python environment..."
 
-echo "Running experiment with standalone executable..."
-./taagem_experiment_local --task_type $task_type --no_output
+# Create virtual environment in job directory
+python3.12 -m venv venv
+source venv/bin/activate
 
-# Clean up executable
-rm -f ./taagem_experiment_local
+# Install required packages
+pip install --no-cache-dir torch torchvision kagglehub numpy pandas scikit-learn plotly
+
+echo "Activating virtual environment..."
+source venv/bin/activate
+
+# Verify environment is active
+echo "Using Python: \$(which python)"
+echo "Python version: \$(python --version)"
+
+# Run the experiment
+python main.py --task_type $task_type --no_output
 
 # Check if the run was successful
-RUN_EXIT_CODE=\$?
-if [ \$RUN_EXIT_CODE -eq 0 ]; then
+if [ \$? -eq 0 ]; then
     echo "=========================================="
     echo "JOB COMPLETED: $task_type run $run"
     echo "Completed at: \$(date)"
@@ -106,8 +101,6 @@ else
     exit 1
 fi
 EOF
-
-        # Note: executable will be copied from submit directory during job execution
 
         # Submit the job
         JOB_ID=$(sbatch slurm_jobs/${JOB_NAME}.sh | awk '{print $4}')
@@ -187,10 +180,6 @@ echo "Running analysis script..."
 
 # Run the analysis script
 python visualization_analysis/retro_stats.py
-
-# Clean up executable
-rm dist/taagem_experiment
-rm -r dist/ build/ taagem_experiment.spec
 
 echo "Analysis complete!"
 echo "Results saved to test_results/ directory"
