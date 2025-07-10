@@ -372,13 +372,13 @@ if __name__ == "__main__":
     images_2_show = []
     titles_2_show = []
     for i in range(0, 10):
-        r = random.randint(1, 59999)
+        r = random.randint(1, len(x_train) - 1)
         images_2_show.append(x_train[r].numpy())
         class_name = FASHION_MNIST_CLASSES[y_train[r].item()]
         titles_2_show.append(f"train [{r}] = {class_name} ({y_train[r].item()})")
 
     for i in range(0, 5):
-        r = random.randint(1, 9999)
+        r = random.randint(1, len(x_test)-1)
         images_2_show.append(x_test[r].numpy())
         class_name = FASHION_MNIST_CLASSES[y_test[r].item()]
         titles_2_show.append(f"test [{r}] = {class_name} ({y_test[r].item()})")

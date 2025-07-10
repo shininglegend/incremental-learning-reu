@@ -400,7 +400,7 @@ if __name__ == "__main__":
         )
 
     for i in range(0, 5):
-        r = random.randint(1, 9999)
+        r = random.randint(1, len(x_test)-1)
         images_2_show.append(x_test[r].numpy())
         titles_2_show.append("test image [" + str(r) + "] = " + str(y_test[r].item()))
 
