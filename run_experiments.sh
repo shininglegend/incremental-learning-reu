@@ -55,7 +55,7 @@ echo "=========================================="
 
 # Setup conda environment
 echo "Setting up conda environment..."
-source \$(conda info --base)/etc/profile.d/conda.sh
+source /opt/conda/etc/profile.d/conda.sh
 
 # Check if environment exists, create if not
 if ! conda env list | grep -q "ta-env"; then
