@@ -55,7 +55,7 @@ class Cluster:
         # Only consider samples except the newest (last one)
         for i in range(len(self.samples) - 1):
             sample = self.samples[i]
-            distance = torch.norm(torch.tensor(sample, dtype=torch.float32) - self.mean)
+            distance = torch.norm(sample - self.mean)
             if distance > max_distance:
                 max_distance = distance
                 furthest_idx = i
@@ -76,7 +76,7 @@ class Cluster:
         self.labels = deque(labels_list)
 
         # Update sum and mean
-        self.sum_samples -= torch.tensor(removed_sample, dtype=torch.float32)
+        self.sum_samples -= removed_sample
         if len(self.samples) > 0:
             self.mean = self.sum_samples / len(self.samples)
         else:

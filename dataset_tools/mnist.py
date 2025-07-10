@@ -393,9 +393,11 @@ if __name__ == "__main__":
     images_2_show = []
     titles_2_show = []
     for i in range(0, 10):
-        r = random.randint(1, 59999)
+        r = random.randint(1, len(x_train) - 1)
         images_2_show.append(x_train[r].numpy())
-        titles_2_show.append("training image [" + str(r) + "] = " + str(y_train[r].item()))
+        titles_2_show.append(
+            "training image [" + str(r) + "] = " + str(y_train[r].item())
+        )
 
     for i in range(0, 5):
         r = random.randint(1, 9999)
