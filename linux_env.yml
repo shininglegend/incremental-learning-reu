@@ -9,8 +9,8 @@ dependencies:
   - brotli-python=1.1.0=py312h2ec8cdc_2
   - bzip2=1.0.8=h4bc722e_7
   - c-ares=1.34.5=hb9d3cd8_0
-  - ca-certificates=2025.6.15=hbd8a1cb_0
-  - certifi=2025.6.15=pyhd8ed1ab_0
+  - ca-certificates=2025.7.9=hbd8a1cb_0
+  - certifi=2025.7.9=pyhd8ed1ab_0
   - cffi=1.17.1=py312h06ac9bb_0
   - charset-normalizer=3.4.2=pyhd8ed1ab_0
   - colorama=0.4.6=pyhd8ed1ab_1
@@ -33,6 +33,8 @@ dependencies:
   - krb5=1.21.3=h659f571_0
   - ld_impl_linux-64=2.43=h712a8e2_4
   - libarchive=3.7.7=h75ea233_4
+  - libblas=3.9.0=32_h59b9bed_openblas
+  - libcblas=3.9.0=32_he106b2a_openblas
   - libcurl=8.13.0=h332b0f4_0
   - libedit=3.1.20250104=pl5321h7949ede_0
   - libev=4.33=hd590300_2
@@ -40,13 +42,17 @@ dependencies:
   - libffi=3.4.6=h2dba641_1
   - libgcc=15.1.0=h767d61c_2
   - libgcc-ng=15.1.0=h69a702a_2
+  - libgfortran=15.1.0=h69a702a_3
+  - libgfortran5=15.1.0=hcea5267_3
   - libgomp=15.1.0=h767d61c_2
   - libiconv=1.18=h4ce23a2_1
+  - liblapack=3.9.0=32_h7ac8fdf_openblas
   - liblzma=5.8.1=hb9d3cd8_1
   - libmamba=2.1.1=h430c389_0
   - libmambapy=2.1.1=py312h07448e0_0
   - libnghttp2=1.64.0=h161d5f1_0
   - libnsl=2.0.1=hd590300_0
+  - libopenblas=0.3.30=pthreads_h94d23a6_0
   - libsolv=0.7.32=h7955e40_2
   - libsqlite=3.49.2=hee588c1_0
   - libssh2=1.11.1=hcf80075_0
@@ -62,7 +68,8 @@ dependencies:
   - menuinst=2.2.0=py312h7900ff3_0
   - ncurses=6.5=h2d0b736_3
   - nlohmann_json=3.11.3=he02047a_1
-  - openssl=3.5.0=h7b32b05_1
+  - numpy=2.2.6=py312h72c5963_0
+  - openssl=3.5.1=h7b32b05_0
   - packaging=25.0=pyh29332c3_1
   - pip=25.1.1=pyh8b19718_0
   - platformdirs=4.3.8=pyhe01879c_0
@@ -92,7 +99,6 @@ dependencies:
   - zstd=1.5.7=hb8e6e7a_2
   - pip:
       - narwhals==1.46.0
-      - numpy==2.3.1
       - pandas==2.3.1
       - plotly==6.2.0
       - pytz==2025.2
