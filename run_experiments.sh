@@ -10,13 +10,15 @@ echo "Running 5 iterations for each task type: permutation, rotation, class_spli
 TASK_TYPES=("permutation" "rotation" "class_split")
 
 # Number of runs per task type
-NUM_RUNS=5
+NUM_RUNS=1
 
 # Create timestamp for this batch of experiments
 BATCH_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 echo "Batch timestamp: $BATCH_TIMESTAMP"
 
 # Create directory for SLURM job scripts and logs
+rm -r slurm_jobs
+rm -r slurm_logs
 mkdir -p slurm_jobs
 mkdir -p slurm_logs
 
