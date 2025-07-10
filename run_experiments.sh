@@ -46,18 +46,29 @@ for task_type in "${TASK_TYPES[@]}"; do
 #SBATCH --time=02:00:00
 #SBATCH --mem=4G
 
-echo "Starting experiment: $task_type run $run"
+echo "=========================================="
+echo "JOB START: $task_type run $run"
 echo "Started at: \$(date)"
 echo "Running on node: \$(hostname)"
+echo "Job ID: \$SLURM_JOB_ID"
+echo "=========================================="
 
 # Run the experiment
 python main.py --task_type $task_type
 
 # Check if the run was successful
 if [ \$? -eq 0 ]; then
-    echo "Completed: $task_type run $run at \$(date)"
+    echo "=========================================="
+    echo "JOB COMPLETED: $task_type run $run"
+    echo "Completed at: \$(date)"
+    echo "Job ID: \$SLURM_JOB_ID"
+    echo "=========================================="
 else
-    echo "ERROR: Failed $task_type run $run at \$(date)"
+    echo "=========================================="
+    echo "JOB FAILED: $task_type run $run"
+    echo "Failed at: \$(date)"
+    echo "Job ID: \$SLURM_JOB_ID"
+    echo "=========================================="
     exit 1
 fi
 EOF
@@ -73,13 +84,64 @@ echo ""
 echo "All jobs submitted. Job IDs: ${JOB_IDS[@]}"
 echo "Waiting for all jobs to complete..."
 
-# Wait for all jobs to complete
-for job_id in "${JOB_IDS[@]}"; do
-    echo "Waiting for job $job_id..."
-    while squeue -j $job_id 2>/dev/null | grep -q $job_id; do
-        sleep 10
+# Function to get job status
+get_job_status() {
+    local job_id=$1
+    squeue -j $job_id -h -o "%T" 2>/dev/null || echo "COMPLETED"
+}
+
+# Function to display current job status
+display_job_status() {
+    echo ""
+    echo "=== Job Status Update at $(date) ==="
+    local running_jobs=0
+    local pending_jobs=0
+    local completed_jobs=0
+
+    for job_id in "${JOB_IDS[@]}"; do
+        status=$(get_job_status $job_id)
+        case $status in
+            "RUNNING")
+                running_jobs=$((running_jobs + 1))
+                # Get job info
+                job_info=$(squeue -j $job_id -h -o "%j %N" 2>/dev/null)
+                echo "  RUNNING: Job $job_id ($job_info)"
+                ;;
+            "PENDING")
+                pending_jobs=$((pending_jobs + 1))
+                job_info=$(squeue -j $job_id -h -o "%j" 2>/dev/null)
+                echo "  PENDING: Job $job_id ($job_info)"
+                ;;
+            "COMPLETED"|"")
+                completed_jobs=$((completed_jobs + 1))
+                ;;
+        esac
     done
+
+    echo "Summary: $running_jobs running, $pending_jobs pending, $completed_jobs completed"
+    echo "=========================================="
+}
+
+# Wait for all jobs to complete with periodic updates
+while true; do
+    all_completed=true
+    for job_id in "${JOB_IDS[@]}"; do
+        if squeue -j $job_id 2>/dev/null | grep -q $job_id; then
+            all_completed=false
+            break
+        fi
+    done
+
+    if $all_completed; then
+        break
+    fi
+
+    display_job_status
+    sleep 15
 done
+
+echo ""
+echo "=== All jobs completed at $(date) ==="
 
 echo ""
 echo "=== All experiments completed ==="
