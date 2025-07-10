@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import pickle
@@ -272,6 +271,7 @@ class Timer:
 
 # Example usage and testing
 if __name__ == "__main__":
+    import numpy as np
     t = Timer()
     t.start("1")
     time.sleep(2.5)
