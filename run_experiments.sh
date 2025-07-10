@@ -56,31 +56,31 @@ echo "Job ID: \$SLURM_JOB_ID"
 echo "=========================================="
 
 # Setup conda environment
+set -e
 echo "Setting up conda environment..."
 source /opt/conda/etc/profile.d/conda.sh
 
-# Use scratch space for conda operations
-SCRATCH_DIR="/tmp/conda_\$SLURM_JOB_ID"
-mkdir -p \$SCRATCH_DIR
-export CONDA_PKGS_DIRS="\$SCRATCH_DIR/pkgs"
-export CONDA_ENVS_PATH="\$SCRATCH_DIR/envs"
+# Set ALL conda cache/config directories to job-local paths
+export CONDA_PKGS_DIRS="\$PWD/conda_cache/pkgs"
+export CONDA_ENVS_PATH="\$PWD/conda_cache/envs"
+export CONDA_BLD_PATH="\$PWD/conda_cache/bld"
+export CONDA_CACHE_DIR="\$PWD/conda_cache"
+export CONDA_NOTICES_DIR="\$PWD/conda_cache/notices"
+export CONDA_TMPDIR="\$PWD/conda_cache/tmp"
 
-# Create and activate environment
-conda env create -f linux_env.yml -p \$SCRATCH_DIR/envs/ta-env
-conda activate \$SCRATCH_DIR/envs/ta-env
+# Create all directories
+mkdir -p "\$CONDA_PKGS_DIRS" "\$CONDA_ENVS_PATH" "\$CONDA_BLD_PATH" "\$CONDA_CACHE_DIR" "\$CONDA_NOTICES_DIR" "\$CONDA_TMPDIR"
 
-# Cleanup on exit
-trap "rm -rf \$SCRATCH_DIR" EXIT
-
-# # Check if environment exists, create if not
-# if ! conda env list | grep -q "ta-env"; then
-#     echo "Creating conda environment from linux_env.yml..."
-#     conda env create -f linux_env.yml
-# fi
+# Check if environment exists, create if not
+ENV_PATH="\$PWD/conda_cache/envs/ta-env"
+if [ ! -d "\$ENV_PATH" ]; then
+    echo "Creating conda environment from linux_env.yml..."
+    conda env create -f linux_env.yml -p "\$ENV_PATH"
+fi
 
 # Activate environment
 echo "Activating ta-env environment..."
-conda activate ta-env
+conda activate "\$ENV_PATH"
 
 # Verify environment is active
 echo "Using Python: \$(which python)"
