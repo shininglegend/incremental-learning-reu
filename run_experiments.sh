@@ -53,6 +53,24 @@ echo "Running on node: \$(hostname)"
 echo "Job ID: \$SLURM_JOB_ID"
 echo "=========================================="
 
+# Setup conda environment
+echo "Setting up conda environment..."
+source \$(conda info --base)/etc/profile.d/conda.sh
+
+# Check if environment exists, create if not
+if ! conda env list | grep -q "ta-env"; then
+    echo "Creating conda environment from linux_env.yml..."
+    conda env create -f linux_env.yml
+fi
+
+# Activate environment
+echo "Activating ta-env environment..."
+conda activate ta-env
+
+# Verify environment is active
+echo "Using Python: \$(which python)"
+echo "Python version: \$(python --version)"
+
 # Run the experiment
 python main.py --task_type $task_type
 
