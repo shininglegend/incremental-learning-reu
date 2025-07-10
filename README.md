@@ -1,6 +1,6 @@
 # TA-A-GEM: Topology-Aware Averaged Gradient Episodic Memory
 
-This folder contains an implementation of **Topology-Aware Averaged Gradient Episodic Memory (TA-A-GEM)**, a continual learning approach that combines A-GEM's gradient projection with topology-aware clustering for episodic memory management. It is based on the paper by Lamers et al. (2023).
+This folder contains an implementation of **Task-Agnostic Averaged Gradient Episodic Memory (TA-A-GEM)**, a continual learning approach that combines A-GEM's gradient projection with topology-aware clustering for episodic memory management. It is based on the paper by Lamers et al. (2023).
 
 ## Overview
 
