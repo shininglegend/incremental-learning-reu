@@ -64,19 +64,32 @@ echo "Running on node: \$(hostname)"
 echo "Job ID: \$SLURM_JOB_ID"
 echo "=========================================="
 
-# Setup Python environment
+# Setup conda environment
 set -e
-echo "Setting up Python environment..."
+echo "Setting up conda environment..."
+source /opt/conda/etc/profile.d/conda.sh
 
-# Create virtual environment in job directory
-python3.12 -m venv venv
-source venv/bin/activate
+# Set ALL conda cache/config directories to job-local paths
+export CONDA_PKGS_DIRS="\$PWD/conda_cache/pkgs"
+export CONDA_ENVS_PATH="\$PWD/conda_cache/envs"
+export CONDA_BLD_PATH="\$PWD/conda_cache/bld"
+export CONDA_CACHE_DIR="\$PWD/conda_cache"
+export CONDA_NOTICES_DIR="\$PWD/conda_cache/notices"
+export CONDA_TMPDIR="\$PWD/conda_cache/tmp"
 
-# Install required packages
-pip install --no-cache-dir torch torchvision kagglehub numpy pandas scikit-learn plotly
+# Create all directories
+mkdir -p "\$CONDA_PKGS_DIRS" "\$CONDA_ENVS_PATH" "\$CONDA_BLD_PATH" "\$CONDA_CACHE_DIR" "\$CONDA_NOTICES_DIR" "\$CONDA_TMPDIR"
 
-echo "Activating virtual environment..."
-source venv/bin/activate
+# Check if environment exists, create if not
+ENV_PATH="\$PWD/conda_cache/envs/ta-env"
+if [ ! -d "\$ENV_PATH" ]; then
+    echo "Creating conda environment from linux_env.yml..."
+    conda env create -f linux_env.yml -p "\$ENV_PATH"
+fi
+
+# Activate environment
+echo "Activating ta-env environment..."
+conda activate "\$ENV_PATH"
 
 # Verify environment is active
 echo "Using Python: \$(which python)"
