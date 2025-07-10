@@ -280,7 +280,7 @@ timestamp = time.strftime("%Y%m%d_%H%M%S")
 visualizer.save_metrics(f"test_results/ta_agem_metrics_{timestamp}.pkl", params=params)
 
 # Generate simplified report with 3 key visualizations
-visualizer.generate_simple_report(clustering_memory)
+visualizer.generate_simple_report(clustering_memory, show_images=False)
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
 print(t)
