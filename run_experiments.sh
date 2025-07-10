@@ -137,7 +137,7 @@ while true; do
     fi
 
     display_job_status
-    sleep 15
+    sleep 30
 done
 
 echo ""
