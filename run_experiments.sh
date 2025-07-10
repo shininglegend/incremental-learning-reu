@@ -17,8 +17,15 @@ BATCH_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 echo "Batch timestamp: $BATCH_TIMESTAMP"
 
 # Create directory for SLURM job scripts and logs
+rm -r slurm_jobs
+rm -r slurm_logs
 mkdir -p slurm_jobs
 mkdir -p slurm_logs
+
+# Create the conda env
+source /opt/conda/etc/profile.d/conda.sh
+conda env create -f linux_env.yml
+echo "Environment created. Jobs will only need to activate it."
 
 # Array to store job IDs
 JOB_IDS=()
@@ -54,14 +61,15 @@ echo "Job ID: \$SLURM_JOB_ID"
 echo "=========================================="
 
 # Setup conda environment
+set -e
 echo "Setting up conda environment..."
 source /opt/conda/etc/profile.d/conda.sh
 
-# Check if environment exists, create if not
-if ! conda env list | grep -q "ta-env"; then
-    echo "Creating conda environment from linux_env.yml..."
-    conda env create -f linux_env.yml
-fi
+# # Check if environment exists, create if not
+# if ! conda env list | grep -q "ta-env"; then
+#     echo "Creating conda environment from linux_env.yml..."
+#     conda env create -f linux_env.yml
+# fi
 
 # Activate environment
 echo "Activating ta-env environment..."
