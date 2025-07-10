@@ -57,11 +57,24 @@ echo "=========================================="
 echo "Setting up conda environment..."
 source /opt/conda/etc/profile.d/conda.sh
 
-# Check if environment exists, create if not
-if ! conda env list | grep -q "ta-env"; then
-    echo "Creating conda environment from linux_env.yml..."
-    conda env create -f linux_env.yml
-fi
+# Use scratch space for conda operations
+SCRATCH_DIR="/tmp/conda_\$SLURM_JOB_ID"
+mkdir -p \$SCRATCH_DIR
+export CONDA_PKGS_DIRS="\$SCRATCH_DIR/pkgs"
+export CONDA_ENVS_PATH="\$SCRATCH_DIR/envs"
+
+# Create and activate environment
+conda env create -f linux_env.yml -p \$SCRATCH_DIR/envs/ta-env
+conda activate \$SCRATCH_DIR/envs/ta-env
+
+# Cleanup on exit
+trap "rm -rf \$SCRATCH_DIR" EXIT
+
+# # Check if environment exists, create if not
+# if ! conda env list | grep -q "ta-env"; then
+#     echo "Creating conda environment from linux_env.yml..."
+#     conda env create -f linux_env.yml
+# fi
 
 # Activate environment
 echo "Activating ta-env environment..."
