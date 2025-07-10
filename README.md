@@ -1,13 +1,13 @@
-# TA-A-GEM: Topology-Aware Averaged Gradient Episodic Memory
+# TA-A-GEM: Task Agnostic Averaged Gradient Episodic Memory
 
-This folder contains an implementation of **Topology-Aware Averaged Gradient Episodic Memory (TA-A-GEM)**, a continual learning approach that combines A-GEM's gradient projection with topology-aware clustering for episodic memory management. It is based on the paper by Lamers et al. (2023).
+This repository contains an implementation of **Task-Agnostic Averaged Gradient Episodic Memory (TA-A-GEM)**, a continual learning approach that combines A-GEM's gradient projection with clustering for episodic memory management. It is based on the paper by Lamers et al. (2023).
 
 ## Overview
 
 TA-A-GEM addresses catastrophic forgetting in continual learning by:
 
 - Using **gradient projection** (A-GEM) to prevent interference between tasks
-- Implementing **topology-aware clustering** to maintain representative samples in episodic memory
+- Implementing **task agnostic clustering** to maintain representative samples in episodic memory
 - Supporting **multi-pool architecture** for different task types
 - Providing comprehensive **visualization and analysis** tools
 
@@ -176,7 +176,7 @@ def optimize(self, data, labels, memory_samples=None):
 
 ### Multi-Pool Clustering Memory
 
-The `ClusteringMemory` class manages topology-aware episodic memory:
+The `ClusteringMemory` class manages Task Agnostic episodic memory:
 
 ```python
 def add_sample(self, sample_data, sample_label):
@@ -378,7 +378,6 @@ QUICK_TEST_MODE = True
 
 - Maximum Q clusters per pool
 - Maximum P samples per cluster
-- Topology-aware sample selection
 
 **Memory Retrieval:**
 
