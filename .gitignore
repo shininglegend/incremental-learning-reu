@@ -1,4 +1,6 @@
 /test_results/*
+/slurm_jobs/*
+/slurm_logs/*
 
 # Ignore the data file itself
 *.csv
