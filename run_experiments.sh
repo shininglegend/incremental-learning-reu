@@ -21,6 +21,15 @@ fi
 
 echo "Executable created: $EXECUTABLE_PATH"
 
+# Test executable for 15 seconds
+echo "Testing executable for 15 seconds..."
+timeout 15s "$EXECUTABLE_PATH" --task_type permutation --no_output || {
+    echo "ERROR: Executable test failed or has import errors"
+    echo "Check the executable before proceeding"
+    exit 1
+}
+echo "Executable test completed successfully"
+
 # Array of task types
 TASK_TYPES=("permutation" "rotation" "class_split")
 
