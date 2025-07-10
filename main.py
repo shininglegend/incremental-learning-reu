@@ -1,4 +1,5 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
+import argparse
 import time
 import torch
 import torch.nn as nn
@@ -16,13 +17,19 @@ from dataset_tools.load_dataset import load_dataset
 from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
 
 # --- 1. Configuration and Initialization ---
-# Device configuration - use GPU if available
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
 
-# If set to True, will w run less tasks and less data, and logs loss per batch
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='TA-A-GEM Incremental Learning')
+parser.add_argument('--task_type', type=str, default='permutation',
+                    choices=['permutation', 'rotation', 'class_split'],
+                    help='Type of task transformation (default: permutation)')
+parser.add_argument('--lite', action='store_true', default=False,
+                    help='Run in quick test mode with fewer tasks and data')
+args = parser.parse_args()
+
+# If set to True, will run less tasks and less data, and logs loss per batch
 # If set to False, will run full MNIST with 5 tasks and 10 epochs with normal progress bar
-QUICK_TEST_MODE = False
+QUICK_TEST_MODE = args.lite
 
 # If set to True, will use the TA-OGD adaptive learning rate scheduler
 # If set to False, will use fixed learning rate
@@ -39,7 +46,7 @@ NUM_EPOCHS = 20
 NUM_TASKS = (
     2 if QUICK_TEST_MODE else 5
 )  # Example: for permutation or rotation based tasks
-TASK_TYPE = "permutation"  # 'permutation', 'rotation', or 'class_split'
+TASK_TYPE = args.task_type  # 'permutation', 'rotation', or 'class_split'
 DATASET_NAME = "mnist"  # Dataset to use: 'mnist' or 'fashion_mnist'
 
 # Determine number of pools based on task type (as per paper)
@@ -99,6 +106,10 @@ class SimpleMLP(nn.Module):
 t = Timer()
 t.start("init")
 
+# Device configuration - use GPU if available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
 # Initialize model, optimizer, and loss function
 model = SimpleMLP(INPUT_DIM, HIDDEN_DIM, NUM_CLASSES).to(device)
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
@@ -147,6 +158,7 @@ t.start("training")
 
 # --- 2. Training Loop ---
 print("Starting TA-A-GEM training...")
+print(f"Quick Test mode: {QUICK_TEST_MODE} | Task Type: {TASK_TYPE}")
 for task_id, train_dataloader in enumerate(train_dataloaders):
     print(f"\n--- Training on Task {task_id} ---")
 
