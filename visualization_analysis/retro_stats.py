@@ -10,6 +10,10 @@ def load_pickle_files(directory="test_results"):
     """Load all pickle files from the test_results directory"""
     pickle_files = glob.glob(os.path.join(directory, "ta_agem_metrics_*.pkl"))
 
+    # Sort files by modification time (newest first) and take only the last 15
+    pickle_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    pickle_files = pickle_files[:15]
+
     results = []
     for file_path in pickle_files:
         try:
@@ -34,7 +38,8 @@ def load_pickle_files(directory="test_results"):
                 'task_type': task_type,
                 'final_accuracy': final_accuracy,
                 'timestamp': timestamp,
-                'data': data
+                'data': data,
+                'file_mtime': os.path.getmtime(file_path)
             })
 
         except Exception as e:
@@ -120,7 +125,18 @@ def main():
         print("No pickle files found in test_results directory")
         return
 
-    print(f"Found {len(results)} result files")
+    print(f"Found {len(results)} result files (analyzing last 15 runs only)")
+
+    # Show time range of analyzed files
+    if results:
+        mtimes = [result['file_mtime'] for result in results]
+        earliest_time = min(mtimes)
+        latest_time = max(mtimes)
+
+        earliest_str = datetime.fromtimestamp(earliest_time).strftime("%B %d, %Y, at %I:%M:%S %p")
+        latest_str = datetime.fromtimestamp(latest_time).strftime("%B %d, %Y, at %I:%M:%S %p")
+
+        print(f"Test results are from {earliest_str} to {latest_str}")
 
     # Show breakdown by task type
     task_counts = {}
