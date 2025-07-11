@@ -22,6 +22,19 @@ class Cluster:
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
+    def get_sample_or_samples(self):
+        """
+        If this cluster is of size one, returns the sample inside.
+        Otherwise, returns the samples as a list or [].
+        Always returns the label stored alongside if present
+
+        Returns:
+            : The stored samples
+        """
+        if len(self.samples) == 1:
+            return (self.samples[0], self.labels[0])
+        return (list(self.samples), list(self.labels))
+
     def add_sample(self, sample: torch.Tensor, label=None):
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
@@ -37,7 +50,7 @@ class Cluster:
         """
         dprint("cl remove_one triggered")
 
-        return self.remove_oldest()
+        return self.remove_based_on_mean()
 
     def remove_based_on_mean(self):
         """
@@ -102,6 +115,9 @@ class Cluster:
 
     def __str__(self):
         return f"""Cluster with mean {self.mean} and samples {self.samples}"""
+    
+    def __len__(self):
+        return len(self.samples)
 
 
 class ClusteringMechanism:
@@ -123,6 +139,10 @@ class ClusteringMechanism:
         self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
 
+        # Sanity checks
+        assert self.Q > 0
+        assert self.P > 0
+
     def add(self, z: torch.Tensor, label=None):
         """
         Adds a sample z to the appropriate cluster or forms a new one.
@@ -142,32 +162,88 @@ class ClusteringMechanism:
                     "Dimensionality reducer must be fitted before adding samples. Call fit_reducer() first."
                 )
             z = self.dimensionality_reducer.transform(z)
-        # if z is a set of samples, add it one by one
-        if len(self.clusters) < self.Q:
-            # If the number of clusters is less than Q, create a new cluster
-            # and add z to it.
-            new_cluster = Cluster(z, label)
-            self.clusters.append(new_cluster)
+
+        # If we're at 0 samples, or at 1 sample and there's space for a second one, add it
+        if len(self.clusters) == 0 or (len(self.clusters) == 1 and self.Q > 1):
+            return self._add_new_cluster(z, label)
+
+        # Find the closest cluster
+        (nearest_cluster_idx_to_new, dist_to_new) = self._find_closest_cluster(z)
+
+        # Check the size of it - if bigger than one, just add
+        # This prevents an outlier from breaking things too much
+        if len(self.clusters[nearest_cluster_idx_to_new]) > 1:
+            return self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
+        
+        # Otherwise, grab that sample, check it's nearest distance.
+        # If that sample is closer to another cluster than this sample is to it, move it to that cluster
+        # and remove the old cluster, replacing it with a new sample centered on this new sample
+        (nearest_old_sample, nearest_old_label) = self.clusters[nearest_cluster_idx_to_new].get_sample_or_samples()
+        (closest_cluster_to_old, dist_to_old) = self._find_closest_cluster(nearest_old_sample, ignore=nearest_cluster_idx_to_new)
+        if dist_to_new > dist_to_old:
+            self.visualize("Before")
+            # Overwrite it with the new sample
+            self._add_to_cluster(closest_cluster_to_old, nearest_old_sample, nearest_old_label)
+            self.clusters[nearest_cluster_idx_to_new] = Cluster(z, label)
+            self.visualize("After overwriting")
+            print(f"Overwrote! {dist_to_new} > {dist_to_old}")
         else:
-            # If the number of clusters has reached Q, find the closest cluster
-            # based on Euclidean distance to its mean.
-            min_distance = float("inf")
-            closest_cluster_idx = -1
+            # Just add it
+            self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
+            # self.visualize("After keeping")
+            print(f"Kept! {dist_to_new} <= {dist_to_old}")
 
-            for i, cluster in enumerate(self.clusters):
-                # Calculate Euclidean distance
-                distance = torch.norm(z - cluster.mean)
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_cluster_idx = i
 
-            # Add z to the identified closest cluster
-            q_star = self.clusters[closest_cluster_idx]
-            q_star.add_sample(z, label)
+    def _find_closest_cluster(self, z, ignore=None):
+        """This finds the closest cluster for a particular sample. Does not add it
 
-            # If the cluster size exceeds P, remove the oldest sample
-            if len(q_star.samples) > self.P:
-                q_star.remove_one()
+        Args:
+            z (Tensor): Sample to find the closest cluster for
+            ignore (index): index of cluster to ignore if given
+
+        Returns:
+            (index, distance): Returns the index and distance to the closest node
+        """
+        # If the number of clusters has reached Q, find the closest cluster
+        # based on Euclidean distance to its mean.
+        min_distance = float("inf")
+        closest_cluster_idx = -1
+
+        for i, cluster in enumerate(self.clusters):
+            if ignore is not None and i == ignore:
+                continue
+            # Calculate Euclidean distance
+            distance = torch.linalg.norm(z - cluster.mean)
+            if distance < min_distance:
+                min_distance = distance
+                closest_cluster_idx = i
+        return (closest_cluster_idx, min_distance)
+
+    def _add_new_cluster(self, z, label=None):
+        """This adds a new cluster with the given sample and label
+
+        Args:
+            z (Tensor): Sample to be added
+            label (, optional): Label to assign to the sample. Defaults to None.
+        """
+        new_cluster = Cluster(z, label)
+        self.clusters.append(new_cluster)
+
+    def _add_to_cluster(self, cluster_index, z, label=None):
+        """Adds a sample to a given cluster, removing one from that cluster if needed to make space
+
+        Args:
+            cluster_index (int): Index of the cluster
+            z (Tensor): Sample to add
+            label (_type_, optional): Optional label of sample. Defaults to None.
+        """
+        # Add z to the identified closest cluster
+        q_star: Cluster = self.clusters[cluster_index]
+        q_star.add_sample(z, label)
+
+        # If the cluster size exceeds P, remove the oldest sample
+        if len(q_star.samples) > self.P:
+            q_star.remove_one()
 
     def fit_reducer(self, z_list):
         """
@@ -254,7 +330,7 @@ class ClusteringMechanism:
         samples_array = torch.stack(all_samples) if all_samples else torch.tensor([])
         return samples_array, all_labels
 
-    def visualize(self):
+    def visualize(self, title_postfix=""):
         """
         Show what's stored inside!
         """
@@ -321,6 +397,8 @@ class ClusteringMechanism:
         )
 
         # Create 3D scatter plot
+        title = "Cluster Visualization (Color=Cluster, Symbol=Label)"
+        title += " | " + title_postfix if title_postfix != "" else ""
         fig = px.scatter_3d(
             df,
             x=x_col,
@@ -328,7 +406,7 @@ class ClusteringMechanism:
             z=z_col,
             color="Cluster",
             symbol="Label",
-            title="Cluster Visualization (Color=Cluster, Symbol=Label)",
+            title=title,
             hover_data={"Cluster": True, "Label": True},
         )
 
@@ -338,26 +416,90 @@ class ClusteringMechanism:
 if __name__ == "__main__":
     print("Testing Cluster Storage")
     NUM_SAMPLES = 20
-    VISUALIZE = True
+    CLUSTERS = 3
+    MAX_PER_CLUSTER = 3
+    VISUALIZE = False
     if VISUALIZE:
         import time
 
-    storage = ClusteringMechanism(Q=2, P=3)
-    samples = [
-        torch.randint(0, 100, (3,), dtype=torch.float32) for _ in range(NUM_SAMPLES)
-    ]
+    storage = ClusteringMechanism(Q=CLUSTERS, P=MAX_PER_CLUSTER)
+    # Generate CLUSTERS+1 clusters with outliers
+    import random, math
+
+    # Set seeds for consistent generation
+    torch.manual_seed(42)
+    random.seed(42)
+
+    samples = []
+    # Generate
+    samples_per_cluster = math.floor(NUM_SAMPLES / 3)
+    for _ in range(samples_per_cluster):
+        # Cluster 1: around [10, 10, 10]
+        samples.append(
+            torch.tensor([10, 10, 10], dtype=torch.float32) + torch.randn(3) * 2
+        )
+        # Cluster 2: around [50, 50, 50]
+        samples.append(
+            torch.tensor([50, 50, 50], dtype=torch.float32) + torch.randn(3) * 2
+        )
+        # Cluster 3: around [90, 90, 90]
+        samples.append(
+            torch.tensor([90, 90, 90], dtype=torch.float32) + torch.randn(3) * 2
+        )
+    # Outliers
+    for _ in range(NUM_SAMPLES - (samples_per_cluster * 3)):
+        samples.append(
+            torch.tensor([25, 75, 25], dtype=torch.float32) + torch.randn(3) * 3
+        )
+    assert NUM_SAMPLES == len(samples), "Did not get the expected number of samples"
+
+    # Shuffle samples
+    random.shuffle(samples)
+
     print(storage.get_clusters_with_labels())
-    for sample in samples:
-        storage.add(sample, label=torch.randint(1, 4, (1,)).item())
+    for i, sample in enumerate(samples):
+        storage.add(sample, label=i)
+        print(storage.get_clusters_with_labels())
         if VISUALIZE:
-            # storage.visualize()
-            print(storage.get_clusters_with_labels())
-            # time.sleep(5)
+            storage.visualize()
+            time.sleep(5)
 
     if len(storage.clusters) == 0:
         raise Exception("No samples successfully added")
-    if VISUALIZE:
-        storage.visualize()
+
+    storage.visualize()
 
     print(storage.get_clusters_with_labels())
     print(sorted(list(triggered))) if len(triggered) > 0 else None
+
+    # Visualize samples in 3D
+    import plotly.graph_objects as go
+
+    sample_array = torch.stack(samples).numpy()
+    colors = (
+        ["red"] * samples_per_cluster
+        + ["blue"] * samples_per_cluster
+        + ["green"] * samples_per_cluster
+        + ["black"] * (NUM_SAMPLES - samples_per_cluster)
+    )
+    random.shuffle(colors)
+
+    fig = go.Figure(
+        data=[
+            go.Scatter3d(
+                x=sample_array[:, 0],
+                y=sample_array[:, 1],
+                z=sample_array[:, 2],
+                mode="markers",
+                marker=dict(size=8, color=colors, opacity=0.8),
+                text=[f"Sample {i}" for i in range(len(samples))],
+            )
+        ]
+    )
+
+    fig.update_layout(
+        title="Generated Test Samples (3 Clusters + Outliers)",
+        scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
+    )
+    if VISUALIZE:
+        fig.show()
