@@ -8,16 +8,19 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms.functional as TF
 try:
-    from .load_dataset import DatasetLoader
-except ImportError:
     from load_dataset import DatasetLoader
+except ImportError:
+    from .load_dataset import DatasetLoader
 
 # Set file paths based on Fashion-MNIST Datasets
 import kagglehub
 
+from config import params, parse_arguments
+
 class FashionMnistDataloader(object):
     def __init__(self, training_images_filepath, training_labels_filepath,
                  test_images_filepath, test_labels_filepath):
+
         self.training_images_filepath = training_images_filepath
         self.training_labels_filepath = training_labels_filepath
         self.test_images_filepath = test_images_filepath
@@ -56,7 +59,18 @@ class FashionMnistDatasetLoader(DatasetLoader):
     def __init__(self):
         super().__init__()
         # Set file paths based on Fashion-MNIST datasets
-        path = kagglehub.dataset_download("zalando-research/fashionmnist")
+
+        if params['sbatch']:
+            args = parse_arguments()
+            params['input_path'] = args.data_dir
+            params['task_id'] = args.task_id
+        else:
+            # Download latest version (Uncomment if you're getting file not found errors)
+            # path = kagglehub.dataset_download("zalando-research/fashionmnist")
+            params['input_path'] = "/home/NAS/reuadodd/incremental-learning-reu/datasets/fashion_mnist"
+
+        path = params['input_path']
+
         print(f"Fashion-MNIST dataset is at {path}")
         self.training_images_filepath = join(path, 'train-images-idx3-ubyte')
         self.training_labels_filepath = join(path, 'train-labels-idx1-ubyte')
@@ -117,22 +131,39 @@ class FashionMnistDatasetLoader(DatasetLoader):
         train_dataloaders = []
         test_dataloaders = []
         num_pixels = 28 * 28
+        params['permutations'] = []
+
+        # Split data into disjoint subsets for each task
+        train_size_per_task = len(x_train_tensor) // num_tasks
+        test_size_per_task = len(x_test_tensor) // num_tasks
 
         for task_id in range(num_tasks):
+            # Get disjoint data subset for this task
+            train_start = task_id * train_size_per_task
+            train_end = (task_id + 1) * train_size_per_task if task_id < num_tasks - 1 else len(x_train_tensor)
+            test_start = task_id * test_size_per_task
+            test_end = (task_id + 1) * test_size_per_task if task_id < num_tasks - 1 else len(x_test_tensor)
+
+            x_train_subset = x_train_tensor[train_start:train_end]
+            y_train_subset = y_train_tensor[train_start:train_end]
+            x_test_subset = x_test_tensor[test_start:test_end]
+            y_test_subset = y_test_tensor[test_start:test_end]
+
             # Generate a random permutation for this task
             perm = torch.randperm(num_pixels)
+            params['permutations'].append(perm)
 
             # Flatten images and apply permutation - TRAIN
-            x_train_task = x_train_tensor.view(-1, num_pixels)
+            x_train_task = x_train_subset.view(-1, num_pixels)
             x_train_task = x_train_task[:, perm]
 
             # Flatten images and apply permutation - TEST
-            x_test_task = x_test_tensor.view(-1, num_pixels)
+            x_test_task = x_test_subset.view(-1, num_pixels)
             x_test_task = x_test_task[:, perm]
 
             # Create datasets and dataloaders
-            train_dataset = TensorDataset(x_train_task, y_train_tensor)
-            test_dataset = TensorDataset(x_test_task, y_test_tensor)
+            train_dataset = TensorDataset(x_train_task, y_train_subset)
+            test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             train_dataloaders.append(train_dataloader)
@@ -145,6 +176,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         train_dataloaders = []
         test_dataloaders = []
         angles = [i * (360 / num_tasks) for i in range(num_tasks)]
+        params['angles'] = angles
 
         for task_id in range(num_tasks):
             angle = angles[task_id]

@@ -16,41 +16,7 @@ except ImportError:
 # Set file paths based on added MNIST Datasets
 import kagglehub
 
-# Stuff for slurm/sbatch
-import argparse
-import os
-import sys
-
-from config import params
-
-
-global input_path
-if params['sbatch']:
-    parser = argparse.ArgumentParser(description="Run a parallel task.")
-    parser.add_argument("--task-id", type=int, help="SLURM Array Task ID")
-    parser.add_argument("--output-dir", type=str, required=True,
-                        help="Directory to save output results.")
-    parser.add_argument("--data-dir", type=str, required=True, # <--- NEW ARGUMENT
-                        help="Directory where datasets are located.")
-    args = parser.parse_args()
-
-    # Ensure output directory exists (double-check from shell script)
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    print(f"Data will be loaded from: {args.data_dir}") # Debug print
-
-    # Example (adjust based on your dataset structure):
-    input_path = args.data_dir
-else:
-    # Download latest version (Uncomment if you're getting file not found errors)
-    # path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-    input_path = "/home/NAS/reuadodd/incremental-learning-reu/datasets"
-
-print(f"Dataset is at {input_path}")
-training_images_filepath = join(input_path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
-training_labels_filepath = join(input_path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
-test_images_filepath = join(input_path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
-test_labels_filepath = join(input_path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
+from config import params, parse_arguments
 
 
 #
@@ -96,11 +62,23 @@ class MnistDatasetLoader(DatasetLoader):
     def __init__(self):
         super().__init__()
         # Set file paths based on MNIST datasets
-        self.path = input_path
+
+        if params['sbatch']:
+            args = parse_arguments()
+            params['input_path'] = args.data_dir
+            params['task_id'] = args.task_id
+        else:
+            # Download latest version (Uncomment if you're getting file not found errors)
+            # path = kagglehub.dataset_download("hojjatk/mnist-dataset")
+            params['input_path'] = "/home/NAS/reuadodd/incremental-learning-reu/datasets/mnist"
+
+        self.path = params['input_path']
         self.training_images_filepath = join(self.path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
         self.training_labels_filepath = join(self.path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
         self.test_images_filepath = join(self.path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
         self.test_labels_filepath = join(self.path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
+
+        print(f"Dataset is at {params['input_path']}") # debug
 
     def load_raw_data(self):
         """Load raw MNIST data."""
@@ -156,6 +134,7 @@ class MnistDatasetLoader(DatasetLoader):
         train_dataloaders = []
         test_dataloaders = []
         num_pixels = 28 * 28
+        params['permutations'] = []
 
         # Split data into disjoint subsets for each task
         train_size_per_task = len(x_train_tensor) // num_tasks
@@ -175,6 +154,7 @@ class MnistDatasetLoader(DatasetLoader):
 
             # Generate a random permutation for this task
             perm = torch.randperm(num_pixels)
+            params['permutations'].append(perm)
 
             # Flatten images and apply permutation - TRAIN
             x_train_task = x_train_subset.view(-1, num_pixels)
@@ -199,6 +179,7 @@ class MnistDatasetLoader(DatasetLoader):
         train_dataloaders = []
         test_dataloaders = []
         angles = [i * (360 / num_tasks) for i in range(num_tasks)]
+        params['angles'] = angles
 
         # Split data into disjoint subsets for each task
         train_size_per_task = len(x_train_tensor) // num_tasks
@@ -308,8 +289,17 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     #
-    # Load MINST dataset
+    # Load MNIST dataset
     #
+
+    params['input_path'] = "/home/NAS/reuadodd/incremental-learning-reu/datasets/mnist"
+
+    path = params['input_path']
+    training_images_filepath = join(path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
+    training_labels_filepath = join(path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
+    test_images_filepath = join(path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
+    test_labels_filepath = join(path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
+
     _mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath, test_images_filepath, test_labels_filepath)
     (x_train, y_train), (x_test, y_test) = _mnist_dataloader.load_data()
 

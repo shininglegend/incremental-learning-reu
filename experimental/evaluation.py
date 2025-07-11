@@ -11,6 +11,7 @@ import seaborn as sns
 import pickle
 import time
 from pathlib import Path
+from config import params
 
 
 class TAGEMEvaluator:
@@ -99,7 +100,7 @@ class TAGEMEvaluator:
                 test_dataloaders.append(dataloader)
 
         elif task_type == 'rotation':
-            angles = [i * (360 / num_tasks) for i in range(num_tasks)]
+            angles = params['angles']
 
             for task_id in range(num_tasks):
                 angle = angles[task_id]
@@ -344,7 +345,10 @@ class TAGEMEvaluator:
         # Adjust subplot layout: 2 rows, 2 columns for now, will adjust based on what plots are kept
 
         fig, axes = plt.subplots(2, 2, figsize=(18, 14)) # Increased figure size for better visibility
-        fig.suptitle(f'TA-AGEM Test Evaluation - {self.params["task_type"].title()} Tasks', fontsize=18)
+        if params['quick_test_mode']:
+            fig.suptitle(f'TA-AGEM Quick Test - {self.params["dataset_name"]}, {self.params["task_type"].title()} Tasks', fontsize=18)
+        else:
+            fig.suptitle(f'TA-AGEM Test Evaluation - {self.params["dataset_name"]}, {self.params["task_type"].title()} Tasks', fontsize=18)
 
         # Plot 1: Table of Intermediate Task Accuracies
         axes[0, 0].set_title('Intermediate Task Accuracies Over Training Progress', fontsize=14)
@@ -405,7 +409,7 @@ class TAGEMEvaluator:
                 if row == 0:  # Header row
                     cell.set_text_props(weight='bold', color='black')
                     cell.set_facecolor('#d9d9d9')
-                elif row == len(table_data) - 1:  # Average row
+                elif row == len(table_data):  # Average row
                     cell.set_text_props(weight='bold', color='darkblue')
                     cell.set_facecolor('#e6f2ff')
                 if col == 0:  # Task ID column
@@ -486,7 +490,12 @@ class TAGEMEvaluator:
         plt.tight_layout(rect=[0, 0.03, 1, 0.96]) # Adjust layout to prevent suptitle overlap
 
         if save_plots:
-            plot_path = self.save_dir / f"evaluation_plots_{self.timestamp}.png"
+            if self.params['sbatch']:
+                # do sbatch stuff
+                plot_path = self.save_dir / f"evaluation_plots_{self.params['task_id']}.png"
+            else:
+                plot_path = self.save_dir / f"evaluation_plots_{self.timestamp}.png"
+
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
             print(f"Plots saved to {plot_path}")
 
@@ -494,7 +503,12 @@ class TAGEMEvaluator:
 
     def save_results(self, results):
         """Save evaluation results to pickle file"""
-        results_path = self.save_dir / f"test_results_{self.timestamp}.pkl"
+        if self.params['sbatch']:
+            # do sbatch stuff
+            results_path = self.save_dir / f"test_results_{self.params['task_id']}.pkl"
+        else:
+            results_path = self.save_dir / f"test_results_{self.timestamp}.pkl"
+
         with open(results_path, 'wb') as f:
             pickle.dump(results, f)
         print(f"Test results saved to {results_path}")

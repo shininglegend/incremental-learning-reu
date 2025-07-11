@@ -9,7 +9,7 @@ from load_dataset import load_dataset
 from simple_mlp import SimpleMLP
 import processing
 from advanced_parallel_strategies import _run_hybrid_training  # Import _run_hybrid_training
-from config import params
+from config import params, parse_arguments
 DEVICE = params['device']
 
 
@@ -77,7 +77,11 @@ def main():
         params['permutations'] = None
 
     if model is not None:  # Ensure model exists before evaluation
-        evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders, save_dir="./test_results")
+        if params['sbatch']:
+            evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders,
+                                       save_dir="./sbatch_results/permutation_mnist_fashion")
+        else:
+            evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders, save_dir="./test_results")
         test_results = evaluator.run_full_evaluation(model, device='cpu', save_results=True,
                                                      intermediate_eval_history=intermediate_eval_accuracies_history)
 

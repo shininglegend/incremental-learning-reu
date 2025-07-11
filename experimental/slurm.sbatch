@@ -1,13 +1,14 @@
 #!/bin/bash
 #SBATCH --job-name="reuadodd_parallel_taagem"
-#SBATCH --output="slurm-%A_%a.out" # %A for Job Array ID, %a for Task ID output
-#SBATCH --error="slurm-%A_%a.err"  # Error log file
+#SBATCH --output="./sbatch_results/permutation_mnist_fashion/slurm-%A_%a.out" # %A for Job Array ID, %a for Task ID output
+#SBATCH --error="./sbatch_results/permutation_mnist_fashion/slurm-%A_%a.err"  # Error log file
 #SBATCH --nodes=1 # Nodes per instance. 1 node = 24 CPUs. Baseline 1
 #SBATCH --ntasks=1                          # Each array task runs one main script. Baseline 1
 #SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
 #SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
-#SBATCH --time="00:15:00" # 00:07:15 baseline. Request a little extra.
-#SBATCH --array=0-4
+#SBATCH --time="00:20:00" # 00:12:41 baseline. Request a little extra.
+#SBATCH --array=0-19
+#SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1 # these guys are fucky wucky
 # #SBATCH --partition="$PARTITION_NAME"
 
 
@@ -16,7 +17,7 @@
 # ------- GLOBAL CONFIG -------
 # General Job Settings
 JOB_NAME="reuadodd_parallel_taagem"          # A descriptive name for your job
-TIME_LIMIT="00:15:00"            # Max time for each task (HH:MM:SS) - 7min15sec baseline
+TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS) - 7min15sec baseline
 # PARTITION_NAME="hpcl1"           # The partition (queue) to submit to. Comment out for first available
 
 # Resource Requests per Program Instance (i.e., per Array Task)
@@ -25,7 +26,6 @@ CORES_PER_INSTANCE=24            # Number of CPU cores each program instance nee
 MEM_PER_INSTANCE_GB=2            # Memory in GB each program instance needs. 2G baseline
 
 # Program Execution Settings
-TOTAL_RUNS=5                    # Total number of individual program runs you want
 PYTHON_SCRIPT="/home/NAS/reuadodd/incremental-learning-reu/experimental/new_main.py" # main script name
 
 
@@ -49,9 +49,13 @@ PYTHON_SCRIPT="/home/NAS/reuadodd/incremental-learning-reu/experimental/new_main
 
 #JOB-SPECIFIC Directory for all sbatch stuff
 JOB_SCRATCH_DIR="/home/NAS/reuadodd/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+
+echo "DEBUG: SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
+echo "DEBUG: Attempting to create directory: \"$JOB_SCRATCH_DIR\""
+
 mkdir -p "$JOB_SCRATCH_DIR" || { echo "Error: Failed to create scratch directory $JOB_SCRATCH_DIR. Check path or permissions."; exit 1; }
 
-SOURCE_DATASET_PATH="/home/NAS/reuadodd/incremental-learning-reu/datasets"
+SOURCE_DATASET_PATH="/home/NAS/reuadodd/incremental-learning-reu/datasets/fashion_mnist"
 
 echo "Copying dataset from $SOURCE_DATASET_PATH to $JOB_SCRATCH_DIR/mnist-dataset/"
 cp -r "$SOURCE_DATASET_PATH" "$JOB_SCRATCH_DIR/mnist-dataset/"
@@ -126,3 +130,9 @@ echo "$PYTHON_EXEC" "$PYTHON_SCRIPT" --task-id "$SLURM_ARRAY_TASK_ID" --output-d
 echo "------------------------------------------------------------"
 echo "Task $SLURM_ARRAY_TASK_ID finished at: $(date)"
 echo "------------------------------------------------------------"
+
+# --- CLEANUP
+echo "Removing temporary directory: $JOB_SCRATCH_DIR"
+rm -rf "$JOB_SCRATCH_DIR"
+
+echo "Job script complete. :)"
