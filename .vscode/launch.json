@@ -22,7 +22,7 @@
       "name": "Python Debugger: Quick Test Mode with Permutations",
       "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
+      "program": "main.py",
       "console": "integratedTerminal",
       "args": "--lite"
     },
@@ -30,7 +30,7 @@
       "name": "Python Debugger: Normal Mode with Class Split",
       "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
+      "program": "main.py",
       "console": "integratedTerminal",
       "args": "--task_type class_split"
     },
@@ -38,7 +38,7 @@
       "name": "Python Debugger: Normal Mode with Rotations",
       "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
+      "program": "main.py",
       "console": "integratedTerminal",
       "args": "--task_type rotation"
     },

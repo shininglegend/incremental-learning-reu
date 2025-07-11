@@ -13,6 +13,29 @@ filename = input("Enter the filename to load (e.g., 'ta_agem_metrics_2025-07-01T
 
 with open(os.path.join("test_results", filename), 'rb') as file:
     data = pickle.load(file)
+
+    # Convert new format to legacy format if needed
+    if 'epoch_data' in data and data['epoch_data']:
+        print("Detected new epoch_data format, converting to legacy format for visualization...")
+        epoch_data = data['epoch_data']
+
+        # Convert to legacy format
+        data['task_accuracies'] = [ep['overall_accuracy'] for ep in epoch_data]
+        data['per_task_accuracies'] = [ep['individual_accuracies'] for ep in epoch_data]
+        data['memory_sizes'] = [ep['memory_size'] for ep in epoch_data]
+        data['epoch_losses'] = [[ep['epoch_loss']] for ep in epoch_data]
+        data['memory_efficiency'] = [ep['overall_accuracy'] / ep['memory_size'] if ep['memory_size'] > 0 else 0.0 for ep in epoch_data]
+
+        # Group by task for epoch losses
+        task_epoch_losses = {}
+        for ep in epoch_data:
+            task_id = ep['task_id']
+            if task_id not in task_epoch_losses:
+                task_epoch_losses[task_id] = []
+            task_epoch_losses[task_id].append(ep['epoch_loss'])
+
+        data['epoch_losses'] = [task_epoch_losses[i] for i in sorted(task_epoch_losses.keys())]
+
     # See what the loaded data looks like without printing the entire structure
     if isinstance(data, dict):
         print(f"Loaded data contains {len(data)} keys:")
@@ -48,19 +71,19 @@ for key in data.keys():
 # 1. Task Accuracies Over Time (Individual Task Performance)
 if 'per_task_accuracies' in data and data['per_task_accuracies']:
     fig_task_acc = go.Figure()
-    
+
     # Create a line for each task showing its accuracy over time
     for task_id in range(len(data['per_task_accuracies'])):
         # Extract accuracy for this specific task across all training stages
         task_performance = []
         x_values = []
-        
+
         # For each training stage, get the accuracy of this specific task
         for stage, stage_accuracies in enumerate(data['per_task_accuracies']):
             if task_id < len(stage_accuracies):  # Only if this task has been evaluated
                 task_performance.append(stage_accuracies[task_id])
                 x_values.append(stage + 1)  # Task numbers start from 1
-        
+
         # Add line for this task
         fig_task_acc.add_trace(go.Scatter(
             x=x_values,
@@ -70,7 +93,7 @@ if 'per_task_accuracies' in data and data['per_task_accuracies']:
             line=dict(width=2.5),
             marker=dict(size=6)
         ))
-    
+
     fig_task_acc.update_layout(
         title='Individual Task Accuracies Over Time',
         xaxis_title='Tasks Completed',
@@ -87,11 +110,11 @@ if 'per_task_accuracies' in data and data['per_task_accuracies']:
     # Create a matrix showing accuracy for each task on each previous task
     max_tasks = len(data['per_task_accuracies'])
     accuracy_matrix = []
-    
+
     for i, task_accs in enumerate(data['per_task_accuracies']):
         row = task_accs + [None] * (max_tasks - len(task_accs))
         accuracy_matrix.append(row)
-    
+
     fig_per_task = px.imshow(
         accuracy_matrix,
         title='Per-Task Accuracies Matrix',
@@ -109,7 +132,7 @@ if 'per_task_accuracies' in data and data['per_task_accuracies']:
 # 3. Epoch Losses for Each Task
 if 'epoch_losses' in data and data['epoch_losses']:
     fig_epoch_losses = go.Figure()
-    
+
     for i, task_losses in enumerate(data['epoch_losses']):
         fig_epoch_losses.add_trace(go.Scatter(
             x=list(range(1, len(task_losses) + 1)),
@@ -118,7 +141,7 @@ if 'epoch_losses' in data and data['epoch_losses']:
             name=f'Task {i+1}',
             line=dict(width=2)
         ))
-    
+
     fig_epoch_losses.update_layout(
         title='Epoch Losses for Each Task',
         xaxis_title='Epoch',
@@ -132,7 +155,7 @@ if 'epoch_losses' in data and data['epoch_losses']:
 if 'batch_losses' in data and data['batch_losses']:
     # Create a dataframe for batch losses
     batch_df = pd.DataFrame(data['batch_losses'])
-    
+
     if not batch_df.empty:
         fig_batch_losses = px.line(
             batch_df,
@@ -189,7 +212,7 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
         specs=[[{"secondary_y": False}, {"secondary_y": False}],
                [{"secondary_y": False}, {"secondary_y": False}]]
     )
-    
+
     # Task accuracies
     fig_combined.add_trace(
         go.Scatter(
@@ -201,7 +224,7 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
         ),
         row=1, col=1
     )
-    
+
     # Average epoch loss per task
     avg_losses = [sum(task_losses)/len(task_losses) for task_losses in data['epoch_losses']]
     fig_combined.add_trace(
@@ -214,19 +237,19 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
         ),
         row=1, col=2
     )
-    
+
     # Per-task accuracies (individual task performance over time)
     for task_id in range(len(data['per_task_accuracies'])):
         # Extract accuracy for this specific task across all training stages
         task_performance = []
         x_values = []
-        
+
         # For each training stage, get the accuracy of this specific task
         for stage, stage_accuracies in enumerate(data['per_task_accuracies']):
             if task_id < len(stage_accuracies):  # Only if this task has been evaluated
                 task_performance.append(stage_accuracies[task_id])
                 x_values.append(stage + 1)  # Task numbers start from 1
-        
+
         # Add line for this task
         fig_combined.add_trace(
             go.Scatter(
@@ -239,7 +262,7 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
             ),
             row=2, col=1
         )
-    
+
     # Training times
     if 'training_times' in data and data['training_times']:
         fig_combined.add_trace(
@@ -252,13 +275,13 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
             ),
             row=2, col=2
         )
-    
+
     fig_combined.update_layout(
         title_text="Incremental Learning Performance Dashboard",
         showlegend=True,
         height=800
     )
-    
+
     # Update axis labels
     fig_combined.update_xaxes(title_text="Task Number", row=1, col=1)
     fig_combined.update_yaxes(title_text="Accuracy", row=1, col=1)

@@ -25,10 +25,24 @@ def load_pickle_files(directory="test_results"):
             if 'params' in data and 'task_type' in data['params']:
                 task_type = data['params']['task_type']
 
-            # Extract final accuracy (last value in task_accuracies)
+            # Extract final accuracy - handle both new and legacy formats
             final_accuracy = None
-            if 'task_accuracies' in data and data['task_accuracies']:
-                final_accuracy = data['task_accuracies'][-1]
+            if 'epoch_data' in data and data['epoch_data']:
+                # New format: average accuracy across all epochs and tasks
+                all_accuracies = []
+                for epoch in data['epoch_data']:
+                    if epoch['individual_accuracies']:
+                        all_accuracies.extend(epoch['individual_accuracies'])
+                if all_accuracies:
+                    final_accuracy = sum(all_accuracies) / len(all_accuracies)
+            elif 'per_task_accuracies' in data and data['per_task_accuracies']:
+                # Legacy format: average accuracy across all evaluations and tasks
+                all_accuracies = []
+                for task_eval in data['per_task_accuracies']:
+                    if task_eval:
+                        all_accuracies.extend(task_eval)
+                if all_accuracies:
+                    final_accuracy = sum(all_accuracies) / len(all_accuracies)
 
             # Extract timestamp
             timestamp = data.get('timestamp', 'unknown')

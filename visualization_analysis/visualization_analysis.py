@@ -13,15 +13,42 @@ import time
 
 class TAGemVisualizer:
     def __init__(self):
-        self.task_accuracies = []
-        self.per_task_accuracies = []
-        self.task_losses = []
-        self.memory_sizes = []
-        self.epoch_losses = []
+        self.epoch_data = []  # List of dicts with epoch-level metrics
+        self.task_boundaries = []  # Track where each task ends
         self.batch_losses = []
         self.training_times = []
-        self.memory_efficiency = []
-        self.learning_rates = []
+        self.current_epoch = 0
+
+    @property
+    def task_accuracies(self):
+        """Backward compatibility: return overall accuracies"""
+        return [ep['overall_accuracy'] for ep in self.epoch_data]
+
+    @property
+    def per_task_accuracies(self):
+        """Backward compatibility: return individual accuracies"""
+        return [ep['individual_accuracies'] for ep in self.epoch_data]
+
+    @property
+    def memory_sizes(self):
+        """Backward compatibility: return memory sizes"""
+        return [ep['memory_size'] for ep in self.epoch_data]
+
+    @property
+    def epoch_losses(self):
+        """Backward compatibility: return epoch losses"""
+        return [[ep['epoch_loss']] for ep in self.epoch_data]
+
+    @property
+    def learning_rates(self):
+        """Backward compatibility: return learning rates"""
+        return [ep['learning_rate'] for ep in self.epoch_data if ep['learning_rate']]
+
+    @property
+    def memory_efficiency(self):
+        """Backward compatibility: return memory efficiency"""
+        return [ep['overall_accuracy'] / ep['memory_size'] if ep['memory_size'] > 0 else 0.0
+                for ep in self.epoch_data]
 
     def update_metrics(
         self,
@@ -33,24 +60,26 @@ class TAGemVisualizer:
         training_time=None,
         learning_rate=None,
     ):
-        """Update metrics for a completed task"""
-        self.task_accuracies.append(overall_accuracy)
-        self.per_task_accuracies.append(individual_accuracies.copy())
-        self.memory_sizes.append(memory_size)
-        self.epoch_losses.append(epoch_losses.copy())
+        """Update metrics for a completed epoch"""
+        epoch_data = {
+            'epoch': self.current_epoch,
+            'task_id': task_id,
+            'overall_accuracy': overall_accuracy,
+            'individual_accuracies': individual_accuracies.copy(),
+            'epoch_loss': epoch_losses[0] if epoch_losses else 0.0,
+            'memory_size': memory_size,
+            'learning_rate': learning_rate,
+            'training_time': training_time
+        }
 
-        if learning_rate is not None:
-            self.learning_rates.append(learning_rate)
+        self.epoch_data.append(epoch_data)
+        self.current_epoch += 1
 
-        if training_time:
-            self.training_times.append(training_time)
-
-        # Calculate memory efficiency (accuracy per memory unit)
-        if memory_size > 0:
-            efficiency = overall_accuracy / memory_size
-            self.memory_efficiency.append(efficiency)
-        else:
-            self.memory_efficiency.append(0)
+        # Track task boundaries for visualization
+        if training_time is not None:  # End of task
+            self.task_boundaries.append(self.current_epoch - 1)
+            if training_time:
+                self.training_times.append(training_time)
 
     def add_batch_loss(self, task_id, epoch, batch_idx, loss):
         """Add individual batch loss for detailed analysis"""
@@ -61,17 +90,21 @@ class TAGemVisualizer:
     def save_metrics(self, filepath, params=None):
         """Save all metrics and params to file for later analysis"""
         metrics = {
-            "task_accuracies": self.task_accuracies,
-            "per_task_accuracies": self.per_task_accuracies,
-            "task_losses": self.task_losses,
-            "memory_sizes": self.memory_sizes,
-            "epoch_losses": self.epoch_losses,
+            "epoch_data": self.epoch_data,
+            "task_boundaries": self.task_boundaries,
             "batch_losses": self.batch_losses,
             "training_times": self.training_times,
-            "memory_efficiency": self.memory_efficiency,
-            "learning_rate": self.learning_rates,
             "timestamp": datetime.now().isoformat(),
         }
+
+        # Add legacy format for backward compatibility
+        if self.epoch_data:
+            metrics["task_accuracies"] = self.task_accuracies
+            metrics["per_task_accuracies"] = self.per_task_accuracies
+            metrics["memory_sizes"] = self.memory_sizes
+            metrics["epoch_losses"] = self.epoch_losses
+            metrics["learning_rate"] = self.learning_rates
+            metrics["memory_efficiency"] = self.memory_efficiency
 
         if params:
             metrics["params"] = params
@@ -86,15 +119,11 @@ class TAGemVisualizer:
             with open(filepath, "rb") as f:
                 metrics = pickle.load(f)
 
-            self.task_accuracies = metrics.get("task_accuracies", [])
-            self.per_task_accuracies = metrics.get("per_task_accuracies", [])
-            self.task_losses = metrics.get("task_losses", [])
-            self.memory_sizes = metrics.get("memory_sizes", [])
-            self.epoch_losses = metrics.get("epoch_losses", [])
+            self.epoch_data = metrics.get("epoch_data", [])
+            self.task_boundaries = metrics.get("task_boundaries", [])
             self.batch_losses = metrics.get("batch_losses", [])
             self.training_times = metrics.get("training_times", [])
-            self.memory_efficiency = metrics.get("memory_efficiency", [])
-            self.learning_rates = metrics.get("learning_rate", [])
+            self.current_epoch = len(self.epoch_data)
 
             print(f"Metrics loaded from {filepath}")
             return True
@@ -102,30 +131,31 @@ class TAGemVisualizer:
 
     def create_per_task_accuracy_graph(self):
         """Create line graph showing accuracy per task over time, sampled per epoch"""
-        if not self.per_task_accuracies:
-            print("No per-task accuracy data available")
+        if not self.epoch_data:
+            print("No epoch data available")
             return None
 
         plot_data = []
-        for task_id, task_accuracies in enumerate(self.per_task_accuracies):
-            for prev_task_id, accuracy in enumerate(task_accuracies):
+        for epoch_idx, epoch_info in enumerate(self.epoch_data):
+            for task_id, accuracy in enumerate(epoch_info['individual_accuracies']):
                 plot_data.append(
                     {
-                        "Task_Learned": task_id,
-                        "Task_Evaluated": prev_task_id,
+                        "Epoch": epoch_idx,
+                        "Task_Evaluated": task_id,
                         "Accuracy": accuracy,
+                        "Current_Task": epoch_info['task_id'],
                     }
                 )
 
         df = pd.DataFrame(plot_data)
         fig = px.line(
             df,
-            x="Task_Learned",
+            x="Epoch",
             y="Accuracy",
             color="Task_Evaluated",
-            title="Per-Task Accuracy Over Time",
+            title="Per-Task Accuracy Over Training Epochs",
             labels={
-                "Task_Learned": "Training Progress (Tasks Completed)",
+                "Epoch": "Training Epoch",
                 "Task_Evaluated": "Task Being Evaluated",
             },
             range_y=[0.0, 1.0],
@@ -152,15 +182,18 @@ class TAGemVisualizer:
 
     def create_overall_accuracy_graph(self):
         """Create line graph showing overall accuracy over time, sampled per epoch"""
-        if not self.task_accuracies:
-            print("No overall accuracy data available")
+        if not self.epoch_data:
+            print("No epoch data available")
             return None
 
+        epochs = [ep['epoch'] for ep in self.epoch_data]
+        accuracies = [ep['overall_accuracy'] for ep in self.epoch_data]
+
         fig = px.line(
-            x=range(len(self.task_accuracies)),
-            y=self.task_accuracies,
-            title="Overall Accuracy Over Time",
-            labels={"x": "Tasks Completed", "y": "Overall Accuracy"},
+            x=epochs,
+            y=accuracies,
+            title="Overall Accuracy Over Training Epochs",
+            labels={"x": "Training Epoch", "y": "Overall Accuracy"},
             range_y=[0.0, 1.0],
         )
         return fig
@@ -169,8 +202,8 @@ class TAGemVisualizer:
         self, clustering_memory, clusters_to_show=1, show_images=True, save_path=None
     ):
         """Generate simplified analysis with just 3 graphs"""
-        if not any([self.task_accuracies, self.per_task_accuracies]):
-            print("No data available for report generation")
+        if not self.epoch_data:
+            print("No epoch data available for report generation")
             return
 
         print("Generating simplified visualizations...")
