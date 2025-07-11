@@ -1,32 +1,25 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import numpy as np
-import time
-import pickle
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import multiprocessing as mp
 
 # Import existing modules
-import agem
-import clustering
-import mnist
-from visualization_analysis import TAGemVisualizer
 from evaluation import TAGEMEvaluator
 from load_dataset import load_dataset
 from simple_mlp import SimpleMLP
 import processing
-from advanced_parallel_strategies import _run_hybrid_training, run_ensemble_parallel_training # Import _run_hybrid_training
+from advanced_parallel_strategies import _run_hybrid_training  # Import _run_hybrid_training
+from config import params
+DEVICE = params['device']
 
-# --- CUDA Device Configuration ---
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {DEVICE}")
-# ---------------------------------
 
 # Main function
-if __name__ == '__main__':
+def main():
     mp.set_start_method('spawn', force=True)
+
+    # --- CUDA Device Configuration ---
+    print(f"Using device: {DEVICE}")
+    # ---------------------------------
 
     # Configuration
     import config
@@ -44,12 +37,12 @@ if __name__ == '__main__':
     )
 
     print(f"\nData Overview:")
-    for i, dataloader in enumerate(train_dataloaders): # Changed task_dataloaders to train_dataloaders
+    for i, dataloader in enumerate(train_dataloaders):  # Changed task_dataloaders to train_dataloaders
         print(f"  Task {i}: {len(dataloader)} batches")
 
     choice = params['strategy']
 
-    model = None # Initialize model outside the if-else block
+    model = None  # Initialize model outside the if-else block
     memory = None
     results = None
     training_time = 0
@@ -83,7 +76,7 @@ if __name__ == '__main__':
         # ensure 'permutations' key is absent or set to None in params
         params['permutations'] = None
 
-    if model is not None: # Ensure model exists before evaluation
+    if model is not None:  # Ensure model exists before evaluation
         evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders, save_dir="./test_results")
         test_results = evaluator.run_full_evaluation(model, device='cpu', save_results=True,
                                                      intermediate_eval_history=intermediate_eval_accuracies_history)
@@ -99,3 +92,7 @@ if __name__ == '__main__':
             mp.set_start_method('spawn', force=True)
         except RuntimeError:
             pass
+
+
+if __name__ == '__main__':
+    main()

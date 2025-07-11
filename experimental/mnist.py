@@ -4,23 +4,49 @@
 import numpy as np # linear algebra
 import struct
 from array import array
-from os.path  import join
+from os.path import join
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms.functional as TF
 try:
-    from .load_dataset import DatasetLoader
-except ImportError:
     from load_dataset import DatasetLoader
+except ImportError:
+    from .load_dataset import DatasetLoader
 
 # Set file paths based on added MNIST Datasets
 import kagglehub
 
-# Download latest version (Uncomment if you're getting file not found errors)
-path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-# path = "/Users/jvcte/.cache/kagglehub/datasets/hojjatk/mnist-dataset/versions/1"
-print(f"Dataset is at {path}")
-input_path = path
+# Stuff for slurm/sbatch
+import argparse
+import os
+import sys
+
+from config import params
+
+
+global input_path
+if params['sbatch']:
+    parser = argparse.ArgumentParser(description="Run a parallel task.")
+    parser.add_argument("--task-id", type=int, help="SLURM Array Task ID")
+    parser.add_argument("--output-dir", type=str, required=True,
+                        help="Directory to save output results.")
+    parser.add_argument("--data-dir", type=str, required=True, # <--- NEW ARGUMENT
+                        help="Directory where datasets are located.")
+    args = parser.parse_args()
+
+    # Ensure output directory exists (double-check from shell script)
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    print(f"Data will be loaded from: {args.data_dir}") # Debug print
+
+    # Example (adjust based on your dataset structure):
+    input_path = args.data_dir
+else:
+    # Download latest version (Uncomment if you're getting file not found errors)
+    # path = kagglehub.dataset_download("hojjatk/mnist-dataset")
+    input_path = "/home/NAS/reuadodd/incremental-learning-reu/datasets"
+
+print(f"Dataset is at {input_path}")
 training_images_filepath = join(input_path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
 training_labels_filepath = join(input_path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
 test_images_filepath = join(input_path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
@@ -31,8 +57,7 @@ test_labels_filepath = join(input_path, 't10k-labels-idx1-ubyte/t10k-labels-idx1
 # MNIST Data Loader Class
 #
 class MnistDataloader(object):
-    def __init__(self, training_images_filepath,training_labels_filepath,
-                 test_images_filepath, test_labels_filepath):
+    def __init__(self, training_images_filepath, training_labels_filepath, test_images_filepath, test_labels_filepath):
         self.training_images_filepath = training_images_filepath
         self.training_labels_filepath = training_labels_filepath
         self.test_images_filepath = test_images_filepath
@@ -71,11 +96,11 @@ class MnistDatasetLoader(DatasetLoader):
     def __init__(self):
         super().__init__()
         # Set file paths based on MNIST datasets
-        path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-        self.training_images_filepath = join(path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
-        self.training_labels_filepath = join(path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
-        self.test_images_filepath = join(path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
-        self.test_labels_filepath = join(path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
+        self.path = input_path
+        self.training_images_filepath = join(self.path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
+        self.training_labels_filepath = join(self.path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
+        self.test_images_filepath = join(self.path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
+        self.test_labels_filepath = join(self.path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
 
     def load_raw_data(self):
         """Load raw MNIST data."""

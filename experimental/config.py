@@ -1,5 +1,4 @@
-import torch
-QUICK_TEST_MODE = True
+QUICK_TEST_MODE = False
 NUM_CLASSES = 10
 INPUT_DIM = 784
 HIDDEN_DIM = 200
@@ -13,8 +12,10 @@ TASK_TYPE = 'permutation' # 'permutation', 'rotation', or 'class split'
 NUM_POOLS = 10
 CLUSTERS_PER_POOL = 10
 DATASET_NAME = 'mnist' # 'mnist' or 'fashion_mnist'
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = 'cpu'
 STRATEGY = 3 # 1 for true parallel, 2 for hybrid, 3 for sequential. sequential is best fs
+SBATCH = True
 
 params = {
     'input_dim': INPUT_DIM,
@@ -31,7 +32,8 @@ params = {
     'quick_test_mode': QUICK_TEST_MODE,
     'device': DEVICE,
     'dataset_name': DATASET_NAME,
-    'strategy': STRATEGY
+    'strategy': STRATEGY,
+    'sbatch': SBATCH,
     }
 
 

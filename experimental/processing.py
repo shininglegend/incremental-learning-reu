@@ -1,5 +1,4 @@
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,9 +7,8 @@ from tqdm import tqdm
 
 import clustering
 import agem
-from experimental.evaluation import TAGEMEvaluator
+from evaluation import TAGEMEvaluator
 from simple_mlp import SimpleMLP
-from load_dataset import optimize_dataloader
 
 # config
 from config import params

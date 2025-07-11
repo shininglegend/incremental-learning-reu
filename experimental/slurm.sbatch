@@ -1,0 +1,128 @@
+#!/bin/bash
+#SBATCH --job-name="reuadodd_parallel_taagem"
+#SBATCH --output="slurm-%A_%a.out" # %A for Job Array ID, %a for Task ID output
+#SBATCH --error="slurm-%A_%a.err"  # Error log file
+#SBATCH --nodes=1 # Nodes per instance. 1 node = 24 CPUs. Baseline 1
+#SBATCH --ntasks=1                          # Each array task runs one main script. Baseline 1
+#SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
+#SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
+#SBATCH --time="00:15:00" # 00:07:15 baseline. Request a little extra.
+#SBATCH --array=0-4
+# #SBATCH --partition="$PARTITION_NAME"
+
+
+# A Slurm batch script for running the program many times in parallel across CPUs
+
+# ------- GLOBAL CONFIG -------
+# General Job Settings
+JOB_NAME="reuadodd_parallel_taagem"          # A descriptive name for your job
+TIME_LIMIT="00:15:00"            # Max time for each task (HH:MM:SS) - 7min15sec baseline
+# PARTITION_NAME="hpcl1"           # The partition (queue) to submit to. Comment out for first available
+
+# Resource Requests per Program Instance (i.e., per Array Task)
+NODES_PER_INSTANCE=1             # Number of nodes each program instance needs. baseline 1
+CORES_PER_INSTANCE=24            # Number of CPU cores each program instance needs. 24 for a full node
+MEM_PER_INSTANCE_GB=2            # Memory in GB each program instance needs. 2G baseline
+
+# Program Execution Settings
+TOTAL_RUNS=5                    # Total number of individual program runs you want
+PYTHON_SCRIPT="/home/NAS/reuadodd/incremental-learning-reu/experimental/new_main.py" # main script name
+
+
+# --- SLURM DIRECTIVES (DO NOT EDIT THESE LINES DIRECTLY) ---
+
+
+
+# Resources per Array Task
+# Each array task runs one instance of your program.
+
+
+# Job Array Definition
+# This creates TOTAL_RUNS separate jobs, indexed from 0 to (TOTAL_RUNS - 1)
+# Each array task will run on its own allocated resources.
+
+
+# --- END SLURM DIRECTIVES ---
+
+
+# --- EXECUTION ---
+
+#JOB-SPECIFIC Directory for all sbatch stuff
+JOB_SCRATCH_DIR="/home/NAS/reuadodd/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+mkdir -p "$JOB_SCRATCH_DIR" || { echo "Error: Failed to create scratch directory $JOB_SCRATCH_DIR. Check path or permissions."; exit 1; }
+
+SOURCE_DATASET_PATH="/home/NAS/reuadodd/incremental-learning-reu/datasets"
+
+echo "Copying dataset from $SOURCE_DATASET_PATH to $JOB_SCRATCH_DIR/mnist-dataset/"
+cp -r "$SOURCE_DATASET_PATH" "$JOB_SCRATCH_DIR/mnist-dataset/"
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to copy dataset. Check SOURCE_DATASET_PATH and permissions."
+    exit 1
+fi
+echo "Dataset copied successfully."
+
+
+# Kaggle is being mean :(
+export KAGGLE_HOME="$JOB_SCRATCH_DIR/kaggle_data"
+export KAGGLE_CONFIG_DIR="$JOB_SCRATCH_DIR/.kaggle"
+export KAGGLE_DATASET_DIR="$JOB_SCRATCH_DIR/datasets"
+
+export XDG_CACHE_HOME="$JOB_SCRATCH_DIR/cache"
+export TMPDIR="$JOB_SCRATCH_DIR/tmp"
+mkdir -p "$KAGGLE_CONFIG_DIR" "$XDG_CACHE_HOME" "$TMPDIR" || { echo "Error: Failed to create necessary sub-directories for caches."; exit 1; }
+
+
+
+# Define Python executable path relative to the script's directory
+SCRIPT_DIR=$(dirname "$0")
+PYTHON_EXEC="/home/NAS/reuadodd/incremental-learning-reu/venv/bin/python" # Adjust if your venv is located elsewhere
+
+# Ensure stdout/stderr are unbuffered for real-time logging
+export PYTHONUNBUFFERED=TRUE
+
+# Basic checks
+if [ ! -f "$PYTHON_EXEC" ]; then
+    echo "Error: Python executable '$PYTHON_EXEC' not found."
+    exit 1
+fi
+if [ ! -f "$PYTHON_SCRIPT" ]; then
+    echo "Error: Python script '$PYTHON_SCRIPT' not found."
+    exit 1
+fi
+
+echo "------------------------------------------------------------"
+echo "SLURM Job ID: $SLURM_JOB_ID"
+echo "SLURM Array Task ID: $SLURM_ARRAY_TASK_ID"
+echo "Running on host: $(hostname)"
+echo "Current directory: $(pwd)"
+echo "Python executable: $PYTHON_EXEC"
+echo "Target Python script: $PYTHON_SCRIPT"
+echo "This task requested $CORES_PER_INSTANCE CPU cores."
+echo "------------------------------------------------------------"
+
+
+# --- Debugging variables ---
+echo "--- SLURM Variable Debugging ---"
+echo "SLURM_JOB_ID: $SLURM_JOB_ID"
+echo "SLURM_ARRAY_JOB_ID: $SLURM_ARRAY_JOB_ID" # This is the ID of the parent array job
+echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
+echo "TOTAL_RUNS (from sbatch): $TOTAL_RUNS"
+echo "--- End SLURM Variable Debugging ---"
+
+# ... (rest of your JOB_SCRATCH_DIR setup and mkdirs) ...
+
+# Execute your Python script
+echo "Executing Python script with arguments:"
+echo "$PYTHON_EXEC" "$PYTHON_SCRIPT" --task-id "$SLURM_ARRAY_TASK_ID" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
+
+
+
+
+
+# Execute your Python script directly for this array task.
+# You can pass the array task ID as an argument to your Python script if it needs it.
+"$PYTHON_EXEC" "$PYTHON_SCRIPT" --task-id "$SLURM_ARRAY_TASK_ID" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
+
+echo "------------------------------------------------------------"
+echo "Task $SLURM_ARRAY_TASK_ID finished at: $(date)"
+echo "------------------------------------------------------------"
