@@ -1,6 +1,5 @@
 name: ta-a-gem
 channels:
-  - pytorch
   - conda-forge
 dependencies:
   - absl-py=2.3.0=pyhd8ed1ab_0
@@ -10,10 +9,10 @@ dependencies:
   - brotli-python=1.1.0=py311h155a34a_3
   - bzip2=1.0.8=h99b78c6_7
   - c-ares=1.34.5=h5505292_0
-  - ca-certificates=2025.6.15=hbd8a1cb_0
+  - ca-certificates=2025.7.9=hbd8a1cb_0
   - cached-property=1.5.2=hd8ed1ab_1
   - cached_property=1.5.2=pyha770c72_1
-  - certifi=2025.6.15=pyhd8ed1ab_0
+  - certifi=2025.7.9=pyhd8ed1ab_0
   - cffi=1.17.1=py311h3a79f62_0
   - charset-normalizer=3.4.2=pyhd8ed1ab_0
   - colorama=0.4.6=pyhd8ed1ab_1
@@ -95,8 +94,9 @@ dependencies:
   - narwhals=1.44.0=pyhe01879c_0
   - ncurses=6.5=h5e97a16_3
   - networkx=3.5=pyhe01879c_0
+  - numpy=2.3.1=py311h4379d9d_0
   - openjpeg=2.5.3=h8a3d83b_0
-  - openssl=3.5.0=h81ee809_1
+  - openssl=3.5.1=h81ee809_0
   - opt_einsum=3.4.0=pyhd8ed1ab_1
   - optree=0.16.0=py311h210dab8_0
   - packaging=25.0=pyh29332c3_1
@@ -112,10 +112,10 @@ dependencies:
   - pysocks=1.7.1=pyha55dd90_7
   - python=3.11.13=hc22306f_0_cpython
   - python-dateutil=2.9.0.post0=pyhe01879c_2
+  - python-dotenv=1.1.1=pyhe01879c_0
   - python-flatbuffers=25.2.10=pyhbc23db3_0
   - python-tzdata=2025.2=pyhd8ed1ab_0
   - python_abi=3.11=7_cp311
-  - pytorch=2.2.2=py3.11_0
   - pytz=2025.2=pyhd8ed1ab_0
   - pyyaml=6.0.2=py311h4921393_2
   - qhull=2020.2=h420ef59_5
@@ -137,7 +137,6 @@ dependencies:
   - termcolor=3.1.0=pyhd8ed1ab_0
   - threadpoolctl=3.6.0=pyhecae5ae_0
   - tk=8.6.13=h892fb3f_2
-  - torchvision=0.17.2=py311_cpu
   - tornado=6.5.1=py311h917b07b_0
   - tqdm=4.67.1=pyhd8ed1ab_1
   - typing-extensions=4.14.0=h32cad80_0
@@ -155,5 +154,11 @@ dependencies:
   - zstandard=0.23.0=py311h917b07b_2
   - zstd=1.5.7=h6491c7d_2
   - pip:
-      - numpy==1.26.4
+      - altgraph==0.17.4
+      - fsspec==2025.5.1
+      - macholib==1.16.3
+      - pyinstaller==6.14.2
+      - pyinstaller-hooks-contrib==2025.5
+      - torch==2.7.1
+      - torchvision==0.22.1
 prefix: /Users/jvcte/miniforge3/envs/ta-a-gem

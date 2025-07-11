@@ -11,17 +11,14 @@ import torchvision.transforms.functional as TF
 
 try:
     from .load_dataset import DatasetLoader
+    from .dataset_utils import get_dataset_path
 except ImportError:
     from load_dataset import DatasetLoader
+    from dataset_utils import get_dataset_path
 
 # Set file paths based on added MNIST Datasets
-import kagglehub
-
-# Download latest version (Uncomment if you're getting file not found errors)
-path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-# path = "/Users/jvcte/.cache/kagglehub/datasets/hojjatk/mnist-dataset/versions/1"
-print(f"Dataset is at {path}")
-input_path = path
+input_path = get_dataset_path("MNIST", "hojjatk/mnist-dataset")
+print(f"Dataset is at {input_path}")
 training_images_filepath = join(
     input_path, "train-images-idx3-ubyte/train-images-idx3-ubyte"
 )
@@ -92,7 +89,7 @@ class MnistDatasetLoader(DatasetLoader):
     def __init__(self):
         super().__init__()
         # Set file paths based on MNIST datasets
-        path = kagglehub.dataset_download("hojjatk/mnist-dataset")
+        path = get_dataset_path("MNIST", "hojjatk/mnist-dataset")
         self.training_images_filepath = join(
             path, "train-images-idx3-ubyte/train-images-idx3-ubyte"
         )
@@ -400,7 +397,7 @@ if __name__ == "__main__":
         )
 
     for i in range(0, 5):
-        r = random.randint(1, len(x_test)-1)
+        r = random.randint(1, len(x_test) - 1)
         images_2_show.append(x_test[r].numpy())
         titles_2_show.append("test image [" + str(r) + "] = " + str(y_test[r].item()))
 

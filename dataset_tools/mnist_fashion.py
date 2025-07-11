@@ -10,11 +10,10 @@ import torchvision.transforms.functional as TF
 
 try:
     from .load_dataset import DatasetLoader
+    from .dataset_utils import get_dataset_path
 except ImportError:
     from load_dataset import DatasetLoader
-
-# Set file paths based on Fashion-MNIST Datasets
-import kagglehub
+    from dataset_utils import get_dataset_path
 
 
 class FashionMnistDataloader(object):
@@ -73,7 +72,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
     def __init__(self):
         super().__init__()
         # Set file paths based on Fashion-MNIST datasets
-        path = kagglehub.dataset_download("zalando-research/fashionmnist")
+        path = get_dataset_path("MNIST_FASHION", "zalando-research/fashionmnist")
         print(f"Fashion-MNIST dataset is at {path}")
         self.training_images_filepath = join(path, "train-images-idx3-ubyte")
         self.training_labels_filepath = join(path, "train-labels-idx1-ubyte")
@@ -378,7 +377,7 @@ if __name__ == "__main__":
         titles_2_show.append(f"train [{r}] = {class_name} ({y_train[r].item()})")
 
     for i in range(0, 5):
-        r = random.randint(1, len(x_test)-1)
+        r = random.randint(1, len(x_test) - 1)
         images_2_show.append(x_test[r].numpy())
         class_name = FASHION_MNIST_CLASSES[y_test[r].item()]
         titles_2_show.append(f"test [{r}] = {class_name} ({y_test[r].item()})")
