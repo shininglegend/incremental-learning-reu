@@ -90,8 +90,8 @@ def initialize_system():
         config["task_type"] = args.task_type
     if args.lite is not None:
         config["lite"] = args.lite
-    if args.dataset_name is not None:
-        config['dataset_name'] = args.dataset_name
+    if args.dataset is not None:
+        config['dataset_name'] = args.dataset
 
     # Apply lite mode overrides
     if config["lite"]:
