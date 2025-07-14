@@ -183,11 +183,11 @@ class ClusteringMechanism:
         (nearest_old_sample, nearest_old_label) = self.clusters[nearest_cluster_idx_to_new].get_sample_or_samples()
         (closest_cluster_to_old, dist_to_old) = self._find_closest_cluster(nearest_old_sample, ignore=nearest_cluster_idx_to_new)
         if dist_to_new > dist_to_old:
-            debug(self.visualize("Before"))
+            debug(self.visualize, "Before")
             # Overwrite it with the new sample
             self._add_to_cluster(closest_cluster_to_old, nearest_old_sample, nearest_old_label)
             self.clusters[nearest_cluster_idx_to_new] = Cluster(z, label)
-            debug(self.visualize("After overwriting"))
+            debug(self.visualize, "After overwriting")
             debug(print, f"Overwrote! {dist_to_new} > {dist_to_old}")
         else:
             # Just add it
