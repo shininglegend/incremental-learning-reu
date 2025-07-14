@@ -8,6 +8,7 @@ from evaluation import TAGEMEvaluator
 from load_dataset import load_dataset
 from simple_mlp import SimpleMLP
 import processing
+import load_dataset
 from advanced_parallel_strategies import _run_hybrid_training  # Import _run_hybrid_training
 from config import params, parse_arguments
 DEVICE = params['device']
@@ -29,15 +30,18 @@ def main():
     print(f"Configuration: {params['num_tasks']} tasks, {params['num_epochs']} epochs")
 
     # Load data
+    print(f"Task type: {params['task_type']}")
     print("Loading dataset and preparing data loaders...")
-    datasetLoader = load_dataset(params['dataset_name'])
-    train_dataloaders, test_dataloaders, permutations_for_tasks = datasetLoader.prepare_domain_incremental_data(
-        task_type=params['task_type'], num_tasks=params['num_tasks'], batch_size=params['batch_size'],
+    train_dataloaders, test_dataloaders = load_dataset.prepare_domain_incremental_data(
+        dataset_name=params['dataset_name'],
+        task_type=params['task_type'],
+        num_tasks=params['num_tasks'],
+        batch_size=params['batch_size'],
         quick_test=params['quick_test_mode']
     )
 
     print(f"\nData Overview:")
-    for i, dataloader in enumerate(train_dataloaders):  # Changed task_dataloaders to train_dataloaders
+    for i, dataloader in enumerate(train_dataloaders):
         print(f"  Task {i}: {len(dataloader)} batches")
 
     choice = params['strategy']
@@ -69,33 +73,14 @@ def main():
     # Evaluation
     print("\nStarting evaluation...")
 
-    if params['task_type'] == 'permutation' and permutations_for_tasks is not None:
-        params['permutations'] = permutations_for_tasks
-    else:
-        # If it's not a permutation task, or permutations are unexpectedly None,
-        # ensure 'permutations' key is absent or set to None in params
-        params['permutations'] = None
-
     if model is not None:  # Ensure model exists before evaluation
-        if params['sbatch']:
-            evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders,
-                                       save_dir="./sbatch_results/permutation_mnist_fashion")
-        else:
-            evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders, save_dir="./test_results")
+        evaluator = TAGEMEvaluator(test_dataloaders=test_dataloaders, save_dir=params["output_dir"])
         test_results = evaluator.run_full_evaluation(model, device='cpu', save_results=True,
                                                      intermediate_eval_history=intermediate_eval_accuracies_history)
 
         print(f"Final test accuracy: {test_results['overall_accuracy']:.4f}")
     else:
         print("No model to evaluate. Training might have failed or not produced a model.")
-
-    # Set multiprocessing start method
-    torch.autograd.set_detect_anomaly(True)
-    if hasattr(mp, 'set_start_method'):
-        try:
-            mp.set_start_method('spawn', force=True)
-        except RuntimeError:
-            pass
 
 
 if __name__ == '__main__':

@@ -20,14 +20,13 @@ class TAGEMEvaluator:
     Handles test data preparation, evaluation, and reporting
     """
 
-    def __init__(self, params, test_dataloaders=None, save_dir="./test_results"):
+    def __init__(self, test_dataloaders=None, save_dir="./test_results"):
         """
         Initialize evaluator with training parameters
 
         Args:
             params (dict): Training parameters dictionary
-            test_dataloaders (list, optional): Pre-prepared list of test DataLoaders.
-                                               If None, prepare_test_data will generate them.
+            test_dataloaders (list): Pre-prepared list of test DataLoaders from dataset loader
             save_dir (str): Directory to save evaluation results
         """
         self.params = params
@@ -35,116 +34,57 @@ class TAGEMEvaluator:
         self.save_dir.mkdir(exist_ok=True)
         self.timestamp = time.strftime("%Y%m%d_%H%M%S")
         self.test_dataloaders = test_dataloaders
-        # Ensure permutations are passed if task_type is permutation
-        self.permutations = params.get('permutations', None)
 
-    def prepare_test_data(self, batch_size=100):
+    def prepare_test_data(self):
         """
-        Prepare test data with the same transformations as training tasks
-
-        Args:
-            batch_size (int): Batch size for test data loaders
-
-        Returns:
-            list: List of test DataLoader objects, one for each task
+        Return pre-prepared test dataloaders.
         """
         if self.test_dataloaders is not None:
-            # print("Using pre-prepared test dataloaders") # Uncomment for debugging
+            print("Using pre-prepared test dataloaders from dataset loader")
             return self.test_dataloaders
-
-        # Import here to avoid circular imports
-        from mnist import MnistDataloader, training_images_filepath, training_labels_filepath, test_images_filepath, \
-            test_labels_filepath
-
-        # Load test data
-        _mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath,
-                                            test_images_filepath, test_labels_filepath)
-        (x_train, y_train), (x_test, y_test) = _mnist_dataloader.load_data()
-
-        # For quick testing, use subset of test data
-        if self.params.get('quick_test_mode', False):
-            # Use first 1000 test samples for quick testing
-            x_test = x_test[:1000]
-            y_test = y_test[:1000]
-
-        return self._apply_task_transformations(x_test, y_test, batch_size)
-
-    def _apply_task_transformations(self, x_test_tensor, y_test_tensor, batch_size):
-        """Apply task-specific transformations to test data"""
-        test_dataloaders = []
-        task_type = self.params['task_type']
-        num_tasks = self.params['num_tasks']
-        # Ensure input_dim is available for permutation tasks
-        num_pixels = self.params.get('input_dim', None)
-
-        if task_type == 'permutation':
-            if num_pixels is None:
-                raise ValueError("input_dim must be provided in params for 'permutation' task_type.")
-            # Use the provided permutations if available, otherwise generate new ones (less ideal for evaluation)
-            if self.permutations is None or len(self.permutations) != num_tasks:
-                print(
-                    "Warning: Permutations not provided or count mismatch. Generating new permutations for evaluation.")
-                torch.manual_seed(42)  # Ensure reproducibility if generating new ones
-                generated_permutations = [torch.randperm(num_pixels) for _ in range(num_tasks)]
-                perms_to_use = generated_permutations
-            else:
-                perms_to_use = self.permutations
-
-            for task_id in range(num_tasks):
-                perm = perms_to_use[task_id]
-                x_task = x_test_tensor.view(-1, num_pixels)
-                x_task = x_task[:, perm]
-
-                dataset = TensorDataset(x_task, y_test_tensor)
-                dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-                test_dataloaders.append(dataloader)
-
-        elif task_type == 'rotation':
-            angles = params['angles']
-
-            for task_id in range(num_tasks):
-                angle = angles[task_id]
-                x_task = x_test_tensor.unsqueeze(1)  # Add channel dimension
-
-                rotated_images = []
-                for img in x_task:
-                    rotated_img = TF.rotate(img, angle)
-                    rotated_images.append(rotated_img)
-
-                x_task = torch.stack(rotated_images)
-                x_task = x_task.view(x_task.size(0), -1)  # Flatten
-
-                dataset = TensorDataset(x_task, y_test_tensor)
-                dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-                test_dataloaders.append(dataloader)
-
-        elif task_type == 'class_split':
-            if 10 % num_tasks != 0:
-                raise ValueError(f"num_tasks ({num_tasks}) must evenly divide 10 for class_split")
-
-            classes_per_task = 10 // num_tasks
-
-            for task_id in range(num_tasks):
-                start_class = task_id * classes_per_task
-                end_class = start_class + classes_per_task
-                task_classes = list(range(start_class, end_class))
-
-                # Filter test data for this task's classes
-                task_mask = torch.zeros(len(y_test_tensor), dtype=torch.bool)
-                for cls in task_classes:
-                    task_mask |= (y_test_tensor == cls)
-
-                x_task = x_test_tensor[task_mask]
-                y_task = y_test_tensor[task_mask]
-                x_task = x_task.view(x_task.size(0), -1)  # Flatten
-
-                dataset = TensorDataset(x_task, y_task)
-                dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-                test_dataloaders.append(dataloader)
         else:
-            raise ValueError(f"Unknown task_type: {task_type}")
+            raise ValueError(
+                "No test_dataloaders provided to evaluator. "
+                "Please pass test_dataloaders from your dataset loader to ensure "
+                "consistent transformations between training and testing data."
+            )
 
-        return test_dataloaders
+    # Remove _apply_task_transformations method entirely
+
+    def run_full_evaluation(self, model, device='cpu', save_results=True, intermediate_eval_history=None):
+        """
+        Run complete evaluation pipeline
+
+        Args:
+            model: Trained PyTorch model
+            device: Device to run evaluation on
+            save_results: Whether to save results and plots
+            intermediate_eval_history (list, optional): History of accuracies from intermediate evaluations.
+
+        Returns:
+            dict: Comprehensive evaluation results
+        """
+        print("\n" + "=" * 50)
+        print("STARTING COMPREHENSIVE TEST EVALUATION")
+        print("=" * 50)
+
+        # Use pre-prepared test dataloaders (required)
+        test_dataloaders = self.prepare_test_data()
+
+        # Evaluate model on all tasks (final evaluation)
+        results = self.evaluate_model(model, test_dataloaders, device)
+
+        # Print report
+        self.print_evaluation_report(results, intermediate_eval_history)
+
+        # Create plots, passing the intermediate history
+        self.plot_evaluation_results(results, intermediate_eval_history, save_plots=save_results)
+
+        # Save results
+        if save_results:
+            self.save_results(results)
+
+        return results
 
     def evaluate_model(self, model, test_dataloaders, device='cpu'):
         """
@@ -492,7 +432,7 @@ class TAGEMEvaluator:
         if save_plots:
             if self.params['sbatch']:
                 # do sbatch stuff
-                plot_path = self.save_dir / f"evaluation_plots_{self.params['task_id']}.png"
+                plot_path = self.save_dir / f"evaluation_plots_{self.timestamp}_{self.params['task_id']}.png"
             else:
                 plot_path = self.save_dir / f"evaluation_plots_{self.timestamp}.png"
 
@@ -505,7 +445,7 @@ class TAGEMEvaluator:
         """Save evaluation results to pickle file"""
         if self.params['sbatch']:
             # do sbatch stuff
-            results_path = self.save_dir / f"test_results_{self.params['task_id']}.pkl"
+            results_path = self.save_dir / f"test_results_{self.timestamp}_{self.params['task_id']}.pkl"
         else:
             results_path = self.save_dir / f"test_results_{self.timestamp}.pkl"
 
@@ -514,41 +454,6 @@ class TAGEMEvaluator:
         print(f"Test results saved to {results_path}")
         return results_path
 
-    def run_full_evaluation(self, model, device='cpu', save_results=True, intermediate_eval_history=None):
-        """
-        Run complete evaluation pipeline
-
-        Args:
-            model: Trained PyTorch model
-            device: Device to run evaluation on
-            save_results: Whether to save results and plots
-            intermediate_eval_history (list, optional): History of accuracies from intermediate evaluations.
-                                                        Used for plotting forgetting over time.
-
-        Returns:
-            dict: Comprehensive evaluation results
-        """
-        print("\n" + "=" * 50)
-        print("STARTING COMPREHENSIVE TEST EVALUATION")
-        print("=" * 50)
-
-        # Prepare test data if not already provided
-        test_dataloaders = self.prepare_test_data()
-
-        # Evaluate model on all tasks (final evaluation)
-        results = self.evaluate_model(model, test_dataloaders, device)
-
-        # Print report
-        self.print_evaluation_report(results, intermediate_eval_history)
-
-        # Create plots, passing the intermediate history
-        self.plot_evaluation_results(results, intermediate_eval_history, save_plots=save_results)
-
-        # Save results
-        if save_results:
-            self.save_results(results)
-
-        return results
 
 
 # Utility functions for standalone use (no changes needed for this request)

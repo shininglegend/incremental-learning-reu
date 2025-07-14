@@ -119,7 +119,7 @@ def main():
     print("=" * 50)
 
     # Load all pickle files
-    directory = "sbatch_results/permutation_mnist_fashion_1"
+    directory = "sbatch_results/rotation_fashion_mnist"
     results = load_pickle_files(directory)
 
     if not results:

@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch import optim
 from tqdm import tqdm
 
-import clustering
+import clustering_pools
 import agem
 from evaluation import TAGEMEvaluator
 from simple_mlp import SimpleMLP
@@ -24,7 +24,7 @@ def run_sequential_training(params, task_dataloaders_nested, test_dataloaders):
     optimizer = optim.SGD(model.parameters(), lr=params['learning_rate'])
     criterion = nn.CrossEntropyLoss()
 
-    memory = clustering.ClusteringMemory(
+    memory = clustering_pools.ClusteringMemory(
         Q=params['memory_size_q'], P=params['memory_size_p'],
         input_type='samples', num_pools=params['num_pools'], device=params['device']
     )
@@ -87,7 +87,7 @@ def run_sequential_training(params, task_dataloaders_nested, test_dataloaders):
         # --- Perform intermediate evaluation after each task is trained ---
         print(f"  Evaluating model after training Task {task_id + 1}...")
         # Create a temporary evaluator instance for intermediate evaluation
-        temp_evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders)
+        temp_evaluator = TAGEMEvaluator(test_dataloaders=test_dataloaders)
         # Evaluate on all tasks from 0 up to the current task_id (inclusive)
         current_accuracies = temp_evaluator.evaluate_tasks_up_to(model, task_id, test_dataloaders,
                                                                          device=params['device'])
@@ -112,7 +112,7 @@ def train_single_task(args):
     optimizer = optim.SGD(model.parameters(), lr=params['learning_rate'])
     criterion = nn.CrossEntropyLoss()
 
-    local_memory = clustering.ClusteringMemory(
+    local_memory = clustering_pools.ClusteringMemory(
         Q=params['memory_size_q'],
         P=params['memory_size_p'],
         input_type='samples',
@@ -267,7 +267,7 @@ def run_optimized_training(params, task_dataloaders, test_dataloaders):
     training_time = time.time() - start_time
 
     # Create final memory
-    final_memory = clustering.ClusteringMemory(
+    final_memory = clustering_pools.ClusteringMemory(
         Q=params['memory_size_q'], P=params['memory_size_p'],
         input_type='samples', num_pools=params['num_pools'], device=params['device']
     )

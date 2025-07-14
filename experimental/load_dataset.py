@@ -21,7 +21,6 @@ class DatasetLoader(ABC):
         self.y_train = None
         self.x_test = None
         self.y_test = None
-        self.permutations: Optional[List[torch.Tensor]] = None
 
     @abstractmethod
     def load_raw_data(self) -> Tuple[Any, Any, Any, Any]:
@@ -51,7 +50,7 @@ class DatasetLoader(ABC):
 
     def prepare_domain_incremental_data(self, task_type: str, num_tasks: int, batch_size: int,
                                         quick_test: bool = False) -> Tuple[
-        List[DataLoader], List[DataLoader], Optional[List[torch.Tensor]]]:
+        List[DataLoader], List[DataLoader]]:
         """Prepare data for domain-incremental learning.
 
         Args:
@@ -81,7 +80,7 @@ class DatasetLoader(ABC):
             task_type, num_tasks, batch_size
         )
 
-        return train_dataloaders, test_dataloaders, self.permutations
+        return train_dataloaders, test_dataloaders
 
     def _create_task_dataloaders(self, x_train_tensor: torch.Tensor, y_train_tensor: torch.Tensor,
                                  x_test_tensor: torch.Tensor, y_test_tensor: torch.Tensor,
@@ -154,7 +153,7 @@ def load_dataset(dataset_name: str) -> DatasetLoader:
 # Convenience function for backward compatibility
 def prepare_domain_incremental_data(dataset_name: str, task_type: str, num_tasks: int, batch_size: int,
                                     quick_test: bool = False) \
-        -> Tuple[List[DataLoader], List[DataLoader], Optional[List[torch.Tensor]]]:
+        -> Tuple[List[DataLoader], List[DataLoader]]:
     """Prepare domain-incremental data for any supported dataset.
 
     Args:

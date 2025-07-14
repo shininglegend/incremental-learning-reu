@@ -53,7 +53,7 @@ class MnistDataloader(object):
     def load_data(self):
         x_train, y_train = self.read_images_labels(self.training_images_filepath, self.training_labels_filepath)
         x_test, y_test = self.read_images_labels(self.test_images_filepath, self.test_labels_filepath)
-        return (x_train, y_train),(x_test, y_test)
+        return (x_train, y_train), (x_test, y_test)
 
 
 class MnistDatasetLoader(DatasetLoader):
@@ -66,7 +66,7 @@ class MnistDatasetLoader(DatasetLoader):
         if params['sbatch']:
             args = parse_arguments()
             params['input_path'] = args.data_dir
-            params['task_id'] = args.task_id
+            params['task_id'] = args.slurm_array_task_id
         else:
             # Download latest version (Uncomment if you're getting file not found errors)
             # path = kagglehub.dataset_download("hojjatk/mnist-dataset")
@@ -134,7 +134,6 @@ class MnistDatasetLoader(DatasetLoader):
         train_dataloaders = []
         test_dataloaders = []
         num_pixels = 28 * 28
-        params['permutations'] = []
 
         # Split data into disjoint subsets for each task
         train_size_per_task = len(x_train_tensor) // num_tasks
@@ -154,7 +153,6 @@ class MnistDatasetLoader(DatasetLoader):
 
             # Generate a random permutation for this task
             perm = torch.randperm(num_pixels)
-            params['permutations'].append(perm)
 
             # Flatten images and apply permutation - TRAIN
             x_train_task = x_train_subset.view(-1, num_pixels)

@@ -11,15 +11,19 @@ BATCH_SIZE = 50 if QUICK_TEST_MODE else 10
 LEARNING_RATE = 1e-3
 NUM_EPOCHS = 20
 NUM_TASKS = 2 if QUICK_TEST_MODE else 5
-TASK_TYPE = 'permutation' # 'permutation', 'rotation', or 'class split'
+TASK_TYPE = 'class_split' # 'permutation', 'rotation', or 'class_split'
 NUM_POOLS = 10
 CLUSTERS_PER_POOL = 10
-DATASET_NAME = 'fashion_mnist' # 'mnist' or 'fashion_mnist'
+DATASET_NAME = 'mnist' # 'mnist' or 'fashion_mnist'
 # DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = 'cpu'
 STRATEGY = 3 # 1 for true parallel, 2 for hybrid, 3 for sequential. sequential is best fs
 SBATCH = True # Set to False when running files directly, True when running w/ SBATCH
 
+if SBATCH:
+    OUTPUT_DIR = "./sbatch_results/class_split_mnist"
+else:
+    OUTPUT_DIR = "./output_results"
 
 params = {
     'input_dim': INPUT_DIM,
@@ -38,6 +42,7 @@ params = {
     'dataset_name': DATASET_NAME,
     'strategy': STRATEGY,
     'sbatch': SBATCH,
+    'output_dir': OUTPUT_DIR
     }
 
 
@@ -54,23 +59,18 @@ def parse_arguments():
     # You might pass `params` into this function if its source is external
 
     # These args are expected when running via sbatch
-    parser.add_argument("--task-id", type=int, default=None,  # default to None for local runs
-                        help="SLURM Array Task ID")
     parser.add_argument("--output-dir", type=str, default="output_results",
                         help="Directory to save output results.")
     parser.add_argument("--data-dir", type=str, default="local_data",
-                        help="Directory where datasets are located.")
-    # Add a flag to explicitly indicate run mode (useful if task-id is optional)
+                         help="Directory where datasets are located.")
     parser.add_argument("--run-mode", type=str, default="local",
                         help="Mode of execution ('slurm' or 'local').")
+    parser.add_argument("--slurm-array-task-id", type=int, default=None,
+                        help="SLURM Array Task ID for this job array element.")
 
     args = parser.parse_args()
 
     # Create output directory if it doesn't exist
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    print(f"Data will be loaded from: {args.data_dir}")  # Debug print
-    print(f"Output will be saved to: {args.output_dir}")  # Debug print
-    print(f"Task ID (if applicable): {args.task_id}")
+    # os.makedirs(args.output_dir, exist_ok=True)
 
     return args  # Return the parsed arguments

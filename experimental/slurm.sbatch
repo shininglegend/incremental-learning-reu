@@ -1,138 +1,182 @@
 #!/bin/bash
+#
+# SLURM Batch Script for CPU-bound Parallel Jobs using Job Array
+#
+# This script reads configuration from config.py to dynamically set paths
+# and manage dataset copying to node-local scratch.
+
+# --- SLURM DIRECTIVES (MUST BE AT THE VERY TOP, DO NOT CHANGE PLACEMENT) ---
+# These values are parsed by SLURM before the script executes.
+
 #SBATCH --job-name="reuadodd_parallel_taagem"
-#SBATCH --output="./sbatch_results/permutation_mnist_fashion/slurm-%A_%a.out" # %A for Job Array ID, %a for Task ID output
-#SBATCH --error="./sbatch_results/permutation_mnist_fashion/slurm-%A_%a.err"  # Error log file
-#SBATCH --nodes=1 # Nodes per instance. 1 node = 24 CPUs. Baseline 1
-#SBATCH --ntasks=1                          # Each array task runs one main script. Baseline 1
-#SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
-#SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
-#SBATCH --time="00:20:00" # 00:12:41 baseline. Request a little extra.
-#SBATCH --array=0-19
-#SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1 # these guys are fucky wucky
-# #SBATCH --partition="$PARTITION_NAME"
+#SBATCH --output="./sbatch_results/logs/slurm-%A_%a.out" # %A for Job Array ID, %a for Task ID output
+#SBATCH --error="./sbatch_results/logs/slurm-%A_%a.err"  # Error log file
+#SBATCH --nodes=1             # Nodes per instance. Baseline 1
+#SBATCH --ntasks=1            # Each array task runs one main script. Baseline 1
+#SBATCH --cpus-per-task=24    # How many CPU cores per instance. Baseline 24
+#SBATCH --mem=2G              # Request memory in Gigabytes. Baseline 2G
+#SBATCH --time="00:20:00"     # Wall-clock time limit (HH:MM:SS). Baseline 00:20:00
+#SBATCH --array=0-19          # Job Array Definition: 20 separate jobs (0 to 19)
+#SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1 # Exclude problematic nodes
 
-
-# A Slurm batch script for running the program many times in parallel across CPUs
-
-# ------- GLOBAL CONFIG -------
-# General Job Settings
-JOB_NAME="reuadodd_parallel_taagem"          # A descriptive name for your job
-TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS) - 7min15sec baseline
-# PARTITION_NAME="hpcl1"           # The partition (queue) to submit to. Comment out for first available
-
-# Resource Requests per Program Instance (i.e., per Array Task)
-NODES_PER_INSTANCE=1             # Number of nodes each program instance needs. baseline 1
-CORES_PER_INSTANCE=24            # Number of CPU cores each program instance needs. 24 for a full node
-MEM_PER_INSTANCE_GB=2            # Memory in GB each program instance needs. 2G baseline
-
-# Program Execution Settings
-PYTHON_SCRIPT="/home/NAS/reuadodd/incremental-learning-reu/experimental/new_main.py" # main script name
-
-
-# --- SLURM DIRECTIVES (DO NOT EDIT THESE LINES DIRECTLY) ---
-
-
-
-# Resources per Array Task
-# Each array task runs one instance of your program.
-
-
-# Job Array Definition
-# This creates TOTAL_RUNS separate jobs, indexed from 0 to (TOTAL_RUNS - 1)
-# Each array task will run on its own allocated resources.
-
+# If your cluster requires a partition, uncomment and specify it here:
+# #SBATCH --partition=hpcl1
 
 # --- END SLURM DIRECTIVES ---
 
 
-# --- EXECUTION ---
-
-#JOB-SPECIFIC Directory for all sbatch stuff
-JOB_SCRATCH_DIR="/home/NAS/reuadodd/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
-
-echo "DEBUG: SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
-echo "DEBUG: Attempting to create directory: \"$JOB_SCRATCH_DIR\""
-
-mkdir -p "$JOB_SCRATCH_DIR" || { echo "Error: Failed to create scratch directory $JOB_SCRATCH_DIR. Check path or permissions."; exit 1; }
-
-SOURCE_DATASET_PATH="/home/NAS/reuadodd/incremental-learning-reu/datasets/fashion_mnist"
-
-echo "Copying dataset from $SOURCE_DATASET_PATH to $JOB_SCRATCH_DIR/mnist-dataset/"
-cp -r "$SOURCE_DATASET_PATH" "$JOB_SCRATCH_DIR/mnist-dataset/"
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to copy dataset. Check SOURCE_DATASET_PATH and permissions."
-    exit 1
-fi
-echo "Dataset copied successfully."
-
-
-# Kaggle is being mean :(
-export KAGGLE_HOME="$JOB_SCRATCH_DIR/kaggle_data"
-export KAGGLE_CONFIG_DIR="$JOB_SCRATCH_DIR/.kaggle"
-export KAGGLE_DATASET_DIR="$JOB_SCRATCH_DIR/datasets"
-
-export XDG_CACHE_HOME="$JOB_SCRATCH_DIR/cache"
-export TMPDIR="$JOB_SCRATCH_DIR/tmp"
-mkdir -p "$KAGGLE_CONFIG_DIR" "$XDG_CACHE_HOME" "$TMPDIR" || { echo "Error: Failed to create necessary sub-directories for caches."; exit 1; }
-
-
+# --- GLOBAL CONFIGURATION (Read from config.py) ---
+# These variables are populated by executing Python code to read from config.py.
+# This ensures a single source of truth for these dynamic parameters.
 
 # Define Python executable path relative to the script's directory
 SCRIPT_DIR=$(dirname "$0")
 PYTHON_EXEC="/home/NAS/reuadodd/incremental-learning-reu/venv/bin/python" # Adjust if your venv is located elsewhere
 
-# Ensure stdout/stderr are unbuffered for real-time logging
+# Add the script's directory to PYTHONPATH so config.py can be imported
+export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
+
+# Get parameters from config.py using python -c
+DATASET_NAME=$( \
+    "$PYTHON_EXEC" -c "import config; print(config.params.get('dataset_name', 'default_dataset'))" \
+) || { echo "Error: Failed to get 'dataset_name' from config.py. Check config.py and its structure."; exit 1; }
+
+PROGRAM_OUTPUT_DIR=$( \
+    "$PYTHON_EXEC" -c "import config; print(config.params.get('output_base_dir', './sbatch_results'))" \
+) || { echo "Error: Failed to get 'output_base_dir' from config.py. Check config.py and its structure."; exit 1; }
+
+
+# Define the root path for your shared datasets based on your project structure
+# This should be the parent directory containing all your dataset folders (e.g., 'mnist', 'cifar10')
+SHARED_DATASETS_ROOT="/home/NAS/reuadodd/incremental-learning-reu/datasets"
+
+# Define the base path for node-local scratch (e.g., /tmp, /localscratch, /dev/shm)
+# This is where datasets will be copied for faster access.
+NODE_LOCAL_SCRATCH_BASE="/home/NAS/reuadodd/tmp"
+
+# --- PROGRAM EXECUTION SETTINGS ---
+PYTHON_SCRIPT_PATH="/home/NAS/reuadodd/incremental-learning-reu/experimental/new_main.py" # Absolute path to your main Python script
+
+# --- END GLOBAL CONFIGURATION ---
+
+
+# --- DYNAMIC DATASET PATH RESOLUTION ---
+# Determine the source path of the dataset based on DATASET_NAME from config.py
+# This is the path on the shared filesystem.
+SOURCE_DATASET_PATH=""
+LOCAL_DATASET_SUBDIR="" # The name of the directory once copied to local scratch
+
+case "$DATASET_NAME" in
+    "mnist")
+        SOURCE_DATASET_PATH="$SHARED_DATASETS_ROOT/mnist"
+        ;;
+    "fashion_mnist")
+        SOURCE_DATASET_PATH="$SHARED_DATASETS_ROOT/fashion_mnist"
+        ;;
+    "cifar10")
+        SOURCE_DATASET_PATH="$SHARED_DATASETS_ROOT/cifar10"
+        ;;
+    *)
+        echo "Error: Unknown dataset_name '$DATASET_NAME' specified in config.py."
+        echo "Please add a case for this dataset or correct the name."
+        exit 1
+        ;;
+esac
+
+LOCAL_DATASET_SUBDIR=$(basename "$SOURCE_DATASET_PATH")
+
+# Construct the job-specific node-local scratch directory
+# This directory will be unique for each array task and will be cleaned up.
+JOB_LOCAL_SCRATCH_DIR="$NODE_LOCAL_SCRATCH_BASE/reuadodd_job_${SLURM_JOB_ID}_task_${SLURM_ARRAY_TASK_ID}"
+
+
+# --- DIRECTORY CREATION ---
+# Create necessary directories. These are executable commands.
+mkdir -p ./sbatch_results/ # For SLURM's main output/error logs (if not already created by sbatch)
+mkdir -p "$PROGRAM_OUTPUT_DIR" # For your program's actual results
+mkdir -p "$JOB_LOCAL_SCRATCH_DIR" || { echo "Error: Failed to create local scratch directory $JOB_LOCAL_SCRATCH_DIR. Check path or permissions."; exit 1; }
+
+
+# --- Copy Dataset to Node-Local Scratch ---
+echo "--- Dataset Copy ---"
+echo "Configured dataset: $DATASET_NAME"
+echo "Source path (shared): $SOURCE_DATASET_PATH"
+echo "Destination path (node-local): $JOB_LOCAL_SCRATCH_DIR/$LOCAL_DATASET_SUBDIR"
+
+if [ ! -d "$SOURCE_DATASET_PATH" ]; then
+    echo "Error: Source dataset directory '$SOURCE_DATASET_PATH' not found on shared storage."
+    exit 1
+fi
+
+cp -r "$SOURCE_DATASET_PATH" "$JOB_LOCAL_SCRATCH_DIR/" || \
+    { echo "Error: Failed to copy dataset from '$SOURCE_DATASET_PATH' to '$JOB_LOCAL_SCRATCH_DIR/'. Check source path, permissions, or local scratch space."; exit 1; }
+echo "Dataset copied successfully."
+echo "--------------------"
+
+
+# --- ENVIRONMENT VARIABLES FOR CACHES/TEMPORARY FILES ---
+# These ensure various libraries/tools use your job-specific scratch space
+export XDG_CACHE_HOME="$JOB_LOCAL_SCRATCH_DIR/cache"
+export TMPDIR="$JOB_LOCAL_SCRATCH_DIR/tmp"
+mkdir -p "$XDG_CACHE_HOME" "$TMPDIR" || { echo "Error: Failed to create necessary cache/tmp sub-directories in local scratch."; exit 1; }
+
+# Ensure Python runs unbuffered for real-time logging
 export PYTHONUNBUFFERED=TRUE
 
-# Basic checks
-if [ ! -f "$PYTHON_EXEC" ]; then
-    echo "Error: Python executable '$PYTHON_EXEC' not found."
-    exit 1
-fi
-if [ ! -f "$PYTHON_SCRIPT" ]; then
-    echo "Error: Python script '$PYTHON_SCRIPT' not found."
-    exit 1
-fi
 
+# --- DIAGNOSTIC INFORMATION ---
 echo "------------------------------------------------------------"
 echo "SLURM Job ID: $SLURM_JOB_ID"
 echo "SLURM Array Task ID: $SLURM_ARRAY_TASK_ID"
 echo "Running on host: $(hostname)"
 echo "Current directory: $(pwd)"
 echo "Python executable: $PYTHON_EXEC"
-echo "Target Python script: $PYTHON_SCRIPT"
-echo "This task requested $CORES_PER_INSTANCE CPU cores."
+echo "Target Python script: $PYTHON_SCRIPT_PATH"
+echo "Requested CPU cores (from SLURM): $SLURM_CPUS_PER_TASK"
+echo "Dataset being used: $DATASET_NAME (copied to node-local scratch)"
+echo "Program outputs will persist in: $PROGRAM_OUTPUT_DIR"
+echo "Temporary job-specific scratch for this task: $JOB_LOCAL_SCRATCH_DIR"
 echo "------------------------------------------------------------"
 
 
-# --- Debugging variables ---
-echo "--- SLURM Variable Debugging ---"
-echo "SLURM_JOB_ID: $SLURM_JOB_ID"
-echo "SLURM_ARRAY_JOB_ID: $SLURM_ARRAY_JOB_ID" # This is the ID of the parent array job
-echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
-echo "TOTAL_RUNS (from sbatch): $TOTAL_RUNS"
-echo "--- End SLURM Variable Debugging ---"
+# --- BASIC CHECKS ---
+if [ ! -f "$PYTHON_EXEC" ]; then
+    echo "Error: Python executable '$PYTHON_EXEC' not found. Ensure venv is correctly set up."
+    exit 1
+fi
+if [ ! -f "$PYTHON_SCRIPT_PATH" ]; then
+    echo "Error: Python script '$PYTHON_SCRIPT_PATH' not found."
+    exit 1
+fi
 
-# ... (rest of your JOB_SCRATCH_DIR setup and mkdirs) ...
 
-# Execute your Python script
+# --- EXECUTION ---
 echo "Executing Python script with arguments:"
-echo "$PYTHON_EXEC" "$PYTHON_SCRIPT" --task-id "$SLURM_ARRAY_TASK_ID" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
+# Pass the path to the *copied* dataset on node-local scratch
+"$PYTHON_EXEC" "$PYTHON_SCRIPT_PATH" \
+    "--slurm-array-task-id" "$SLURM_ARRAY_TASK_ID" \
+    "--output-dir" "$PROGRAM_OUTPUT_DIR" \
+    "--data-dir" "$JOB_LOCAL_SCRATCH_DIR/$LOCAL_DATASET_SUBDIR" \
+    "--run-mode" "slurm"
 
-
-
-
-
-# Execute your Python script directly for this array task.
-# You can pass the array task ID as an argument to your Python script if it needs it.
-"$PYTHON_EXEC" "$PYTHON_SCRIPT" --task-id "$SLURM_ARRAY_TASK_ID" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
+# Check the exit status of the Python script
+PYTHON_EXIT_CODE=$?
+if [ $PYTHON_EXIT_CODE -ne 0 ]; then
+    echo "Error: Python script exited with non-zero status: $PYTHON_EXIT_CODE"
+    # You might want to avoid cleaning up if the script failed, for debugging
+    # Or add a specific cleanup condition
+fi
 
 echo "------------------------------------------------------------"
 echo "Task $SLURM_ARRAY_TASK_ID finished at: $(date)"
+echo "Final exit status of Python script: $PYTHON_EXIT_CODE"
 echo "------------------------------------------------------------"
 
-# --- CLEANUP
-echo "Removing temporary directory: $JOB_SCRATCH_DIR"
-rm -rf "$JOB_SCRATCH_DIR"
+
+# --- CLEANUP ---
+# Remove the job-specific node-local scratch directory
+# This is crucial to avoid filling up /tmp or /localscratch
+echo "Removing temporary job-specific local scratch directory: $JOB_LOCAL_SCRATCH_DIR"
+rm -rf "$JOB_LOCAL_SCRATCH_DIR"
 
 echo "Job script complete. :)"

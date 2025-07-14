@@ -7,6 +7,7 @@ from os.path import join
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms.functional as TF
+
 try:
     from load_dataset import DatasetLoader
 except ImportError:
@@ -16,6 +17,7 @@ except ImportError:
 import kagglehub
 
 from config import params, parse_arguments
+
 
 class FashionMnistDataloader(object):
     def __init__(self, training_images_filepath, training_labels_filepath,
@@ -63,7 +65,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         if params['sbatch']:
             args = parse_arguments()
             params['input_path'] = args.data_dir
-            params['task_id'] = args.task_id
+            params['task_id'] = args.slurm_array_task_id
         else:
             # Download latest version (Uncomment if you're getting file not found errors)
             # path = kagglehub.dataset_download("zalando-research/fashionmnist")
@@ -126,12 +128,19 @@ class FashionMnistDatasetLoader(DatasetLoader):
 
         return x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor
 
-    def _create_permutation_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size):
+    def _create_permutation_tasks(
+        self,
+        x_train_tensor,
+        y_train_tensor,
+        x_test_tensor,
+        y_test_tensor,
+        num_tasks,
+        batch_size,
+    ):
         """Create permutation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
         test_dataloaders = []
         num_pixels = 28 * 28
-        params['permutations'] = []
 
         # Split data into disjoint subsets for each task
         train_size_per_task = len(x_train_tensor) // num_tasks
@@ -140,9 +149,17 @@ class FashionMnistDatasetLoader(DatasetLoader):
         for task_id in range(num_tasks):
             # Get disjoint data subset for this task
             train_start = task_id * train_size_per_task
-            train_end = (task_id + 1) * train_size_per_task if task_id < num_tasks - 1 else len(x_train_tensor)
+            train_end = (
+                (task_id + 1) * train_size_per_task
+                if task_id < num_tasks - 1
+                else len(x_train_tensor)
+            )
             test_start = task_id * test_size_per_task
-            test_end = (task_id + 1) * test_size_per_task if task_id < num_tasks - 1 else len(x_test_tensor)
+            test_end = (
+                (task_id + 1) * test_size_per_task
+                if task_id < num_tasks - 1
+                else len(x_test_tensor)
+            )
 
             x_train_subset = x_train_tensor[train_start:train_end]
             y_train_subset = y_train_tensor[train_start:train_end]
@@ -151,7 +168,6 @@ class FashionMnistDatasetLoader(DatasetLoader):
 
             # Generate a random permutation for this task
             perm = torch.randperm(num_pixels)
-            params['permutations'].append(perm)
 
             # Flatten images and apply permutation - TRAIN
             x_train_task = x_train_subset.view(-1, num_pixels)
@@ -164,25 +180,59 @@ class FashionMnistDatasetLoader(DatasetLoader):
             # Create datasets and dataloaders
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
-            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataloader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True
+            )
+            test_dataloader = DataLoader(
+                test_dataset, batch_size=batch_size, shuffle=False
+            )
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
         return train_dataloaders, test_dataloaders
 
-    def _create_rotation_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size):
+    def _create_rotation_tasks(
+        self,
+        x_train_tensor,
+        y_train_tensor,
+        x_test_tensor,
+        y_test_tensor,
+        num_tasks,
+        batch_size,
+    ):
         """Create rotation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
         test_dataloaders = []
         angles = [i * (360 / num_tasks) for i in range(num_tasks)]
-        params['angles'] = angles
+
+        # Split data into disjoint subsets for each task
+        train_size_per_task = len(x_train_tensor) // num_tasks
+        test_size_per_task = len(x_test_tensor) // num_tasks
 
         for task_id in range(num_tasks):
+            # Get disjoint data subset for this task
+            train_start = task_id * train_size_per_task
+            train_end = (
+                (task_id + 1) * train_size_per_task
+                if task_id < num_tasks - 1
+                else len(x_train_tensor)
+            )
+            test_start = task_id * test_size_per_task
+            test_end = (
+                (task_id + 1) * test_size_per_task
+                if task_id < num_tasks - 1
+                else len(x_test_tensor)
+            )
+
+            x_train_subset = x_train_tensor[train_start:train_end]
+            y_train_subset = y_train_tensor[train_start:train_end]
+            x_test_subset = x_test_tensor[test_start:test_end]
+            y_test_subset = y_test_tensor[test_start:test_end]
+
             angle = angles[task_id]
 
             # Rotate train images
-            x_train_task = x_train_tensor.unsqueeze(1)
+            x_train_task = x_train_subset.unsqueeze(1)
             rotated_train_images = []
             for img in x_train_task:
                 rotated_img = TF.rotate(img, angle)
@@ -191,7 +241,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
             x_train_task = x_train_task.view(x_train_task.size(0), -1)
 
             # Rotate test images
-            x_test_task = x_test_tensor.unsqueeze(1)
+            x_test_task = x_test_subset.unsqueeze(1)
             rotated_test_images = []
             for img in x_test_task:
                 rotated_img = TF.rotate(img, angle)
@@ -200,36 +250,41 @@ class FashionMnistDatasetLoader(DatasetLoader):
             x_test_task = x_test_task.view(x_test_task.size(0), -1)
 
             # Create datasets and dataloaders
-            train_dataset = TensorDataset(x_train_task, y_train_tensor)
-            test_dataset = TensorDataset(x_test_task, y_test_tensor)
-            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataset = TensorDataset(x_train_task, y_train_subset)
+            test_dataset = TensorDataset(x_test_task, y_test_subset)
+            train_dataloader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True
+            )
+            test_dataloader = DataLoader(
+                test_dataset, batch_size=batch_size, shuffle=False
+            )
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
         return train_dataloaders, test_dataloaders
 
-    def _create_class_split_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor, num_tasks, batch_size):
+    def _create_class_split_tasks(self, x_train_tensor, y_train_tensor, x_test_tensor,
+                                  y_test_tensor, num_tasks, batch_size):
         """Create class-split-based tasks for Fashion-MNIST."""
         train_dataloaders = []
         test_dataloaders = []
 
-        # Check if num_tasks evenly divides 10
-        if 10 % num_tasks != 0:
-            raise ValueError(f"num_tasks ({num_tasks}) must evenly divide 10 for class_split")
-
-        classes_per_task = 10 // num_tasks
+        # Check if num_tasks is 5 (for 2 classes per task)
+        if num_tasks != 5:
+            raise ValueError(
+                f"num_tasks ({num_tasks}) must be 5 for class_split (2 classes per task)"
+            )
 
         for task_id in range(num_tasks):
-            # Determine which classes belong to this task
-            start_class = task_id * classes_per_task
-            end_class = start_class + classes_per_task
+            # Determine which classes belong to this task (2 classes per task)
+            start_class = task_id * 2
+            end_class = start_class + 2
             task_classes = list(range(start_class, end_class))
 
             # Filter train data for this task's classes
             train_task_mask = torch.zeros(len(y_train_tensor), dtype=torch.bool)
             for cls in task_classes:
-                train_task_mask |= (y_train_tensor == cls)
+                train_task_mask |= y_train_tensor == cls
 
             x_train_task = x_train_tensor[train_task_mask]
             y_train_task = y_train_tensor[train_task_mask]
@@ -237,10 +292,14 @@ class FashionMnistDatasetLoader(DatasetLoader):
             # Filter test data for this task's classes
             test_task_mask = torch.zeros(len(y_test_tensor), dtype=torch.bool)
             for cls in task_classes:
-                test_task_mask |= (y_test_tensor == cls)
+                test_task_mask |= y_test_tensor == cls
 
             x_test_task = x_test_tensor[test_task_mask]
             y_test_task = y_test_tensor[test_task_mask]
+
+            # Remap labels: even labels -> 0, odd labels -> 1
+            y_train_task = y_train_task % 2
+            y_test_task = y_test_task % 2
 
             # Flatten for consistent model input
             x_train_task = x_train_task.view(x_train_task.size(0), -1)
@@ -249,8 +308,12 @@ class FashionMnistDatasetLoader(DatasetLoader):
             # Create datasets and dataloaders
             train_dataset = TensorDataset(x_train_task, y_train_task)
             test_dataset = TensorDataset(x_test_task, y_test_task)
-            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            train_dataloader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True
+            )
+            test_dataloader = DataLoader(
+                test_dataset, batch_size=batch_size, shuffle=False
+            )
             train_dataloaders.append(train_dataloader)
             test_dataloaders.append(test_dataloader)
 
@@ -271,6 +334,7 @@ FASHION_MNIST_CLASSES = [
     'Ankle boot'
 ]
 
+
 # Load Fashion-MNIST dataset for standalone use
 def load_fashion_mnist_data():
     """Load Fashion-MNIST dataset for standalone use."""
@@ -286,11 +350,12 @@ if __name__ == "__main__":
     loader = FashionMnistDatasetLoader()
     x_train, y_train, x_test, y_test = loader.load_raw_data()
 
+
     def show_images(images, title_texts):
         """Helper function to show a list of images with their relating titles."""
         cols = 5
-        rows = int(len(images)/cols) + 1
-        plt.figure(figsize=(30,20))
+        rows = int(len(images) / cols) + 1
+        plt.figure(figsize=(30, 20))
         index = 1
         for x in zip(images, title_texts):
             image = x[0]
@@ -298,9 +363,10 @@ if __name__ == "__main__":
             plt.subplot(rows, cols, index)
             plt.imshow(image, cmap='gray')
             if (title_text != ''):
-                plt.title(title_text, fontsize = 15)
+                plt.title(title_text, fontsize=15)
             index += 1
         plt.show()
+
 
     # Show some random training and test images
     images_2_show = []
