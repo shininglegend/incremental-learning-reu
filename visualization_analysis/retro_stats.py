@@ -4,15 +4,16 @@ import numpy as np
 from scipy import stats
 import os
 import glob
+import argparse
 from datetime import datetime
 
-def load_pickle_files(directory="test_results"):
-    """Load all pickle files from the test_results directory"""
+def load_pickle_files(directory="test_results", num_files=15):
+    """Load pickle files from the test_results directory"""
     pickle_files = glob.glob(os.path.join(directory, "ta_agem_metrics_*.pkl"))
 
-    # Sort files by modification time (newest first) and take only the last 15
+    # Sort files by modification time (newest first) and take only the specified number
     pickle_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-    pickle_files = pickle_files[:15]
+    pickle_files = pickle_files[:num_files]
 
     results = []
     for file_path in pickle_files:
@@ -129,17 +130,22 @@ def create_summary_table(statistics):
     return display_df, df
 
 def main():
+    parser = argparse.ArgumentParser(description="TA-A-GEM Experiment Analysis")
+    parser.add_argument('-n', '--num-runs', type=int, default=15,
+                       help='Number of most recent test runs to analyze (default: 15)')
+    args = parser.parse_args()
+
     print("TA-A-GEM Experiment Analysis")
     print("=" * 50)
 
     # Load all pickle files
-    results = load_pickle_files()
+    results = load_pickle_files(num_files=args.num_runs)
 
     if not results:
         print("No pickle files found in test_results directory")
         return
 
-    print(f"Found {len(results)} result files (analyzing last 15 runs only)")
+    print(f"Found {len(results)} result files (analyzing last {args.num_runs} runs only)")
 
     # Show time range of analyzed files
     if results:
