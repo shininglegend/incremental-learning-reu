@@ -76,13 +76,20 @@ def run_sequential_training(params, task_dataloaders_nested, test_dataloaders):
                 data = data.to(params['device'])
                 labels = labels.to(params['device'])
 
-                batch_loss = agem_handler.optimize(data, labels, memory.get_memory_samples())
+                # Get memory samples for A-GEM
+                _samples = memory.get_memory_samples()
+
+                # Use A-GEM optimization with current batch and memory samples
+                batch_loss = agem_handler.optimize(data, labels, _samples)
 
                 if batch_loss is not None:
                     epoch_losses.append(batch_loss)
 
+                # Add current batch samples to memory (moved to CPU for storage)
                 for i in range(len(data)):
-                    memory.add_sample(data[i], labels[i])
+                    sample_data = data[i].cpu()
+                    sample_label = labels[i].cpu()
+                    memory.add_sample(sample_data, sample_label)
 
         # --- Perform intermediate evaluation after each task is trained ---
         print(f"  Evaluating model after training Task {task_id + 1}...")
@@ -90,7 +97,7 @@ def run_sequential_training(params, task_dataloaders_nested, test_dataloaders):
         temp_evaluator = TAGEMEvaluator(test_dataloaders=test_dataloaders)
         # Evaluate on all tasks from 0 up to the current task_id (inclusive)
         current_accuracies = temp_evaluator.evaluate_tasks_up_to(model, task_id, test_dataloaders,
-                                                                         device=params['device'])
+                                                                 device=params['device'])
         intermediate_eval_accuracies_history.append(current_accuracies)
         print(f"  Intermediate accuracies after Task {task_id + 1}: {current_accuracies}")
         # --- End intermediate evaluation ---
@@ -147,49 +154,20 @@ def train_single_task(args):
             data = data.to(DEVICE)
             labels = labels.to(DEVICE)
 
-            if use_amp:
-                with torch.amp.autocast('cuda'):
-                    memory_samples = local_memory.get_memory_samples()
-                    memory_samples_on_device = [
-                        (s, l) for s, l in memory_samples
-                    ]
+            # Get memory samples for A-GEM
+            _samples = local_memory.get_memory_samples()
 
-                    projected_grads_flat, batch_loss = agem_handler.compute_and_project_batch_gradient(
-                        data, labels, memory_samples_on_device
-                    )
-            else:
-                memory_samples = local_memory.get_memory_samples()
-                memory_samples_on_device = [
-                    (s, l) for s, l in memory_samples
-                ]
-
-                projected_grads_flat, batch_loss = agem_handler.compute_and_project_batch_gradient(
-                    data, labels, memory_samples_on_device
-                )
+            # Use A-GEM optimization with current batch and memory samples
+            batch_loss = agem_handler.optimize(data, labels, _samples)
 
             if batch_loss is not None:
                 epoch_losses.append(batch_loss)
 
-            if projected_grads_flat is not None:
-                if accumulated_projected_grads is None:
-                    accumulated_projected_grads = torch.zeros_like(projected_grads_flat).to(DEVICE)
-
-                accumulated_projected_grads += projected_grads_flat
-                step_count += 1
-
-                # Apply accumulated gradients every N steps
-                if step_count % accumulation_steps == 0:
-                    agem_handler.apply_accumulated_gradients(accumulated_projected_grads)
-                    accumulated_projected_grads = None  # Reset accumulation
-                    step_count = 0
-
-            # Add samples to memory
+            # Add current batch samples to memory (moved to CPU for storage)
             for i in range(len(data)):
-                local_memory.add_sample(data[i].to('cpu'), labels[i].to('cpu'))
-
-        # Apply any remaining accumulated gradients
-        if accumulated_projected_grads is not None and step_count > 0:
-            agem_handler.apply_accumulated_gradients(accumulated_projected_grads)
+                sample_data = data[i].cpu()
+                sample_label = labels[i].cpu()
+                local_memory.add_sample(sample_data, sample_label)
 
         avg_loss = np.mean(epoch_losses) if epoch_losses else 0.0
         task_history.append(avg_loss)
