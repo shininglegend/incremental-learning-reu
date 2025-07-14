@@ -6,14 +6,16 @@ from collections import deque
 DEBUG = False
 
 triggered = set()
-dprint = lambda s: triggered.add(s) if DEBUG else None
+dtriggered = lambda s: triggered.add(s) if DEBUG else None
+# Helper function that allows conditional function execution based on flag above
+debug = lambda f, *args, **kwargs: f(*args, **kwargs) if DEBUG else None
 
 
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
 
     def __init__(self, initial_sample: torch.Tensor, initial_label=None):
-        dprint("cl init triggered")
+        dtriggered("cl init triggered")
 
         self.samples = deque([initial_sample])  # Stores samples in insertion order
         self.labels = (
@@ -37,7 +39,7 @@ class Cluster:
 
     def add_sample(self, sample: torch.Tensor, label=None):
         """Adds a new sample to the cluster and updates its mean."""
-        dprint("cl add_sample triggered")
+        dtriggered("cl add_sample triggered")
 
         self.samples.append(sample)
         self.labels.append(label)
@@ -48,7 +50,7 @@ class Cluster:
         """
         Removes a sample from the cluster and updates its mean.
         """
-        dprint("cl remove_one triggered")
+        dtriggered("cl remove_one triggered")
 
         return self.remove_based_on_mean()
 
@@ -56,7 +58,7 @@ class Cluster:
         """
         Removes the sample furthest from the mean, excluding the newest sample.
         """
-        dprint("cl remove_based_on_mean triggered")
+        dtriggered("cl remove_based_on_mean triggered")
 
         if len(self.samples) <= 1:
             return self.remove_oldest()
@@ -102,7 +104,7 @@ class Cluster:
         Removes a sample from the cluster and updates its mean.
         Currently removes the oldest sample.
         """
-        dprint("cl remove_oldest triggered")
+        dtriggered("cl remove_oldest triggered")
 
         if len(self.samples) > 0:
             oldest_sample = self.samples.popleft()
@@ -132,7 +134,7 @@ class ClusteringMechanism:
             P (int): Maximum size of each cluster.
             dimensionality_reducer (DimensionalityReducer): Dimensionality reduction method. If None, no reduction is applied.
         """
-        dprint("clm init triggered")
+        dtriggered("clm init triggered")
 
         self.clusters: list[Cluster] = []  # List of Cluster objects
         self.Q = Q  # Max number of clusters
@@ -151,7 +153,7 @@ class ClusteringMechanism:
             z (torch.Tensor): The sample (e.g., activation vector) to add.
             label: Optional label associated with the sample (does not affect clustering).
         """
-        dprint("clm add triggered")
+        dtriggered("clm add triggered")
 
         assert len(z.shape) == 1, "Sample should only have one axis."
 
@@ -181,17 +183,17 @@ class ClusteringMechanism:
         (nearest_old_sample, nearest_old_label) = self.clusters[nearest_cluster_idx_to_new].get_sample_or_samples()
         (closest_cluster_to_old, dist_to_old) = self._find_closest_cluster(nearest_old_sample, ignore=nearest_cluster_idx_to_new)
         if dist_to_new > dist_to_old:
-            self.visualize("Before")
+            debug(self.visualize("Before"))
             # Overwrite it with the new sample
             self._add_to_cluster(closest_cluster_to_old, nearest_old_sample, nearest_old_label)
             self.clusters[nearest_cluster_idx_to_new] = Cluster(z, label)
-            self.visualize("After overwriting")
-            print(f"Overwrote! {dist_to_new} > {dist_to_old}")
+            debug(self.visualize("After overwriting"))
+            debug(print, f"Overwrote! {dist_to_new} > {dist_to_old}")
         else:
             # Just add it
             self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
             # self.visualize("After keeping")
-            print(f"Kept! {dist_to_new} <= {dist_to_old}")
+            debug(print, f"Kept! {dist_to_new} <= {dist_to_old}")
 
 
     def _find_closest_cluster(self, z, ignore=None):
@@ -252,7 +254,7 @@ class ClusteringMechanism:
         Args:
             z_list (list or torch.Tensor): List of samples to fit reducer on
         """
-        dprint("clm fit_reducer triggered")
+        dtriggered("clm fit_reducer triggered")
 
         if self.dimensionality_reducer.fitted:
             return
@@ -271,7 +273,7 @@ class ClusteringMechanism:
         Returns:
             torch.Tensor: Transformed data
         """
-        dprint("clm transform triggered")
+        dtriggered("clm transform triggered")
 
         if self.dimensionality_reducer is None:
             return z
@@ -291,7 +293,7 @@ class ClusteringMechanism:
             z_list (torch.Tensor): list of samples to add
             labels: Optional list of labels corresponding to samples
         """
-        dprint("clm add_multi triggered")
+        dtriggered("clm add_multi triggered")
 
         self.fit_reducer(z_list)
         if labels is not None:
@@ -305,7 +307,7 @@ class ClusteringMechanism:
         Returns:
             torch.Tensor: an array of samples currently stored in the clusters
         """
-        dprint("clm get_clusters_for_training triggered")
+        dtriggered("clm get_clusters_for_training triggered")
 
         all_samples = []
         for cluster in self.clusters:
@@ -319,7 +321,7 @@ class ClusteringMechanism:
         Returns:
             tuple: (torch.Tensor of samples, list of labels)
         """
-        dprint("clm get_clusters_with_labels triggered")
+        dtriggered("clm get_clusters_with_labels triggered")
 
         all_samples = []
         all_labels = []
@@ -334,7 +336,7 @@ class ClusteringMechanism:
         """
         Show what's stored inside!
         """
-        dprint("clm visualize triggered")
+        dtriggered("clm visualize triggered")
         # Show each cluster in it's own color
         import plotly.express as px
         from sklearn.decomposition import PCA
