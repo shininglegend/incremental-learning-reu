@@ -21,6 +21,7 @@ class AGEMHandler:
         max_cluster_samples=64,
         importance_decay=0.95,
         diversity_weight=0.3,
+        gradient_weighting_strategy='importance',  # 'importance', 'size', 'uniform', 'mixed'
     ):
         self.model = model
         self.criterion = criterion
@@ -36,6 +37,7 @@ class AGEMHandler:
         self.max_cluster_samples = max_cluster_samples
         self.importance_decay = importance_decay
         self.diversity_weight = diversity_weight
+        self.gradient_weighting_strategy = gradient_weighting_strategy
         
         # Clustering state
         self.cluster_model = None
@@ -219,7 +221,7 @@ class AGEMHandler:
         """Select samples using importance weighting and cluster-aware strategy"""
         if not self.cluster_assignments or not self.sample_importance:
             # Fallback to random selection
-            return memory_samples[:target_size]
+            return memory_samples[:target_size], None
         
         # Group samples by cluster
         cluster_samples = defaultdict(list)
@@ -231,6 +233,7 @@ class AGEMHandler:
         
         # Allocate samples per cluster based on cluster importance
         selected_samples = []
+        selected_weights = []
         selected_indices = set()  # Track selected indices to avoid duplicates
         remaining_budget = target_size
         
@@ -261,9 +264,10 @@ class AGEMHandler:
             # Select top samples from this cluster by importance
             cluster_sample_list.sort(key=lambda x: x[1], reverse=True)
             for i in range(cluster_allocation):
-                sample_idx, _ = cluster_sample_list[i]
+                sample_idx, importance = cluster_sample_list[i]
                 if sample_idx not in selected_indices:
                     selected_samples.append(memory_samples[sample_idx])
+                    selected_weights.append(importance)
                     selected_indices.add(sample_idx)
                     remaining_budget -= 1
         
@@ -275,15 +279,22 @@ class AGEMHandler:
             
             all_remaining.sort(key=lambda x: x[1], reverse=True)
             for i in range(min(remaining_budget, len(all_remaining))):
-                sample_idx, _ = all_remaining[i]
+                sample_idx, importance = all_remaining[i]
                 if sample_idx not in selected_indices:
                     selected_samples.append(memory_samples[sample_idx])
+                    selected_weights.append(importance)
                     selected_indices.add(sample_idx)
                     remaining_budget -= 1
         
-        return selected_samples
+        # Normalize weights to sum to 1
+        if selected_weights:
+            weight_tensor = torch.tensor(selected_weights, dtype=torch.float32)
+            weight_tensor = weight_tensor / weight_tensor.sum()
+            return selected_samples, weight_tensor
+        
+        return selected_samples, None
 
-    def compute_gradient(self, data, labels):
+    def compute_gradient(self, data, labels, sample_weights=None):
         """Compute gradients for given data and labels without corrupting model state"""
         # Move data to device
         data, labels = data.to(self.device), labels.to(self.device)
@@ -299,7 +310,23 @@ class AGEMHandler:
         # Compute new gradients
         self.model.zero_grad()
         outputs = self.model(data)
-        loss = self.criterion(outputs, labels)
+        
+        # Compute loss with optional sample weights
+        if sample_weights is not None:
+            sample_weights = sample_weights.to(self.device)
+            # Compute individual losses for each sample
+            individual_losses = self.criterion(outputs, labels)
+            if individual_losses.dim() == 0:
+                # If criterion returns scalar, compute individual losses manually
+                individual_losses = torch.nn.functional.cross_entropy(
+                    outputs, labels, reduction='none'
+                )
+            # Weight the losses by sample importance
+            weighted_loss = torch.mean(individual_losses * sample_weights)
+            loss = weighted_loss
+        else:
+            loss = self.criterion(outputs, labels)
+            
         loss.backward()
 
         # Extract gradients
@@ -316,6 +343,86 @@ class AGEMHandler:
                 param.grad = None
 
         return torch.cat(grads) if grads else torch.tensor([]).to(self.device)
+
+    def compute_cluster_weighted_gradient(self, data, labels, cluster_ids, weighting_strategy='importance'):
+        """Compute gradients with advanced cluster-based weighting strategies"""
+        # Move data to device
+        data, labels = data.to(self.device), labels.to(self.device)
+        
+        # Save current gradients
+        current_grads = []
+        for param in self.model.parameters():
+            if param.grad is not None:
+                current_grads.append(param.grad.clone())
+            else:
+                current_grads.append(None)
+
+        # Compute gradients for each cluster separately
+        cluster_gradients = []
+        cluster_weights = []
+        
+        unique_clusters = torch.unique(cluster_ids)
+        
+        for cluster_id in unique_clusters:
+            cluster_mask = cluster_ids == cluster_id
+            cluster_data = data[cluster_mask]
+            cluster_labels = labels[cluster_mask]
+            
+            if len(cluster_data) == 0:
+                continue
+                
+            # Compute gradient for this cluster
+            self.model.zero_grad()
+            outputs = self.model(cluster_data)
+            loss = self.criterion(outputs, cluster_labels)
+            loss.backward()
+            
+            # Extract cluster gradient
+            cluster_grad = []
+            for param in self.model.parameters():
+                if param.grad is not None:
+                    cluster_grad.append(param.grad.view(-1))
+            
+            if cluster_grad:
+                cluster_gradients.append(torch.cat(cluster_grad))
+                
+                # Compute cluster weight based on strategy
+                cluster_id_item = cluster_id.item()
+                if weighting_strategy == 'importance':
+                    weight = self.cluster_importance.get(cluster_id_item, 1.0)
+                elif weighting_strategy == 'size':
+                    weight = 1.0 / len(cluster_data)  # Inverse size weighting
+                elif weighting_strategy == 'uniform':
+                    weight = 1.0
+                else:
+                    weight = 1.0
+                    
+                cluster_weights.append(weight)
+        
+        # Combine cluster gradients with weights
+        if cluster_gradients:
+            # Normalize weights
+            total_weight = sum(cluster_weights)
+            if total_weight > 0:
+                cluster_weights = [w / total_weight for w in cluster_weights]
+            else:
+                cluster_weights = [1.0 / len(cluster_weights)] * len(cluster_weights)
+            
+            # Weighted sum of cluster gradients
+            combined_grad = torch.zeros_like(cluster_gradients[0])
+            for grad, weight in zip(cluster_gradients, cluster_weights):
+                combined_grad += weight * grad
+        else:
+            combined_grad = torch.tensor([]).to(self.device)
+        
+        # Restore original gradients
+        for param, original_grad in zip(self.model.parameters(), current_grads):
+            if original_grad is not None:
+                param.grad = original_grad
+            else:
+                param.grad = None
+                
+        return combined_grad
 
     def project_gradient(self, current_grad, ref_grad):
         """Project current gradient to not increase loss on reference gradient"""
@@ -383,8 +490,8 @@ class AGEMHandler:
                 # Compute dynamic batch size
                 dynamic_batch_size = self.compute_dynamic_batch_size(memory_samples)
                 
-                # Select importance-weighted samples
-                selected_samples = self.select_importance_weighted_samples(
+                # Select importance-weighted samples - FIXED: unpack the tuple
+                selected_samples, sample_weights = self.select_importance_weighted_samples(
                     memory_samples, dynamic_batch_size
                 )
                 
@@ -409,8 +516,8 @@ class AGEMHandler:
                         else torch.tensor(mem_labels_list).to(self.device)
                     )
 
-                    # Compute reference gradient on selected memory
-                    ref_grad = self.compute_gradient(mem_data, mem_labels)
+                    # Compute reference gradient on selected memory with optional weights
+                    ref_grad = self.compute_gradient(mem_data, mem_labels, sample_weights)
 
                     # Project current gradient
                     projected_grad = self.project_gradient(current_grad, ref_grad)

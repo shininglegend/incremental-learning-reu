@@ -1,3 +1,8 @@
 ta_agem_metrics_20250714_150109.pkl --> *Improved AGEM version I. Normal Mode. Run 1**.
 
 ta_agem_metrics_20250714_152253.pkl --> Improved AGEM version I. Normal Mode. Run 2.
+
+ta_agem_metrics_20250714_155451.pkl --> Improved AGEM version I. Normal Mode. Run 3.
+
+ta_agem_metrics_20250714_162225.pkl --> Improved AGEM version II. Normal Mode. Run 1.
+	-Didn't perform very well, accuracy kept dropping.
