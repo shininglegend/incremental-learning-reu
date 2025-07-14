@@ -18,10 +18,10 @@ DATASET_NAME = 'mnist' # 'mnist' or 'fashion_mnist'
 # DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = 'cpu'
 STRATEGY = 3 # 1 for true parallel, 2 for hybrid, 3 for sequential. sequential is best fs
-SBATCH = True # Set to False when running files directly, True when running w/ SBATCH
+SBATCH = False # Set to False when running files directly, True when running w/ SBATCH
 
 if SBATCH:
-    OUTPUT_DIR = "./sbatch_results/class_split_mnist"
+    OUTPUT_DIR = "./sbatch_results/class_split_fashion_mnist"
 else:
     OUTPUT_DIR = "./output_results"
 

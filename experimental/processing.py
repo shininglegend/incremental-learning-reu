@@ -128,10 +128,10 @@ def train_single_task(args):
                                     device=params['device'])
     task_history = []
 
-    # OPTIMIZATION 1: Larger effective batch size through gradient accumulation
+    # Larger effective batch size through gradient accumulation
     accumulation_steps = 4  # Effectively 4x larger batches
 
-    # OPTIMIZATION 2: Mixed precision training (if available)
+    # Mixed precision training (if available)
     use_amp = torch.cuda.is_available() and hasattr(torch.cuda, 'amp')
     if use_amp:
         scaler = torch.amp.GradScaler('cuda')
@@ -151,7 +151,7 @@ def train_single_task(args):
                 with torch.amp.autocast('cuda'):
                     memory_samples = local_memory.get_memory_samples()
                     memory_samples_on_device = [
-                        (s.to(DEVICE), l.to(DEVICE)) for s, l in memory_samples
+                        (s, l) for s, l in memory_samples
                     ]
 
                     projected_grads_flat, batch_loss = agem_handler.compute_and_project_batch_gradient(
@@ -243,8 +243,7 @@ def run_optimized_training(params, task_dataloaders, test_dataloaders):
 
             # Update accumulated memory
             accumulated_memory.extend([
-                (s.to(params['device']), l.to(params['device'])) for s, l in task_result['memory_samples']
-            ])
+                (s, l) for s, l in task_result['memory_samples']])
 
             # Limit memory size
             if len(accumulated_memory) > params['memory_size_p'] * params['num_pools']:
@@ -254,7 +253,7 @@ def run_optimized_training(params, task_dataloaders, test_dataloaders):
 
             # --- Perform intermediate evaluation after each task is trained ---
             print(f"  Evaluating model after training Task {task_id + 1}...")
-            temp_evaluator = TAGEMEvaluator(params, test_dataloaders=test_dataloaders)
+            temp_evaluator = TAGEMEvaluator(test_dataloaders=test_dataloaders)
             current_accuracies = temp_evaluator.evaluate_tasks_up_to(main_model, task_id, test_dataloaders,
                                                                      device=params['device'])
             intermediate_eval_accuracies_history.append(current_accuracies)

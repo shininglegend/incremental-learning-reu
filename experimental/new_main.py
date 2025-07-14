@@ -9,7 +9,6 @@ from load_dataset import load_dataset
 from simple_mlp import SimpleMLP
 import processing
 import load_dataset
-from advanced_parallel_strategies import _run_hybrid_training  # Import _run_hybrid_training
 from config import params, parse_arguments
 DEVICE = params['device']
 
@@ -52,6 +51,7 @@ def main():
     training_time = 0
     intermediate_eval_accuracies_history = []
 
+    ''' # Now-defunct code for parallelization. Now that we have slurm, we don't need this.
     if choice == '1':
         model, memory, results, training_time, intermediate_eval_accuracies_history = \
             processing.run_optimized_training(params, train_dataloaders, test_dataloaders)
@@ -64,6 +64,11 @@ def main():
         model, memory, training_time, intermediate_eval_accuracies_history = processing.run_sequential_training(
             params, train_dataloaders, test_dataloaders)
         results = None
+    '''
+
+    # Train!!
+    model, memory, results, training_time, intermediate_eval_accuracies_history = \
+        processing.run_optimized_training(params, train_dataloaders, test_dataloaders)
 
     print(f"\n{'=' * 60}")
     print(f"TRAINING COMPLETED!")
