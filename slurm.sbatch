@@ -37,7 +37,7 @@ echo "DEBUG: Attempting to create directory: \"$JOB_SCRATCH_DIR\""
 
 mkdir -p "$JOB_SCRATCH_DIR" || { echo "Error: Failed to create scratch directory $JOB_SCRATCH_DIR. Check path or permissions."; exit 1; }
 
-SOURCE_DATASET_PATH="$HOME_DIR/incremental-learning-reu/datasets/fashion_mnist"
+SOURCE_DATASET_PATH="$HOME_DIR/datasets"
 
 echo "Copying dataset from $SOURCE_DATASET_PATH to $JOB_SCRATCH_DIR/mnist-dataset/"
 cp -r "$SOURCE_DATASET_PATH" "$JOB_SCRATCH_DIR/mnist-dataset/"
@@ -61,7 +61,7 @@ mkdir -p "$KAGGLE_CONFIG_DIR" "$XDG_CACHE_HOME" "$TMPDIR" || { echo "Error: Fail
 # Define Python executable path relative to the script's directory
 SCRIPT_DIR=$(dirname "$0")
 PYTHON_EXEC="incremental-learning-reu/venv/bin/python" # Adjust if your venv is located elsewhere
-PYTHON_EXEC="/" # Adjust if your venv is located elsewhere
+PYTHON_EXEC="env/bin/python"
 
 # Ensure stdout/stderr are unbuffered for real-time logging
 export PYTHONUNBUFFERED=TRUE
@@ -95,11 +95,9 @@ echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
 echo "TOTAL_RUNS (from sbatch): $TOTAL_RUNS"
 echo "--- End SLURM Variable Debugging ---"
 
-# ... (rest of your JOB_SCRATCH_DIR setup and mkdirs) ...
-
 # Execute your Python script
 echo "Executing Python script with arguments:"
-echo "$PYTHON_EXEC" "$PYTHON_SCRIPT" --task-id "$SLURM_ARRAY_TASK_ID" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
+echo "$PYTHON_EXEC" "$PYTHON_SCRIPT" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
 
 
 
@@ -107,14 +105,28 @@ echo "$PYTHON_EXEC" "$PYTHON_SCRIPT" --task-id "$SLURM_ARRAY_TASK_ID" --output-d
 
 # Execute your Python script directly for this array task.
 # You can pass the array task ID as an argument to your Python script if it needs it.
-"$PYTHON_EXEC" "$PYTHON_SCRIPT" --task-id "$SLURM_ARRAY_TASK_ID" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
+"$PYTHON_EXEC" "$PYTHON_SCRIPT" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
 
 echo "------------------------------------------------------------"
 echo "Task $SLURM_ARRAY_TASK_ID finished at: $(date)"
 echo "------------------------------------------------------------"
 
 # --- CLEANUP
-echo "Removing temporary directory: $JOB_SCRATCH_DIR"
+echo "Copying output files to test_results directory"
+mkdir -p "$HOME_DIR/test_results"
+for file in "$JOB_SCRATCH_DIR"/*; do
+    [ -f "$file" ] || continue
+    basename=$(basename "$file")
+    dest="$HOME_DIR/test_results/$basename"
+    counter=1
+    while [ -e "$dest" ]; do
+        name="${basename%.*}"
+        ext="${basename##*.}"
+        [ "$name" = "$ext" ] && dest="$HOME_DIR/test_results/${basename}_$counter" || dest="$HOME_DIR/test_results/${name}_$counter.$ext"
+        ((counter++))
+    done
+    cp "$file" "$dest"
+done
 rm -rf "$JOB_SCRATCH_DIR"
 
 echo "Job script complete. :)"

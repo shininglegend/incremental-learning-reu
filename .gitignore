@@ -4,7 +4,7 @@ TRAINING_LOG.md
 # Ignore the data file itself
 *.csv
 *.zip
-
+/datasets/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
