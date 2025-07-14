@@ -116,8 +116,13 @@ class Cluster:
                 self.mean = torch.zeros_like(self.mean)  # If cluster becomes empty
 
     def __str__(self):
-        return f"""Cluster with mean {self.mean} and samples {self.samples}"""
-    
+        return f"Cluster with mean {self.mean} and labeled samples: " + "\n".join(
+            [
+                (f"({sample}, {label})")
+                for sample, label in zip(self.samples, self.labels)
+            ]
+        )
+
     def __len__(self):
         return len(self.samples)
 
@@ -176,25 +181,34 @@ class ClusteringMechanism:
         # This prevents an outlier from breaking things too much
         if len(self.clusters[nearest_cluster_idx_to_new]) > 1:
             return self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
-        
+
         # Otherwise, grab that sample, check it's nearest distance.
         # If that sample is closer to another cluster than this sample is to it, move it to that cluster
         # and remove the old cluster, replacing it with a new sample centered on this new sample
-        (nearest_old_sample, nearest_old_label) = self.clusters[nearest_cluster_idx_to_new].get_sample_or_samples()
-        (closest_cluster_to_old, dist_to_old) = self._find_closest_cluster(nearest_old_sample, ignore=nearest_cluster_idx_to_new)
+        (nearest_old_sample, nearest_old_label) = self.clusters[
+            nearest_cluster_idx_to_new
+        ].get_sample_or_samples()
+        (closest_cluster_to_old, dist_to_old) = self._find_closest_cluster(
+            nearest_old_sample, ignore=nearest_cluster_idx_to_new
+        )
         if dist_to_new > dist_to_old:
             debug(self.visualize, "Before")
             # Overwrite it with the new sample
-            self._add_to_cluster(closest_cluster_to_old, nearest_old_sample, nearest_old_label)
+            self._add_to_cluster(
+                closest_cluster_to_old, nearest_old_sample, nearest_old_label
+            )
             self.clusters[nearest_cluster_idx_to_new] = Cluster(z, label)
             debug(self.visualize, "After overwriting")
             debug(print, f"Overwrote! {dist_to_new} > {dist_to_old}")
         else:
-            # Just add it
-            self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
+            if len(self.clusters) < self.Q:
+                # Add a new cluster if possible
+                self._add_new_cluster(z, label)
+            else:
+                # Add to whatever cluster is closest
+                self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
             # self.visualize("After keeping")
             debug(print, f"Kept! {dist_to_new} <= {dist_to_old}")
-
 
     def _find_closest_cluster(self, z, ignore=None):
         """This finds the closest cluster for a particular sample. Does not add it
@@ -325,10 +339,12 @@ class ClusteringMechanism:
 
         all_samples = []
         all_labels = []
-        for cluster in self.clusters:
-            for sample, label in zip(cluster.samples, cluster.labels):
-                all_samples.append(sample)
-                all_labels.append(label)
+        for i in range(len(self.clusters)):
+            assert len(self.clusters[i].samples) == len(
+                self.clusters[i].labels
+            ), "Missing labels - spoof if needed"
+            all_samples.extend(self.clusters[i].samples)
+            all_labels.extend(self.clusters[i].labels)
         samples_array = torch.stack(all_samples) if all_samples else torch.tensor([])
         return samples_array, all_labels
 
@@ -462,6 +478,7 @@ if __name__ == "__main__":
     for i, sample in enumerate(samples):
         storage.add(sample, label=i)
         print(storage.get_clusters_with_labels())
+
         if VISUALIZE:
             storage.visualize()
             time.sleep(5)
@@ -469,10 +486,9 @@ if __name__ == "__main__":
     if len(storage.clusters) == 0:
         raise Exception("No samples successfully added")
 
-    storage.visualize()
-
-    print(storage.get_clusters_with_labels())
+    [print(f"\n{i+1}:\n {storage.clusters[i]}\n") for i in range(len(storage.clusters))]
     print(sorted(list(triggered))) if len(triggered) > 0 else None
+    storage.visualize()
 
     # Visualize samples in 3D
     import plotly.graph_objects as go
