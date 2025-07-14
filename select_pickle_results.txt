@@ -1,0 +1,11 @@
+ta_agem_metrics_20250710_112316.pkl --> Run of original code pulled from main branch. Quick mode. 1 Run.
+
+ta_agem_metrics_20250710_130511.pkl --> Run of original code pulled from main branch. Normal mode. 1 Run.
+
+ta_agem_metrics_20250710_164934.pkl --> Run of altered code (version 1). Quick mode. Run 1.
+
+ta_agem_metrics_20250710_171434.pkl --> Run of altered code (version 1). Normal mode. Run 1.
+
+ta_agem_metrics_20250711_111615.pkl --> Run of altered code (version 2). Quick mode. Run _.
+
+ta_agem_metrics_20250711_113517.pkl --> Run of altered code (version 2). Normal mode. Run _.

@@ -182,9 +182,9 @@ def load_dataset(dataset_name: str) -> DatasetLoader:
     """
     if dataset_name.lower() == "mnist":
         try:
-            from .mnist import MnistDatasetLoader
-        except ImportError:
             from mnist import MnistDatasetLoader
+        except ImportError:
+            from dataset_tools.mnist import MnistDatasetLoader
         return MnistDatasetLoader()
     elif dataset_name.lower() == "fashion_mnist":
         try:
