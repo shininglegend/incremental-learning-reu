@@ -31,9 +31,9 @@ def parse_args():
     parser.add_argument(
         "--dataset",
         type=str,
-        default="mnist",
-        choices=['minst', 'fashion_mnist'],
-        help="Which dataset to use"
+        default=None,
+        choices=["minst", "fashion_mnist"],
+        help="Which dataset to use",
     )
     parser.add_argument(
         "--lite",
@@ -47,6 +47,13 @@ def parse_args():
         default="config/default.yaml",
         help="Path to configuration file",
     )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="test_results",
+        help="Path to store the output in, should be a folder",
+    )
+    parser.add_argument("--data_dir", type=str, default=None, help="Path to dataset")
     return parser.parse_args()
 
 
@@ -91,7 +98,11 @@ def initialize_system():
     if args.lite is not None:
         config["lite"] = args.lite
     if args.dataset is not None:
-        config['dataset_name'] = args.dataset
+        config["dataset_name"] = args.dataset
+    if args.output_dir is not None:
+        config["output_dir"] = args.output_dir
+    if args.data_dir is not None:
+        config["data_dir"] = args.data_dir
 
     # Apply lite mode overrides
     if config["lite"]:
@@ -105,19 +116,20 @@ def initialize_system():
 
     # Create params dictionary for compatibility
     params = {
-        "input_dim": config["input_dim"],
-        "hidden_dim": config["hidden_dim"],
-        "num_classes": config["num_classes"],
-        "memory_size_q": config["clusters_per_pool"],
-        "memory_size_p": config["memory_size_p"],
-        "num_pools": config["num_pools"],
-        "task_type": config["task_type"],
         "batch_size": config["batch_size"],
-        "learning_rate": config["learning_rate"],
-        "num_epochs": config["num_epochs"],
-        "num_tasks": config["num_tasks"],
-        "quick_test_mode": config["lite"],
         "dataset_name": config["dataset_name"],
+        "hidden_dim": config["hidden_dim"],
+        "input_dim": config["input_dim"],
+        "learning_rate": config["learning_rate"],
+        "memory_size_p": config["memory_size_p"],
+        "memory_size_q": config["clusters_per_pool"],
+        "num_classes": config["num_classes"],
+        "num_epochs": config["num_epochs"],
+        "num_pools": config["num_pools"],
+        "num_tasks": config["num_tasks"],
+        "output_dir": config["output_dir"],
+        "quick_test_mode": config["lite"],
+        "task_type": config["task_type"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
     }
 
@@ -126,7 +138,11 @@ def initialize_system():
     timer.start("init")
 
     # Device configuration
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = config["device"]
+    if config["device"] == "cuda":
+        # Intelligently overwrite the cuda setting if cuda isn't avaliable
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     print(f"Using device: {device}")
 
     # Initialize model, optimizer, and loss function
@@ -156,7 +172,7 @@ def initialize_system():
 
     # Load dataset
     print("Loading dataset and preparing data loaders...")
-    datasetLoader = load_dataset(config["dataset_name"])
+    datasetLoader = load_dataset(config["dataset_name"], config["data_dir"])
     train_dataloaders, test_dataloaders = datasetLoader.prepare_domain_incremental_data(
         task_type=config["task_type"],
         num_tasks=config["num_tasks"],

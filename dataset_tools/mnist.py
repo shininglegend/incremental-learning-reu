@@ -16,18 +16,6 @@ except ImportError:
     from load_dataset import DatasetLoader
     from dataset_utils import get_dataset_path
 
-# Set file paths based on added MNIST Datasets
-input_path = get_dataset_path("MNIST", "hojjatk/mnist-dataset")
-print(f"Dataset is at {input_path}")
-training_images_filepath = join(
-    input_path, "train-images-idx3-ubyte/train-images-idx3-ubyte"
-)
-training_labels_filepath = join(
-    input_path, "train-labels-idx1-ubyte/train-labels-idx1-ubyte"
-)
-test_images_filepath = join(input_path, "t10k-images-idx3-ubyte/t10k-images-idx3-ubyte")
-test_labels_filepath = join(input_path, "t10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte")
-
 
 #
 # MNIST Data Loader Class
@@ -86,10 +74,10 @@ class MnistDataloader(object):
 class MnistDatasetLoader(DatasetLoader):
     """MNIST dataset loader implementing the DatasetLoader interface."""
 
-    def __init__(self):
+    def __init__(self, path_override=None):
         super().__init__()
         # Set file paths based on MNIST datasets
-        path = get_dataset_path("MNIST", "hojjatk/mnist-dataset")
+        path = get_dataset_path("MNIST", "hojjatk/mnist-dataset", path_override=path_override)
         self.training_images_filepath = join(
             path, "train-images-idx3-ubyte/train-images-idx3-ubyte"
         )
@@ -359,6 +347,22 @@ if __name__ == "__main__":
     #
     # Load MINST dataset
     #
+    # Set file paths based on added MNIST Datasets
+    input_path = get_dataset_path("MNIST", "hojjatk/mnist-dataset")
+    print(f"Dataset is at {input_path}")
+    training_images_filepath = join(
+        input_path, "train-images-idx3-ubyte/train-images-idx3-ubyte"
+    )
+    training_labels_filepath = join(
+        input_path, "train-labels-idx1-ubyte/train-labels-idx1-ubyte"
+    )
+    test_images_filepath = join(
+        input_path, "t10k-images-idx3-ubyte/t10k-images-idx3-ubyte"
+    )
+    test_labels_filepath = join(
+        input_path, "t10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte"
+    )
+
     _mnist_dataloader = MnistDataloader(
         training_images_filepath,
         training_labels_filepath,
