@@ -177,38 +177,53 @@ class ClusteringMechanism:
         # Find the closest cluster
         (nearest_cluster_idx_to_new, dist_to_new) = self._find_closest_cluster(z)
 
-        # Check the size of it - if bigger than one, just add
-        # This prevents an outlier from breaking things too much
-        if len(self.clusters[nearest_cluster_idx_to_new]) > 1:
-            return self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
+        # See if we can re-assign clusters to make this a new mean
+        # Logic: If any cluster of size 1 is closer to another cluster than this sample is to it,
+        # merge the sample from that cluster into whatever it's closer to, and remove the old cluster,
+        # replacing it with a new sample centered on this new sample
 
-        # Otherwise, grab that sample, check it's nearest distance.
-        # If that sample is closer to another cluster than this sample is to it, move it to that cluster
-        # and remove the old cluster, replacing it with a new sample centered on this new sample
-        (nearest_old_sample, nearest_old_label) = self.clusters[
-            nearest_cluster_idx_to_new
-        ].get_sample_or_samples()
-        (closest_cluster_to_old, dist_to_old) = self._find_closest_cluster(
-            nearest_old_sample, ignore=nearest_cluster_idx_to_new
-        )
-        if dist_to_new > dist_to_old:
-            debug(self.visualize, "Before")
-            # Overwrite it with the new sample
-            self._add_to_cluster(
-                closest_cluster_to_old, nearest_old_sample, nearest_old_label
-            )
-            self.clusters[nearest_cluster_idx_to_new] = Cluster(z, label)
-            debug(self.visualize, "After overwriting")
-            debug(print, f"Overwrote! {dist_to_new} > {dist_to_old}")
-        else:
+        # Start by finding the current two closest clusters to each other, for each cluster of size 1
+        # This is n^2 where n is the number of clusters (Q), so should probably be optimized
+        min_dist = math.inf
+        cluster_idx_to_merge, cluster_idx_to_merge_into = None, None
+        for i in range(len(self.clusters)):
+            if len(self.clusters[i]) > 1:
+                # We don't want to reassign from a cluster that's bigger than size 1
+                continue
+            for j in range(i+1, len(self.clusters)):
+                if i == j:
+                    continue  # Ignore itself, obv
+                dist = self._dist_between(i, j)
+                if min_dist > dist:
+                    min_dist = dist
+                    # Don't flip the letters! Otherwise, you could be merging a cluster of size > 1
+                    cluster_idx_to_merge = i
+                    cluster_idx_to_merge_into = j
+
+        if min_dist == math.inf or  min_dist >= dist_to_new:
+            # No mergable clusters found
+            debug(print, f"Kept! {min_dist} >= {dist_to_new}")
             if len(self.clusters) < self.Q:
                 # Add a new cluster if possible
-                self._add_new_cluster(z, label)
+                return self._add_new_cluster(z, label)
             else:
-                # Add to whatever cluster is closest
-                self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
-            # self.visualize("After keeping")
-            debug(print, f"Kept! {dist_to_new} <= {dist_to_old}")
+                return self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
+
+        # Merge the cluster, then add the new sample as a new cluster
+        self._add_to_cluster(
+            cluster_idx_to_merge_into,
+            self.clusters[cluster_idx_to_merge].samples.pop(),
+            self.clusters[cluster_idx_to_merge].labels.pop(),
+        )
+
+        debug(print, f"Overwrote! {dist_to_new} > {min_dist}")
+        self.clusters[cluster_idx_to_merge] = Cluster(z, label)
+
+    def _dist_between(self, cluster_a_indx, cluster_b_indx):
+        """Returns the distance between two clusters's means"""
+        return torch.linalg.norm(
+            self.clusters[cluster_a_indx].mean - self.clusters[cluster_b_indx].mean
+        )
 
     def _find_closest_cluster(self, z, ignore=None):
         """This finds the closest cluster for a particular sample. Does not add it
@@ -480,8 +495,9 @@ if __name__ == "__main__":
         print(storage.get_clusters_with_labels())
 
         if VISUALIZE:
-            storage.visualize()
-            time.sleep(5)
+            storage.visualize(f"After sample {i}")
+            # It is recommended to set a breakpoint on the next line when visualizing
+            time.sleep(1)
 
     if len(storage.clusters) == 0:
         raise Exception("No samples successfully added")
