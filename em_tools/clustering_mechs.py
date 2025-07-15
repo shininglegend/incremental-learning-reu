@@ -1,4 +1,5 @@
 # Handles the clusters themselves - assigning and removing as needed
+import math
 import torch
 import pandas
 from collections import deque
@@ -190,7 +191,7 @@ class ClusteringMechanism:
             if len(self.clusters[i]) > 1:
                 # We don't want to reassign from a cluster that's bigger than size 1
                 continue
-            for j in range(i+1, len(self.clusters)):
+            for j in range(i + 1, len(self.clusters)):
                 if i == j:
                     continue  # Ignore itself, obv
                 dist = self._dist_between(i, j)
@@ -200,7 +201,7 @@ class ClusteringMechanism:
                     cluster_idx_to_merge = i
                     cluster_idx_to_merge_into = j
 
-        if min_dist == math.inf or  min_dist >= dist_to_new:
+        if min_dist == math.inf or min_dist >= dist_to_new:
             # No mergable clusters found
             debug(print, f"Kept! {min_dist} >= {dist_to_new}")
             if len(self.clusters) < self.Q:
