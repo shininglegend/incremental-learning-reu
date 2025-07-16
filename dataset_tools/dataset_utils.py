@@ -9,17 +9,22 @@ except ImportError:
     set_key = None
 
 
-def get_dataset_path(dataset_name, kaggle_dataset_id):
+def get_dataset_path(dataset_name, kaggle_dataset_id, path_override=None):
     """
     Get dataset path with env fallback and auto-download.
 
     Args:
         dataset_name: Name for env variable (e.g., 'MNIST', 'MNIST_FASHION')
         kaggle_dataset_id: Kaggle dataset identifier for download
+        path: Path to the Kaggle dataset, will ignore the .env
 
     Returns:
         str: Path to dataset directory
     """
+    if path_override is not None:
+        path_override = os.path.join(path_override, dataset_name)
+        assert Path(path_override).exists(), f"Dataset not found at `{path_override}`. Aborting"
+        return path_override
     env_var = f"DATASET_LOCATION_{dataset_name}"
     env_file = Path(".env")
 

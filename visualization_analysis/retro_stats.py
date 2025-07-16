@@ -131,18 +131,22 @@ def create_summary_table(statistics):
 
 def main():
     parser = argparse.ArgumentParser(description="TA-A-GEM Experiment Analysis")
-    parser.add_argument('-n', '--num-runs', type=int, default=15,
+    parser.add_argument('-n', '--num_runs', type=int, default=15,
                        help='Number of most recent test runs to analyze (default: 15)')
+    parser.add_argument('--input_dir', type=str, default='test_results',
+                        help='Directory containing the test results (default: test_results)')
+    parser.add_argument('--output_dir', type=str, default='test_results',
+                        help='Directory to save the analysis results (default: test_results)')
     args = parser.parse_args()
 
     print("TA-A-GEM Experiment Analysis")
     print("=" * 50)
 
     # Load all pickle files
-    results = load_pickle_files(num_files=args.num_runs)
+    results = load_pickle_files(directory=args.input_dir, num_files=args.num_runs)
 
     if not results:
-        print("No pickle files found in test_results directory")
+        print(f"No pickle files found in {args.input_dir} directory")
         return
 
     print(f"Found {len(results)} result files (analyzing last {args.num_runs} runs only)")
@@ -198,7 +202,7 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Save summary table
-    summary_filename = f"test_results/experiment_analysis_{timestamp}.csv"
+    summary_filename = os.path.join(args.output_dir, f"experiment_analysis_{timestamp}.csv")
     display_df.to_csv(summary_filename, index=False)
     print(f"\nSummary results saved to: {summary_filename}")
 
@@ -213,7 +217,7 @@ def main():
             })
 
     detailed_df = pd.DataFrame(detailed_results)
-    detailed_filename = f"test_results/detailed_results_{timestamp}.csv"
+    detailed_filename = os.path.join(args.output_dir, f"detailed_results_{timestamp}.csv")
     detailed_df.to_csv(detailed_filename, index=False)
     print(f"Detailed results saved to: {detailed_filename}")
 
