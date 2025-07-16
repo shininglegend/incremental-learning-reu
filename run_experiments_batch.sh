@@ -6,7 +6,7 @@
 # Define Python executable path relative to the script's directory
 # If you have a virtual environment, adjust the path accordingly.
 # You can tell conda to put the env in the same directory as the script by using:
-# conda create --prefix ./env -f linux_env.yml
+# conda env create --prefix ./env -f linux_env.yml
 
 #PYTHON_EXEC="incremental-learning-reu/venv/bin/python" # Uncomment for pip venv
 PYTHON_EXEC="env/bin/python" # Uncomment for conda env
