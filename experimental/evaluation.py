@@ -49,8 +49,6 @@ class TAGEMEvaluator:
                 "consistent transformations between training and testing data."
             )
 
-    # Remove _apply_task_transformations method entirely
-
     def run_full_evaluation(self, model, device='cpu', save_results=True, intermediate_eval_history=None):
         """
         Run complete evaluation pipeline
@@ -109,10 +107,10 @@ class TAGEMEvaluator:
             'overall_accuracy': 0.0,
             'per_class_accuracy': {},
             'confusion_matrices': [],
-            'evaluation_params': self.params.copy(),
+            'params': self.params.copy(),
             'timestamp': self.timestamp,
             'all_predictions': np.array([]), # Initialize for safety
-            'all_true_labels': np.array([])  # Initialize for safety
+            'all_true_labels': np.array([]),  # Initialize for safety
         }
 
         all_predictions_list = []  # Store as list of tensors initially

@@ -11,14 +11,17 @@ BATCH_SIZE = 50 if QUICK_TEST_MODE else 10
 LEARNING_RATE = 1e-3
 NUM_EPOCHS = 20
 NUM_TASKS = 2 if QUICK_TEST_MODE else 5
-TASK_TYPE = 'permutation' # 'permutation', 'rotation', or 'class_split'
+TASK_TYPE = 'class_split' # 'permutation', 'rotation', or 'class_split'
 NUM_POOLS = 10
 CLUSTERS_PER_POOL = 10
-DATASET_NAME = 'mnist' # 'mnist' or 'fashion_mnist'
+DATASET_NAME = 'fashion_mnist' # 'mnist' or 'fashion_mnist'
 # DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = 'cpu'
 STRATEGY = 3 # 1 for true parallel, 2 for hybrid, 3 for sequential. sequential is best fs
-SBATCH = False # Set to False when running files directly, True when running w/ SBATCH
+SBATCH = True # Set to False when running files directly, True when running w/ SBATCH
+
+# To add a new removal, make sure you update clustering_mechs!
+REMOVAL = 'remove_oldest' # 'remove_oldest' or 'remove_based_on_mean'.
 
 if SBATCH:
     OUTPUT_DIR = "./sbatch_results/class_split_fashion_mnist"
@@ -42,7 +45,8 @@ params = {
     'dataset_name': DATASET_NAME,
     'strategy': STRATEGY,
     'sbatch': SBATCH,
-    'output_dir': OUTPUT_DIR
+    'output_dir': OUTPUT_DIR,
+    'removal': REMOVAL,
     }
 
 

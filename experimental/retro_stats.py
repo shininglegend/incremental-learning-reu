@@ -20,10 +20,17 @@ def load_pickle_files(directory="test_results"):
             with open(file_path, 'rb') as f:
                 data = pickle.load(f)
 
-            # Extract task type from params if available
+            # Extract from params if available
             task_type = "unknown"
-            if 'params' in data and 'task_type' in data['params']:
-                task_type = data['params']['task_type']
+            dataset_name = 'unknown'
+            removal = 'unknown'
+            if 'params' in data:
+                if 'task_type' in data['params']:
+                    task_type = data['params']['task_type']
+                if 'dataset_name' in data['params']:
+                    dataset_name = data['params']['dataset_name']
+                if 'removal' in data['params']:
+                    removal = data['params']['removal']
 
             # Extract final accuracy (last value in task_accuracies)
             final_accuracy = None
@@ -39,7 +46,9 @@ def load_pickle_files(directory="test_results"):
                 'final_accuracy': final_accuracy,
                 'timestamp': timestamp,
                 'data': data,
-                'file_mtime': os.path.getmtime(file_path)
+                'file_mtime': os.path.getmtime(file_path),
+                'dataset_name': dataset_name,
+                'removal': removal,
             })
 
         except Exception as e:
@@ -59,23 +68,32 @@ def compute_confidence_interval(data, confidence=0.99):
 
     return mean - h, mean + h
 
+
 def analyze_experiments(results):
     """Analyze experiments and compute statistics"""
 
-    # Group results by task type
+    # Group results by task type, dataset, and removal method
     task_groups = {}
     for result in results:
         task_type = result['task_type']
-        if task_type not in task_groups:
-            task_groups[task_type] = []
+
+        # Extract dataset and removal from params
+        dataset = result.get('dataset_name', 'unknown')
+        removal = result.get('removal', 'unknown')
+
+        # Create a composite key for grouping
+        group_key = (task_type, dataset, removal)
+
+        if group_key not in task_groups:
+            task_groups[group_key] = []
 
         if result['final_accuracy'] is not None:
-            task_groups[task_type].append(result['final_accuracy'])
+            task_groups[group_key].append(result['final_accuracy'])
 
-    # Compute statistics for each task type
+    # Compute statistics for each group
     statistics = []
 
-    for task_type, accuracies in task_groups.items():
+    for (task_type, dataset, removal), accuracies in task_groups.items():
         if len(accuracies) == 0:
             continue
 
@@ -87,15 +105,18 @@ def analyze_experiments(results):
 
         statistics.append({
             'Task Type': task_type,
+            'Dataset': dataset,
+            'Removal': removal,
             'Number of Runs': len(accuracies),
             'Mean Accuracy': mean_accuracy,
             'Std Deviation': std_accuracy,
             '99% CI Lower': ci_lower,
             '99% CI Upper': ci_upper,
-            'Raw Accuracies': accuracies
+            'Raw Accuracies': accuracies,
         })
 
     return statistics
+
 
 def create_summary_table(statistics):
     """Create formatted summary table"""
@@ -119,7 +140,7 @@ def main():
     print("=" * 50)
 
     # Load all pickle files
-    directory = "sbatch_results/class_split_mnist"
+    directory = "sbatch_results/class_split_fashion_mnist"
     results = load_pickle_files(directory)
 
     if not results:
@@ -190,7 +211,9 @@ def main():
             detailed_results.append({
                 'Task Type': stat['Task Type'],
                 'Run Number': i + 1,
-                'Final Accuracy': accuracy
+                'Final Accuracy': accuracy,
+                'Dataset': stat['Dataset'],
+                'Removal': stat['Removal']
             })
 
     detailed_df = pd.DataFrame(detailed_results)

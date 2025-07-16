@@ -7,6 +7,7 @@ DEBUG = False
 
 triggered = set()
 dprint = lambda s: triggered.add(s) if DEBUG else None
+from config import params
 
 
 class Cluster:
@@ -37,13 +38,22 @@ class Cluster:
         """
         dprint("cl remove_one triggered")
 
-        return self.remove_oldest()
+        if params['removal'] == 'remove_oldest':
+            return self.remove_oldest()
+        elif params['removal'] == 'remove_based_on_mean':
+            return self.remove_based_on_mean()
+        else:
+            dprint("Unknown removal method detected. Performing remove_oldest. Updating params.")
+            params['removal'] = 'remove_oldest'
+            return self.remove_oldest()
 
     def remove_based_on_mean(self):
         """
         Removes the sample furthest from the mean, excluding the newest sample.
         """
         dprint("cl remove_based_on_mean triggered")
+
+        params['removal'] = 'remove_based_on_mean()'
 
         if len(self.samples) <= 1:
             return self.remove_oldest()
@@ -91,14 +101,22 @@ class Cluster:
         """
         dprint("cl remove_oldest triggered")
 
+        params['removal'] = "remove_oldest"
+
         if len(self.samples) > 0:
             oldest_sample = self.samples.popleft()
-            self.labels.popleft()  # Also remove the corresponding label
+            oldest_label = self.labels.popleft()  # Store the label before removing
             self.sum_samples -= oldest_sample
             if len(self.samples) > 0:
                 self.mean = self.sum_samples / len(self.samples)
             else:
-                self.mean = torch.zeros_like(self.mean)  # If cluster becomes empty
+                self.mean = torch.zeros_like(self.mean)
+
+            # Return the removed sample and label
+            return oldest_sample, oldest_label
+        else:
+            # Handle empty cluster case
+            return None, None
 
     def __str__(self):
         return f"""Cluster with mean {self.mean} and samples {self.samples}"""

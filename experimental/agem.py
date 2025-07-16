@@ -71,6 +71,11 @@ class AGEMHandler:
 
         return current_grad
 
+    def compute_and_project_batch_gradient(self, data, labels, memory_samples_on_device):
+        current_grad = self.compute_gradient(data, labels)
+
+
+
     def set_gradient(self, grad_vector):
         """Set model gradients from flattened gradient vector"""
         if grad_vector.numel() == 0:
