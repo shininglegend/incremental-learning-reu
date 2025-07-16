@@ -22,6 +22,12 @@ def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="TA-A-GEM Incremental Learning")
     parser.add_argument(
+        "--config",
+        type=str,
+        default="config/default.yaml",
+        help="Path to configuration file",
+    )
+    parser.add_argument(
         "--task_type",
         type=str,
         default=None,
@@ -40,12 +46,6 @@ def parse_args():
         action="store_true",
         default=None,
         help="Run in quick test mode with fewer tasks and data",
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="config/default.yaml",
-        help="Path to configuration file",
     )
     parser.add_argument(
         "--output_dir",
@@ -103,6 +103,8 @@ def initialize_system():
         config["output_dir"] = args.output_dir
     if args.data_dir is not None:
         config["data_dir"] = args.data_dir
+    else:
+        config["data_dir"] = None  # Default to None if not provided
 
     # Apply lite mode overrides
     if config["lite"]:
