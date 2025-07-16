@@ -127,7 +127,7 @@ for file in "$JOB_SCRATCH_DIR"/*; do
     while [ -e "$dest" ]; do
         name="${basename%.*}"
         ext="${basename##*.}"
-        [ "$name" = "$ext" ] && dest="$HOME_DIR/test_results/$4${basename}_$counter" || dest="$HOME_DIR/test_results/$4/${name}_$counter.$ext"
+        [ "$name" = "$ext" ] && dest="$HOME_DIR/test_results/$4/${basename}_$counter" || dest="$HOME_DIR/test_results/$4/${name}_$counter.$ext"
         ((counter++))
     done
     cp "$file" "$dest"
