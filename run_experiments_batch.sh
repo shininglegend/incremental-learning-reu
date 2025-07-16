@@ -19,8 +19,16 @@ fi
 
 dataset_name=$1
 if [[ -z "$dataset_name" ]]; then
-    echo "Usage: $0 <dataset_name>"
-    echo "Example: $0 mnist"
+    echo "Usage: $0 <dataset_name> <save_location>"
+    echo "Example: $0 mnist test-new-remove-one"
+    exit 1
+fi
+
+# Subfolder to save test results to
+save_location=$2
+if [[ -z "$save_location" ]]; then
+    echo "Usage: $0 <dataset_name> <save_location>"
+    echo "Example: $0 mnist test-new-remove-one"
     exit 1
 fi
 
@@ -40,7 +48,7 @@ for task_type in "${TASK_TYPES[@]}"; do
     echo "Submitting job for task type: $task_type with dataset: $dataset_name"
 
     # Submit job
-    JOB_OUTPUT=$(sbatch slurm.sbatch $task_type $dataset_name "$PYTHON_EXEC")
+    JOB_OUTPUT=$(sbatch slurm.sbatch $task_type $dataset_name "$PYTHON_EXEC" $save_location)
     JOB_ID=$(echo $JOB_OUTPUT | grep -o '[0-9]*')
 
     echo "Job ID $JOB_ID submitted for $task_type"
@@ -49,6 +57,7 @@ done
 echo ""
 echo "All jobs submitted."
 echo "Monitoring job progress..."
+sleep 2.5
 
 # Monitor jobs until completion
 while true; do
@@ -71,5 +80,5 @@ echo ""
 echo "Running analysis script..."
 
 # Run the analysis script
-"$PYTHON_EXEC" visualization_analysis/retro_stats.py
+"$PYTHON_EXEC" visualization_analysis/retro_stats.py --input_dir test_results/$2
 echo "Results saved to test_results/ directory"
