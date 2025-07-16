@@ -127,7 +127,4 @@ for file in "$JOB_SCRATCH_DIR"/*; do
 done
 rm -rf "$JOB_SCRATCH_DIR"
 
-# Run visualization/analysis script
-"$PYTHON_EXEC" "$HOME_DIR/visualization_analysis/retro_stats.py" --input_dir "$JOB_SCRATCH_DIR"
-
 echo "Job script complete. :)"
