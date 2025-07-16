@@ -33,7 +33,12 @@ t.start("training")
 
 # --- 2. Training Loop ---
 print("Starting TA-A-GEM training...")
-print(f"Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}")
+print(
+    f"""
+Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']} 
+Total tasks: {len(train_dataloaders)}"""
+)
+
 for task_id, train_dataloader in enumerate(train_dataloaders):
     print(f"\n--- Training on Task {task_id + 1} ---")
 
