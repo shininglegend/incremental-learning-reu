@@ -48,7 +48,7 @@ for task_type in "${TASK_TYPES[@]}"; do
     echo "Submitting job for task type: $task_type with dataset: $dataset_name"
 
     # Submit job
-    JOB_OUTPUT=$(sbatch slurm.sbatch $task_type $dataset_name "$PYTHON_EXEC" $save_location)
+    JOB_OUTPUT=$(sbatch slurm.sbatch $task_type $dataset_name "$PYTHON_EXEC" "$save_location")
     JOB_ID=$(echo $JOB_OUTPUT | grep -o '[0-9]*')
 
     echo "Job ID $JOB_ID submitted for $task_type"
