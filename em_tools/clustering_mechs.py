@@ -52,7 +52,7 @@ class Cluster:
         """
         dtriggered("cl remove_one triggered")
 
-        return self.remove_based_on_mean()
+        return self.remove_oldest()
 
     def remove_based_on_mean(self):
         """
