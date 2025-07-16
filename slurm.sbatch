@@ -118,16 +118,16 @@ echo "------------------------------------------------------------"
 
 # --- CLEANUP ---
 echo "Copying output files to test_results directory"
-mkdir -p "$HOME_DIR/test_results"
+mkdir -p "$HOME_DIR/test_results/$4"
 for file in "$JOB_SCRATCH_DIR"/*; do
     [ -f "$file" ] || continue
     basename=$(basename "$file")
-    dest="$HOME_DIR/test_results/$basename"
+    dest="$HOME_DIR/test_results/$4/$basename"
     counter=1
     while [ -e "$dest" ]; do
         name="${basename%.*}"
         ext="${basename##*.}"
-        [ "$name" = "$ext" ] && dest="$HOME_DIR/test_results/${basename}_$counter" || dest="$HOME_DIR/test_results/${name}_$counter.$ext"
+        [ "$name" = "$ext" ] && dest="$HOME_DIR/test_results/$4/${basename}_$counter" || dest="$HOME_DIR/test_results/$4/${name}_$counter.$ext"
         ((counter++))
     done
     cp "$file" "$dest"
