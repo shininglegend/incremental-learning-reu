@@ -1,5 +1,5 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
-import time
+import time, os
 from agem import agem
 from init import initialize_system
 
@@ -8,16 +8,27 @@ from init import initialize_system
 # Initialize system with configuration
 # Parse command line arguments
 (
-    config, params, t, device, model, optimizer, criterion,
-    lr_scheduler, clustering_memory, agem_handler, train_dataloaders,
-    test_dataloaders, visualizer
+    config,
+    params,
+    t,
+    device,
+    model,
+    optimizer,
+    criterion,
+    lr_scheduler,
+    clustering_memory,
+    agem_handler,
+    train_dataloaders,
+    test_dataloaders,
+    visualizer,
 ) = initialize_system()
 
 # Extract commonly used variables from config
-QUICK_TEST_MODE = config['lite']
-NUM_EPOCHS = config['num_epochs']
-USE_LEARNING_RATE_SCHEDULER = config['use_learning_rate_scheduler']
-LEARNING_RATE = config['learning_rate']
+QUICK_TEST_MODE = config["lite"]
+VERBOSE = config["verbose"]
+NUM_EPOCHS = config["num_epochs"]
+USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
+LEARNING_RATE = config["learning_rate"]
 t.start("training")
 
 # --- 2. Training Loop ---
@@ -67,7 +78,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             num_batches += 1
 
             # Update progress bar every 50 batches or on last batch
-            if not QUICK_TEST_MODE and (
+            if not QUICK_TEST_MODE and VERBOSE and (
                 batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1
             ):
                 progress = (batch_idx + 1) / len(train_dataloader)
@@ -81,7 +92,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 )
 
         # Print newline after progress bar completion
-        if not QUICK_TEST_MODE:
+        if not QUICK_TEST_MODE and VERBOSE:
             print()
 
         # Track epoch loss
@@ -107,7 +118,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
         # Update visualizer with epoch metrics
         memory_size = clustering_memory.get_memory_size()
-        current_lr = lr_scheduler.get_lr() if USE_LEARNING_RATE_SCHEDULER else LEARNING_RATE
+        current_lr = (
+            lr_scheduler.get_lr() if USE_LEARNING_RATE_SCHEDULER else LEARNING_RATE
+        )
 
         visualizer.update_metrics(
             task_id=task_id,
@@ -121,7 +134,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
         # Print epoch summary
         if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
-            print(f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}")
+            print(
+                f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
+            )
 
     # Calculate training time for this task
     task_time = time.time() - task_start_time
@@ -132,10 +147,14 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     final_memory_size = clustering_memory.get_memory_size()
 
     # Get final accuracy from last epoch evaluation
-    final_avg_accuracy = visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
+    final_avg_accuracy = (
+        visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
+    )
 
     print(f"After Task {task_id}, Final Average Accuracy: {final_avg_accuracy:.4f}")
-    print(f"Memory Size: {final_memory_size} samples across {num_active_pools} active pools")
+    print(
+        f"Memory Size: {final_memory_size} samples across {num_active_pools} active pools"
+    )
     print(f"Pool sizes: {pool_sizes}")
     print(f"Task Training Time: {task_time:.2f}s")
 
@@ -147,10 +166,16 @@ print("\nGenerating comprehensive analysis...")
 
 # Save metrics for future analysis
 timestamp = time.strftime("%Y%m%d_%H%M%S")
-visualizer.save_metrics(f"test_results/ta_agem_metrics_{timestamp}.pkl", params=params)
+visualizer.save_metrics(
+    os.path.join(params["output_dir"], f"ta_agem_metrics_{timestamp}.pkl"),
+    params=params,
+)
 
 # Generate simplified report with 3 key visualizations
-visualizer.generate_simple_report(clustering_memory, show_images=config['show_images'])
+visualizer.generate_simple_report(
+    clustering_memory,
+    show_images=config["show_images"],
+)
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
 print(t)

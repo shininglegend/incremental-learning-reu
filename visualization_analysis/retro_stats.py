@@ -4,15 +4,16 @@ import numpy as np
 from scipy import stats
 import os
 import glob
+import argparse
 from datetime import datetime
 
-def load_pickle_files(directory="test_results"):
-    """Load all pickle files from the test_results directory"""
+def load_pickle_files(directory="test_results", num_files=15):
+    """Load pickle files from the test_results directory"""
     pickle_files = glob.glob(os.path.join(directory, "ta_agem_metrics_*.pkl"))
 
-    # Sort files by modification time (newest first) and take only the last 15
+    # Sort files by modification time (newest first) and take only the specified number
     pickle_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-    pickle_files = pickle_files[:15]
+    pickle_files = pickle_files[:num_files]
 
     results = []
     for file_path in pickle_files:
@@ -129,17 +130,26 @@ def create_summary_table(statistics):
     return display_df, df
 
 def main():
+    parser = argparse.ArgumentParser(description="TA-A-GEM Experiment Analysis")
+    parser.add_argument('-n', '--num_runs', type=int, default=15,
+                       help='Number of most recent test runs to analyze (default: 15)')
+    parser.add_argument('--input_dir', type=str, default='test_results',
+                        help='Directory containing the test results (default: test_results)')
+    parser.add_argument('--output_dir', type=str, default='test_results',
+                        help='Directory to save the analysis results (default: test_results)')
+    args = parser.parse_args()
+
     print("TA-A-GEM Experiment Analysis")
     print("=" * 50)
 
     # Load all pickle files
-    results = load_pickle_files()
+    results = load_pickle_files(directory=args.input_dir, num_files=args.num_runs)
 
     if not results:
-        print("No pickle files found in test_results directory")
+        print(f"No pickle files found in {args.input_dir} directory")
         return
 
-    print(f"Found {len(results)} result files (analyzing last 15 runs only)")
+    print(f"Found {len(results)} result files (analyzing last {args.num_runs} runs only)")
 
     # Show time range of analyzed files
     if results:
@@ -192,7 +202,7 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Save summary table
-    summary_filename = f"test_results/experiment_analysis_{timestamp}.csv"
+    summary_filename = os.path.join(args.output_dir, f"experiment_analysis_{timestamp}.csv")
     display_df.to_csv(summary_filename, index=False)
     print(f"\nSummary results saved to: {summary_filename}")
 
@@ -207,7 +217,7 @@ def main():
             })
 
     detailed_df = pd.DataFrame(detailed_results)
-    detailed_filename = f"test_results/detailed_results_{timestamp}.csv"
+    detailed_filename = os.path.join(args.output_dir, f"detailed_results_{timestamp}.csv")
     detailed_df.to_csv(detailed_filename, index=False)
     print(f"Detailed results saved to: {detailed_filename}")
 

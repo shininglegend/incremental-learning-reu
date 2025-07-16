@@ -6,8 +6,10 @@ dependencies:
   - _openmp_mutex=4.5=3_kmp_llvm
   - absl-py=2.3.0=pyhd8ed1ab_0
   - alsa-lib=1.2.14=hb9d3cd8_0
+  - altgraph=0.17.4=pyhd8ed1ab_1
   - aom=3.6.1=h59595ed_0
   - astunparse=1.6.3=pyhd8ed1ab_3
+  - attrs=25.3.0=pyh71513ae_0
   - blas=2.116=mkl
   - blas-devel=3.9.0=16_linux64_mkl
   - brotli=1.1.0=hb9d3cd8_3
@@ -15,13 +17,14 @@ dependencies:
   - brotli-python=1.1.0=py312h2ec8cdc_3
   - bzip2=1.0.8=h4bc722e_7
   - c-ares=1.34.5=hb9d3cd8_0
-  - ca-certificates=2025.6.15=hbd8a1cb_0
+  - ca-certificates=2025.7.9=hbd8a1cb_0
   - cached-property=1.5.2=hd8ed1ab_1
   - cached_property=1.5.2=pyha770c72_1
   - cairo=1.18.4=h3394656_0
-  - certifi=2025.6.15=pyhd8ed1ab_0
+  - certifi=2025.7.9=pyhd8ed1ab_0
   - cffi=1.17.1=py312h06ac9bb_0
   - charset-normalizer=3.4.2=pyhd8ed1ab_0
+  - colorama=0.4.6=pyhd8ed1ab_1
   - contourpy=1.3.2=py312h68727a3_0
   - cpython=3.12.11=py312hd8ed1ab_0
   - cuda-crt-tools=12.4.131=ha770c72_1
@@ -70,8 +73,13 @@ dependencies:
   - icu=75.1=he02047a_0
   - idna=3.10=pyhd8ed1ab_1
   - importlib-metadata=8.7.0=pyhe01879c_1
+  - importlib_resources=6.5.2=pyhd8ed1ab_0
   - jinja2=3.1.6=pyhd8ed1ab_0
   - joblib=1.5.1=pyhd8ed1ab_0
+  - jsonschema=4.24.0=pyhd8ed1ab_0
+  - jsonschema-specifications=2025.4.1=pyh29332c3_0
+  - jupyter_core=5.8.1=pyh31011fe_0
+  - kagglehub=0.3.8=pyhd8ed1ab_0
   - keras=3.10.0=pyh753f3f9_0
   - keyutils=1.6.1=h166bdaf_0
   - kiwisolver=1.4.8=py312h84d6215_0
@@ -176,6 +184,7 @@ dependencies:
   - munkres=1.1.4=pyhd8ed1ab_1
   - namex=0.1.0=pyhd8ed1ab_0
   - narwhals=1.44.0=pyhe01879c_0
+  - nbformat=5.10.4=pyhd8ed1ab_1
   - nccl=2.27.5.1=h9b8ff78_0
   - ncurses=6.5=h2d0b736_3
   - nettle=3.9.1=h7ab15ed_0
@@ -186,7 +195,7 @@ dependencies:
   - openh264=2.3.1=hcb278e6_2
   - openjpeg=2.5.3=h5fbd93e_0
   - openldap=2.6.10=he970967_0
-  - openssl=3.5.0=h7b32b05_1
+  - openssl=3.5.1=h7b32b05_0
   - opt_einsum=3.4.0=pyhd8ed1ab_1
   - optree=0.16.0=py312h68727a3_0
   - p11-kit=0.24.1=hc5aa10d_0
@@ -196,16 +205,22 @@ dependencies:
   - pillow=11.2.1=py312h80c1187_0
   - pip=25.1.1=pyh8b19718_0
   - pixman=0.46.2=h29eaf8c_0
+  - pkgutil-resolve-name=1.3.10=pyhd8ed1ab_2
+  - platformdirs=4.3.8=pyhe01879c_0
   - plotly=6.2.0=pyhd8ed1ab_0
   - protobuf=5.27.5=py312h2ec8cdc_0
   - pthread-stubs=0.4=hb9d3cd8_1002
   - pycparser=2.22=pyh29332c3_1
   - pygments=2.19.2=pyhd8ed1ab_0
+  - pyinstaller=6.14.2=py312h67dfd3b_0
+  - pyinstaller-hooks-contrib=2025.5=pyhd8ed1ab_0
   - pyparsing=3.2.3=pyhd8ed1ab_1
   - pyside6=6.9.1=py312hdb827e4_0
   - pysocks=1.7.1=pyha55dd90_7
   - python=3.12.11=h9e4cc4f_0_cpython
   - python-dateutil=2.9.0.post0=pyhe01879c_2
+  - python-dotenv=1.1.1=pyhe01879c_0
+  - python-fastjsonschema=2.21.1=pyhd8ed1ab_0
   - python-flatbuffers=25.2.10=pyhbc23db3_0
   - python-tzdata=2025.2=pyhd8ed1ab_0
   - python_abi=3.12=7_cp312
@@ -218,15 +233,16 @@ dependencies:
   - qt6-main=6.9.1=h0384650_1
   - re2=2024.07.02=h9925aae_2
   - readline=8.2=h8c095d6_2
+  - referencing=0.36.2=pyh29332c3_0
   - requests=2.32.4=pyhd8ed1ab_0
   - rich=14.0.0=pyh29332c3_0
+  - rpds-py=0.25.1=py312h680f630_0
   - scikit-learn=1.7.0=py312h7a48858_1
   - scipy=1.16.0=py312hf734454_0
   - setuptools=80.9.0=pyhff2d567_0
   - six=1.17.0=pyhd8ed1ab_0
   - snappy=1.2.1=h8bd8927_1
   - svt-av1=1.4.1=hcb278e6_0
-  - sympy=1.14.0=pyh2585a3b_105
   - tbb=2021.13.0=hceb3a55_1
   - tensorboard=2.17.1=pyhd8ed1ab_0
   - tensorboard-data-server=0.7.0=py312hda17c39_2
@@ -239,6 +255,8 @@ dependencies:
   - torchtriton=3.1.0=py312
   - torchvision=0.20.1=py312_cu124
   - tornado=6.5.1=py312h66e93f0_0
+  - tqdm=4.67.1=pyhd8ed1ab_1
+  - traitlets=5.14.3=pyhd8ed1ab_1
   - typing-extensions=4.14.0=h32cad80_0
   - typing_extensions=4.14.0=pyhe01879c_0
   - tzdata=2025b=h78e105d_0
@@ -277,4 +295,7 @@ dependencies:
   - zipp=3.23.0=pyhd8ed1ab_0
   - zstandard=0.23.0=py312h66e93f0_2
   - zstd=1.5.7=hb8e6e7a_2
+  - pip:
+      - fsspec==2025.5.1
+      - sympy==1.13.1
 prefix: /home/reutmurphy/miniforge3/envs/ta-env
