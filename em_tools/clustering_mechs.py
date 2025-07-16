@@ -9,25 +9,40 @@ triggered = set()
 dprint = lambda s: triggered.add(s) if DEBUG else None
 
 
+# Distance heuristic
+def distance_h(*args, **kwargs):
+    return torch.norm(*args, **kwargs)
+
+
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
 
-    def __init__(self, initial_sample: torch.Tensor, initial_label=None):
+    def __init__(
+        self, initial_sample: torch.Tensor, initial_label=None, initial_task_id=None
+    ):
         dprint("cl init triggered")
 
         self.samples = deque([initial_sample])  # Stores samples in insertion order
         self.labels = (
             deque([initial_label]) if initial_label is not None else deque([None])
         )  # Stores labels in insertion order
+        self.task_ids = deque([initial_task_id])  # Stores task IDs for each sample
+        self.insertion_order = deque(
+            [0]
+        )  # Stores insertion order (age) for each sample
+        self.next_insertion_id = 1  # Counter for next insertion
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
-    def add_sample(self, sample: torch.Tensor, label=None):
+    def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
 
         self.samples.append(sample)
         self.labels.append(label)
+        self.task_ids.append(task_id)
+        self.insertion_order.append(self.next_insertion_id)
+        self.next_insertion_id += 1
         self.sum_samples += sample.clone().detach()
         self.mean = self.sum_samples / len(self.samples)
 
@@ -55,25 +70,31 @@ class Cluster:
         # Only consider samples except the newest (last one)
         for i in range(len(self.samples) - 1):
             sample = self.samples[i]
-            distance = torch.norm(sample - self.mean)
+            distance = distance_h(sample, self)
             if distance > max_distance:
                 max_distance = distance
                 furthest_idx = i
 
-        # Remove the furthest sample and its label
+        # Remove the furthest sample and its metadata
         removed_sample = self.samples[furthest_idx]
         removed_label = self.labels[furthest_idx]
 
         # Convert deque to list for index-based removal
         samples_list = list(self.samples)
         labels_list = list(self.labels)
+        task_ids_list = list(self.task_ids)
+        insertion_order_list = list(self.insertion_order)
 
         samples_list.pop(furthest_idx)
         labels_list.pop(furthest_idx)
+        task_ids_list.pop(furthest_idx)
+        insertion_order_list.pop(furthest_idx)
 
         # Convert back to deque
         self.samples = deque(samples_list)
         self.labels = deque(labels_list)
+        self.task_ids = deque(task_ids_list)
+        self.insertion_order = deque(insertion_order_list)
 
         # Update sum and mean
         self.sum_samples -= removed_sample
@@ -94,6 +115,8 @@ class Cluster:
         if len(self.samples) > 0:
             oldest_sample = self.samples.popleft()
             self.labels.popleft()  # Also remove the corresponding label
+            self.task_ids.popleft()  # Also remove the corresponding task_id
+            self.insertion_order.popleft()  # Also remove the corresponding insertion_order
             self.sum_samples -= oldest_sample
             if len(self.samples) > 0:
                 self.mean = self.sum_samples / len(self.samples)
@@ -123,13 +146,14 @@ class ClusteringMechanism:
         self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
 
-    def add(self, z: torch.Tensor, label=None):
+    def add(self, z: torch.Tensor, label=None, task_id=None):
         """
         Adds a sample z to the appropriate cluster or forms a new one.
 
         Args:
             z (torch.Tensor): The sample (e.g., activation vector) to add.
             label: Optional label associated with the sample (does not affect clustering).
+            task_id: Optional task ID to track which task this sample came from.
         """
         dprint("clm add triggered")
 
@@ -146,7 +170,7 @@ class ClusteringMechanism:
         if len(self.clusters) < self.Q:
             # If the number of clusters is less than Q, create a new cluster
             # and add z to it.
-            new_cluster = Cluster(z, label)
+            new_cluster = Cluster(z, label, task_id)
             self.clusters.append(new_cluster)
         else:
             # If the number of clusters has reached Q, find the closest cluster
@@ -155,15 +179,15 @@ class ClusteringMechanism:
             closest_cluster_idx = -1
 
             for i, cluster in enumerate(self.clusters):
-                # Calculate Euclidean distance
-                distance = torch.norm(z - cluster.mean)
+                # Calculate distance
+                distance = distance_h(z - cluster.mean)
                 if distance < min_distance:
                     min_distance = distance
                     closest_cluster_idx = i
 
             # Add z to the identified closest cluster
             q_star = self.clusters[closest_cluster_idx]
-            q_star.add_sample(z, label)
+            q_star.add_sample(z, label, task_id)
 
             # If the cluster size exceeds P, remove the oldest sample
             if len(q_star.samples) > self.P:
@@ -207,19 +231,27 @@ class ClusteringMechanism:
 
         return self.dimensionality_reducer.transform(z)
 
-    def add_multi(self, z_list, labels=None):
+    def add_multi(self, z_list, labels=None, task_ids=None):
         """
         This adds a list of samples to the system. TM
 
         Args:
             z_list (torch.Tensor): list of samples to add
             labels: Optional list of labels corresponding to samples
+            task_ids: Optional list of task IDs corresponding to samples
         """
         dprint("clm add_multi triggered")
 
         self.fit_reducer(z_list)
-        if labels is not None:
+        if labels is not None and task_ids is not None:
+            [
+                self.add(z, label, task_id)
+                for z, label, task_id in zip(z_list, labels, task_ids)
+            ]
+        elif labels is not None:
             [self.add(z, label) for z, label in zip(z_list, labels)]
+        elif task_ids is not None:
+            [self.add(z, task_id=task_id) for z, task_id in zip(z_list, task_ids)]
         else:
             [self.add(z) for z in z_list]
 
@@ -267,16 +299,27 @@ class ClusteringMechanism:
             print("No clusters to visualize")
             return
 
-        # Collect all samples with cluster labels and true labels
+        # Collect all samples with cluster labels, task IDs, and insertion order
         all_samples = []
         cluster_labels = []
-        true_labels = []
+        task_labels = []
+        age_labels = []
 
         for cluster_idx, cluster in enumerate(self.clusters):
-            for sample, label in zip(cluster.samples, cluster.labels):
+            for sample, task_id, insertion_order in zip(
+                cluster.samples, cluster.task_ids, cluster.insertion_order
+            ):
                 all_samples.append(sample)
                 cluster_labels.append(f"Cluster {cluster_idx}")
-                true_labels.append(str(label) if label is not None else "None")
+                task_labels.append(
+                    f"Task {task_id}" if task_id is not None else "Unknown"
+                )
+                # Invert insertion_order so oldest samples (lower insertion_order) are biggest
+                age_labels.append(
+                    max(cluster.insertion_order) - insertion_order + 1
+                    if insertion_order is not None
+                    else 1
+                )
 
         if not all_samples:
             print("No samples to visualize")
@@ -316,7 +359,8 @@ class ClusteringMechanism:
                 y_col: X_reduced[:, 1].numpy(),
                 z_col: X_reduced[:, 2].numpy(),
                 "Cluster": cluster_labels,
-                "Label": true_labels,
+                "Task": task_labels,
+                "Age": age_labels,
             }
         )
 
@@ -327,9 +371,10 @@ class ClusteringMechanism:
             y=y_col,
             z=z_col,
             color="Cluster",
-            symbol="Label",
-            title="Cluster Visualization (Color=Cluster, Symbol=Label)",
-            hover_data={"Cluster": True, "Label": True},
+            symbol="Task",
+            size="Age",
+            title="Cluster Visualization (Color=Cluster, Symbol=Task, Size=Age)",
+            hover_data={"Cluster": True, "Task": True, "Age": True},
         )
 
         fig.show()
@@ -347,8 +392,8 @@ if __name__ == "__main__":
         torch.randint(0, 100, (3,), dtype=torch.float32) for _ in range(NUM_SAMPLES)
     ]
     print(storage.get_clusters_with_labels())
-    for sample in samples:
-        storage.add(sample, label=torch.randint(1, 4, (1,)).item())
+    for i, sample in enumerate(samples):
+        storage.add(sample, label=torch.randint(1, 4, (1,)).item(), task_id=i % 3)
         if VISUALIZE:
             # storage.visualize()
             print(storage.get_clusters_with_labels())

@@ -71,15 +71,17 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 sample_data = data[i].cpu()  # Move to CPU for memory storage
                 sample_label = labels[i].cpu()  # Move to CPU for memory storage
                 clustering_memory.add_sample(
-                    sample_data, sample_label
+                    sample_data, sample_label, task_id
                 )  # Add sample to clusters
             t.end("add samples")
 
             num_batches += 1
 
             # Update progress bar every 50 batches or on last batch
-            if not QUICK_TEST_MODE and VERBOSE and (
-                batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1
+            if (
+                not QUICK_TEST_MODE
+                and VERBOSE
+                and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1)
             ):
                 progress = (batch_idx + 1) / len(train_dataloader)
                 bar_length = 30
