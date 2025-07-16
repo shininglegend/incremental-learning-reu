@@ -3,8 +3,16 @@
 # run_experiments_batch.sh
 # Script to run TA-A-GEM experiments in parallel using SBATCH
 
+dataset_name=$1
+if [[ -z "$dataset_name" ]]; then
+    echo "Usage: $0 <dataset_name>"
+    echo "Example: $0 mnist"
+    exit 1
+fi
+
 echo "Starting TA-A-GEM parallel experiments..."
 echo "Running 5 iterations for each task type: permutation, rotation, class_split"
+echo "Dataset: $dataset_name"
 
 # Array of task types
 TASK_TYPES=("permutation" "rotation" "class_split")
@@ -15,10 +23,10 @@ echo "Batch timestamp: $BATCH_TIMESTAMP"
 
 # Submit jobs for each task type
 for task_type in "${TASK_TYPES[@]}"; do
-    echo "Submitting job for task type: $task_type"
+    echo "Submitting job for task type: $task_type with dataset: $dataset_name"
 
     # Submit job
-    JOB_OUTPUT=$(sbatch slurm.sbatch $task_type)
+    JOB_OUTPUT=$(sbatch slurm.sbatch $task_type $dataset_name)
     JOB_ID=$(echo $JOB_OUTPUT | grep -o '[0-9]*')
 
     echo "Job ID $JOB_ID submitted for $task_type"

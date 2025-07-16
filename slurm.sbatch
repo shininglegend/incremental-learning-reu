@@ -22,7 +22,13 @@ PYTHON_SCRIPT="$HOME_DIR/main.py" # Or wherever you put main
 JOB_NAME="parallel_taagem"          # A descriptive name for your job
 TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS)
 TASK_TYPE=$1 # Type of task: "permutation", "class_split", "rotation"
-DATASET_NAME="mnist" # mnist or fashion_mnist
+DATASET_NAME=$2 # mnist or fashion_mnist
+if [[ -z "$TASK_TYPE" || -z "$DATASET_NAME" ]]; then
+    echo "Usage: $0 <task_type> <dataset_name>"
+    echo "Example: $0 permutation mnist"
+    exit 1
+fi
+
 
 # Resource Requests per Program Instance (i.e., per Array Task)
 NODES_PER_INSTANCE=1             # Number of nodes each program instance needs. baseline 1
