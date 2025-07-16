@@ -312,7 +312,7 @@ class ClusteringMechanism:
                 all_samples.append(sample)
                 cluster_labels.append(f"Cluster {cluster_idx}")
                 task_labels.append(
-                    f"Task {task_id}" if task_id is not None else "Unknown"
+                    f"Task {task_id + 1}" if task_id is not None else "Unknown"
                 )
                 # Invert insertion_order so oldest samples (lower insertion_order) are biggest
                 age_labels.append(

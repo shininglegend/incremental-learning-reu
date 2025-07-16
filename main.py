@@ -35,7 +35,7 @@ t.start("training")
 print("Starting TA-A-GEM training...")
 print(f"Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}")
 for task_id, train_dataloader in enumerate(train_dataloaders):
-    print(f"\n--- Training on Task {task_id} ---")
+    print(f"\n--- Training on Task {task_id + 1} ---")
 
     task_start_time = time.time()
     task_epoch_losses = []
@@ -88,7 +88,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 filled_length = int(bar_length * progress)
                 bar = "█" * filled_length + "-" * (bar_length - filled_length)
                 print(
-                    f"\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
+                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
                     end="",
                     flush=True,
                 )
@@ -153,7 +153,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
     )
 
-    print(f"After Task {task_id}, Final Average Accuracy: {final_avg_accuracy:.4f}")
+    print(f"After Task {task_id + 1}, Final Average Accuracy: {final_avg_accuracy:.4f}")
     print(
         f"Memory Size: {final_memory_size} samples across {num_active_pools} active pools"
     )
