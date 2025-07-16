@@ -3,11 +3,11 @@
 #SBATCH --output="./sbatch_results/slurm-%A_%a.out" # %A for Job Array ID, %a for Task ID output
 #SBATCH --error="./sbatch_results/slurm-%A_%a.err"  # Error log file
 #SBATCH --nodes=1 # Nodes per instance. 1 node = 24 CPUs. Baseline 1
-#SBATCH --ntasks=1                          # Each array task runs one main script. Baseline 1
+#SBATCH --ntasks=1 # Each array task runs one main script. Baseline 1
 #SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
 #SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
 #SBATCH --time="00:20:00" # 00:12:41 baseline. Request a little extra.
-#SBATCH --array=0-19
+#SBATCH --array=0-4 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
 #SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1 # these guys are bad
 # #SBATCH --partition="$PARTITION_NAME"
 
@@ -20,7 +20,9 @@ PYTHON_SCRIPT="$HOME_DIR/main.py" # Or wherever you put main
 
 # General Job Settings
 JOB_NAME="parallel_taagem"          # A descriptive name for your job
-TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS) - 7min15sec baseline
+TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS)
+TASK_TYPE="permutation" # Type of task: "permutation", "class_split", "rotation"
+DATASET_NAME="mnist" # mnist or fashion_mnist
 
 # Resource Requests per Program Instance (i.e., per Array Task)
 NODES_PER_INSTANCE=1             # Number of nodes each program instance needs. baseline 1
@@ -97,21 +99,17 @@ echo "--- End SLURM Variable Debugging ---"
 
 # Execute your Python script
 echo "Executing Python script with arguments:"
-echo "$PYTHON_EXEC" "$PYTHON_SCRIPT" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
-
-
-
-
+echo "$PYTHON_EXEC" "$PYTHON_SCRIPT" --output_dir "$JOB_SCRATCH_DIR" --data_dir "$JOB_SCRATCH_DIR/mnist-dataset" --task_type "$TASK_TYPE" --dataset "$DATASET_NAME" --no_verbose
 
 # Execute your Python script directly for this array task.
 # You can pass the array task ID as an argument to your Python script if it needs it.
-"$PYTHON_EXEC" "$PYTHON_SCRIPT" --output-dir "$JOB_SCRATCH_DIR" --data-dir "$JOB_SCRATCH_DIR/mnist-dataset"
+"$PYTHON_EXEC" "$PYTHON_SCRIPT" --output_dir "$JOB_SCRATCH_DIR" --data_dir "$JOB_SCRATCH_DIR/mnist-dataset" --task_type "$TASK_TYPE" --dataset "$DATASET_NAME" --no_verbose
 
 echo "------------------------------------------------------------"
 echo "Task $SLURM_ARRAY_TASK_ID finished at: $(date)"
 echo "------------------------------------------------------------"
 
-# --- CLEANUP
+# --- CLEANUP ---
 echo "Copying output files to test_results directory"
 mkdir -p "$HOME_DIR/test_results"
 for file in "$JOB_SCRATCH_DIR"/*; do
@@ -128,5 +126,8 @@ for file in "$JOB_SCRATCH_DIR"/*; do
     cp "$file" "$dest"
 done
 rm -rf "$JOB_SCRATCH_DIR"
+
+# Run visualization/analysis script
+"$PYTHON_EXEC" "$HOME_DIR/visualization_analysis/retro_stats.py" --input_dir "$JOB_SCRATCH_DIR"
 
 echo "Job script complete. :)"

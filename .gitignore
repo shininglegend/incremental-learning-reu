@@ -1,4 +1,5 @@
 /test_results/*
+/sbatch_results/*
 TRAINING_LOG.md
 
 # Ignore the data file itself

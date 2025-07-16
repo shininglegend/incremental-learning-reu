@@ -25,6 +25,7 @@ from init import initialize_system
 
 # Extract commonly used variables from config
 QUICK_TEST_MODE = config["lite"]
+VERBOSE = config["verbose"]
 NUM_EPOCHS = config["num_epochs"]
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
@@ -77,7 +78,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             num_batches += 1
 
             # Update progress bar every 50 batches or on last batch
-            if not QUICK_TEST_MODE and (
+            if not QUICK_TEST_MODE and VERBOSE and (
                 batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1
             ):
                 progress = (batch_idx + 1) / len(train_dataloader)
@@ -91,7 +92,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 )
 
         # Print newline after progress bar completion
-        if not QUICK_TEST_MODE:
+        if not QUICK_TEST_MODE and VERBOSE:
             print()
 
         # Track epoch loss

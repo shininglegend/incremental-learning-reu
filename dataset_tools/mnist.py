@@ -345,7 +345,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     #
-    # Load MINST dataset
+    # Load MNIST dataset
     #
     # Set file paths based on added MNIST Datasets
     input_path = get_dataset_path("MNIST", "hojjatk/mnist-dataset")

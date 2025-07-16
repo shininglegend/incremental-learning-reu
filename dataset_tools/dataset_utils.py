@@ -22,8 +22,8 @@ def get_dataset_path(dataset_name, kaggle_dataset_id, path_override=None):
         str: Path to dataset directory
     """
     if path_override is not None:
-        path_override = os.path.join(dataset_name, path_override)
-        assert Path(path_override).exists(), "Dataset not found. Aborting"
+        path_override = os.path.join(path_override, dataset_name)
+        assert Path(path_override).exists(), f"Dataset not found at `{path_override}`. Aborting"
         return path_override
     env_var = f"DATASET_LOCATION_{dataset_name}"
     env_file = Path(".env")

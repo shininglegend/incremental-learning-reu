@@ -38,7 +38,7 @@ def parse_args():
         "--dataset",
         type=str,
         default=None,
-        choices=["minst", "fashion_mnist"],
+        choices=["mnist", "fashion_mnist"],
         help="Which dataset to use",
     )
     parser.add_argument(
@@ -46,6 +46,12 @@ def parse_args():
         action="store_true",
         default=None,
         help="Run in quick test mode with fewer tasks and data",
+    )
+    parser.add_argument(
+        "--no_verbose",
+        action="store_true",
+        default=False,
+        help="Turn off printing dynamic progress reports for sbatch",
     )
     parser.add_argument(
         "--output_dir",
@@ -91,6 +97,10 @@ def initialize_system():
 
     # Load configuration
     config = load_config(args.config)
+    
+    # Set some default values that aren't in the config file
+    config['verbose'] = True
+    config['data_dir'] = None
 
     # Override config with command line arguments
     if args.task_type is not None:
@@ -101,10 +111,10 @@ def initialize_system():
         config["dataset_name"] = args.dataset
     if args.output_dir is not None:
         config["output_dir"] = args.output_dir
+    if args.no_verbose is not None:
+        config["verbose"] = not args.no_verbose  # Note: Inverted.
     if args.data_dir is not None:
         config["data_dir"] = args.data_dir
-    else:
-        config["data_dir"] = None  # Default to None if not provided
 
     # Apply lite mode overrides
     if config["lite"]:
@@ -133,6 +143,7 @@ def initialize_system():
         "quick_test_mode": config["lite"],
         "task_type": config["task_type"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
+        "verbose": config["verbose"],
     }
 
     # Set up timer
