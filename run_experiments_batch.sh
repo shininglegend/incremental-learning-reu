@@ -80,5 +80,5 @@ echo ""
 echo "Running analysis script..."
 
 # Run the analysis script
-"$PYTHON_EXEC" visualization_analysis/retro_stats.py --input_dir test_results/$2
+"$PYTHON_EXEC" visualization_analysis/retro_stats.py --input_dir "test_results/$save_location"
 echo "Results saved to test_results/ directory"
