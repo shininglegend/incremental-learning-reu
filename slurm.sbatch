@@ -14,9 +14,16 @@
 
 # A Slurm batch script for running the program many times in parallel across CPUs
 
-# ------- GLOBAL CONFIG (CUSTOMIZE WITH YOUR FILE LOCATIONS) ------- 
-HOME_DIR="/home/NAS/reutmurphy/incremental-learning-reu"                 # Don't forget to customize this!!
-PYTHON_SCRIPT="$HOME_DIR/main.py" # Or wherever you put main
+# ------- GLOBAL CONFIG (CUSTOMIZE WITH YOUR FILE LOCATIONS) -------
+HOME_DIR="/home/NAS/$USER/incremental-learning-reu"
+PYTHON_SCRIPT="$HOME_DIR/main.py" # Or wherever you put main.py
+
+# Define Python executable path relative to the script's directory
+PYTHON_EXEC=$3
+if [ ! -f "$PYTHON_EXEC" ]; then
+    echo "Error: Python executable '$PYTHON_EXEC' not found."
+    exit 1
+fi
 
 # General Job Settings
 JOB_NAME="parallel_taagem"          # A descriptive name for your job
@@ -68,17 +75,11 @@ mkdir -p "$KAGGLE_CONFIG_DIR" "$XDG_CACHE_HOME" "$TMPDIR" || { echo "Error: Fail
 
 # Define Python executable path relative to the script's directory
 SCRIPT_DIR=$(dirname "$0")
-PYTHON_EXEC="incremental-learning-reu/venv/bin/python" # Adjust if your venv is located elsewhere
-PYTHON_EXEC="env/bin/python"
 
 # Ensure stdout/stderr are unbuffered for real-time logging
 export PYTHONUNBUFFERED=TRUE
 
 # Basic checks
-if [ ! -f "$PYTHON_EXEC" ]; then
-    echo "Error: Python executable '$PYTHON_EXEC' not found."
-    exit 1
-fi
 if [ ! -f "$PYTHON_SCRIPT" ]; then
     echo "Error: Python script '$PYTHON_SCRIPT' not found."
     exit 1

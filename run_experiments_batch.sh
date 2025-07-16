@@ -3,6 +3,20 @@
 # run_experiments_batch.sh
 # Script to run TA-A-GEM experiments in parallel using SBATCH
 
+# Define Python executable path relative to the script's directory
+# If you have a virtual environment, adjust the path accordingly.
+# You can tell conda to put the env in the same directory as the script by using:
+# conda create --prefix ./env -f linux_env.yml
+
+#PYTHON_EXEC="incremental-learning-reu/venv/bin/python" # Uncomment for pip venv
+PYTHON_EXEC="env/bin/python" # Uncomment for conda env
+
+# Check if the Python executable exists
+if [ ! -f "$PYTHON_EXEC" ]; then
+    echo "Error: Python executable '$PYTHON_EXEC' not found."
+    exit 1
+fi
+
 dataset_name=$1
 if [[ -z "$dataset_name" ]]; then
     echo "Usage: $0 <dataset_name>"
@@ -26,7 +40,7 @@ for task_type in "${TASK_TYPES[@]}"; do
     echo "Submitting job for task type: $task_type with dataset: $dataset_name"
 
     # Submit job
-    JOB_OUTPUT=$(sbatch slurm.sbatch $task_type $dataset_name)
+    JOB_OUTPUT=$(sbatch slurm.sbatch $task_type $dataset_name "$PYTHON_EXEC")
     JOB_ID=$(echo $JOB_OUTPUT | grep -o '[0-9]*')
 
     echo "Job ID $JOB_ID submitted for $task_type"
@@ -57,7 +71,5 @@ echo ""
 echo "Running analysis script..."
 
 # Run the analysis script
-python visualization_analysis/retro_stats.py
-
-echo "Analysis complete!"
+"$PYTHON_EXEC" visualization_analysis/retro_stats.py
 echo "Results saved to test_results/ directory"
