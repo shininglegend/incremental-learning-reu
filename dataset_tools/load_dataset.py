@@ -171,11 +171,12 @@ class DatasetLoader(ABC):
         pass
 
 
-def load_dataset(dataset_name: str) -> DatasetLoader:
+def load_dataset(dataset_name: str, path_override: str = None) -> DatasetLoader:
     """Factory function to load the appropriate dataset loader.
 
     Args:
         dataset_name: Name of the dataset ('mnist', 'fashion_mnist', etc.)
+        path_override: If given, overrides the path to locate the dataset (for SBATCH)
 
     Returns:
         DatasetLoader: Appropriate dataset loader instance
@@ -185,38 +186,12 @@ def load_dataset(dataset_name: str) -> DatasetLoader:
             from .mnist import MnistDatasetLoader
         except ImportError:
             from mnist import MnistDatasetLoader
-        return MnistDatasetLoader()
+        return MnistDatasetLoader(path_override)
     elif dataset_name.lower() == "fashion_mnist":
         try:
             from .mnist_fashion import FashionMnistDatasetLoader
         except ImportError:
             from mnist_fashion import FashionMnistDatasetLoader
-        return FashionMnistDatasetLoader()
+        return FashionMnistDatasetLoader(path_override)
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
-
-
-# Convenience function for backward compatibility
-def prepare_domain_incremental_data(
-    dataset_name: str,
-    task_type: str,
-    num_tasks: int,
-    batch_size: int,
-    quick_test: bool = False,
-) -> Tuple[List[DataLoader], List[DataLoader]]:
-    """Prepare domain-incremental data for any supported dataset.
-
-    Args:
-        dataset_name: Name of the dataset ('mnist', 'fashion_mnist', etc.)
-        task_type: One of 'permutation', 'rotation', 'class_split'
-        num_tasks: Number of tasks to create
-        batch_size: Batch size for DataLoaders
-        quick_test: If True, use reduced dataset for faster testing
-
-    Returns:
-        tuple: (train_dataloaders, test_dataloaders) - Lists of DataLoader objects
-    """
-    loader = load_dataset(dataset_name)
-    return loader.prepare_domain_incremental_data(
-        task_type, num_tasks, batch_size, quick_test
-    )
