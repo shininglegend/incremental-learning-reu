@@ -21,7 +21,7 @@ PYTHON_SCRIPT="$HOME_DIR/main.py" # Or wherever you put main
 # General Job Settings
 JOB_NAME="parallel_taagem"          # A descriptive name for your job
 TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS)
-TASK_TYPE="permutation" # Type of task: "permutation", "class_split", "rotation"
+TASK_TYPE=$1 # Type of task: "permutation", "class_split", "rotation"
 DATASET_NAME="mnist" # mnist or fashion_mnist
 
 # Resource Requests per Program Instance (i.e., per Array Task)
