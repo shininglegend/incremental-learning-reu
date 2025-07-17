@@ -19,7 +19,7 @@ def distance_h(*args, **kwargs):
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
 
-    def __init__(self, initial_sample: torch.Tensor, initial_label=None):
+    def __init__(self, initial_sample: torch.Tensor, initial_label=None, initial_task_id=None):
         dtriggered("cl init triggered")
 
         self.samples = deque([initial_sample])  # Stores samples in insertion order
@@ -47,7 +47,7 @@ class Cluster:
             return (self.samples[0], self.labels[0])
         return (list(self.samples), list(self.labels))
 
-    def add_sample(self, sample: torch.Tensor, label=None):
+    def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dtriggered("cl add_sample triggered")
 
@@ -171,7 +171,7 @@ class ClusteringMechanism:
         assert self.Q > 0
         assert self.P > 0
 
-    def add(self, z: torch.Tensor, label=None):
+    def add(self, z: torch.Tensor, label=None, task_id=None):
         """
         Adds a sample z to the appropriate cluster or forms a new one.
 
@@ -194,7 +194,7 @@ class ClusteringMechanism:
 
         # If we're at 0 samples, or at 1 sample and there's space for a second one, add it
         if len(self.clusters) == 0 or (len(self.clusters) == 1 and self.Q > 1):
-            return self._add_new_cluster(z, label)
+            return self._add_new_cluster(z, label, task_id)
 
         # Find the closest cluster
         (nearest_cluster_idx_to_new, dist_to_new) = self._find_closest_cluster(z)
@@ -202,7 +202,7 @@ class ClusteringMechanism:
         # Check the size of it - if bigger than one, just add
         # This prevents an outlier from breaking things too much
         if len(self.clusters[nearest_cluster_idx_to_new]) > 1:
-            return self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
+            return self._add_to_cluster(nearest_cluster_idx_to_new, z, label, task_id)
 
         # Otherwise, grab that sample, check it's nearest distance.
         # If that sample is closer to another cluster than this sample is to it, move it to that cluster
@@ -217,18 +217,18 @@ class ClusteringMechanism:
             debug(self.visualize, "Before")
             # Overwrite it with the new sample
             self._add_to_cluster(
-                closest_cluster_to_old, nearest_old_sample, nearest_old_label
+                closest_cluster_to_old, nearest_old_sample, nearest_old_label, task_id
             )
-            self.clusters[nearest_cluster_idx_to_new] = Cluster(z, label)
+            self.clusters[nearest_cluster_idx_to_new] = Cluster(z, label, task_id)
             debug(self.visualize, "After overwriting")
             debug(print, f"Overwrote! {dist_to_new} > {dist_to_old}")
         else:
             if len(self.clusters) < self.Q:
                 # Add a new cluster if possible
-                self._add_new_cluster(z, label)
+                self._add_new_cluster(z, label, task_id)
             else:
                 # Add to whatever cluster is closest
-                self._add_to_cluster(nearest_cluster_idx_to_new, z, label)
+                self._add_to_cluster(nearest_cluster_idx_to_new, z, label, task_id)
             # self.visualize("After keeping")
             debug(print, f"Kept! {dist_to_new} <= {dist_to_old}")
 
@@ -257,17 +257,17 @@ class ClusteringMechanism:
                 closest_cluster_idx = i
         return (closest_cluster_idx, min_distance)
 
-    def _add_new_cluster(self, z, label=None):
+    def _add_new_cluster(self, z, label=None, task_id=None):
         """This adds a new cluster with the given sample and label
 
         Args:
             z (Tensor): Sample to be added
             label (, optional): Label to assign to the sample. Defaults to None.
         """
-        new_cluster = Cluster(z, label)
+        new_cluster = Cluster(z, label, task_id)
         self.clusters.append(new_cluster)
 
-    def _add_to_cluster(self, cluster_index, z, label=None):
+    def _add_to_cluster(self, cluster_index, z, label=None, task_id=None):
         """Adds a sample to a given cluster, removing one from that cluster if needed to make space
 
         Args:
@@ -277,7 +277,7 @@ class ClusteringMechanism:
         """
         # Add z to the identified closest cluster
         q_star: Cluster = self.clusters[cluster_index]
-        q_star.add_sample(z, label)
+        q_star.add_sample(z, label, task_id)
 
         # If the cluster size exceeds P, remove the oldest sample
         if len(q_star.samples) > self.P:
