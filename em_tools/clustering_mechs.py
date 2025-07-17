@@ -175,15 +175,13 @@ class ClusteringMechanism:
             z = self.dimensionality_reducer.transform(z)
 
         if timer: timer.start("adding")
-        new_cluster = self.add_allow_larger_clusters(z, label, task_id)
-        assert new_cluster is not None
-        dprint("New cluster:", new_cluster)
+        self.add_allow_larger_clusters(z, label, task_id)
         if timer: timer.end("adding")
 
         # Change this to decide how to manage max cluster size
         # self._manage_by_cluster_size(new_cluster)
         if timer: timer.start("manage_pool")
-        self._manage_by_pool_size(new_cluster, timer)
+        self._manage_by_pool_size(timer)
         if timer: timer.end("manage_pool")
 
         # Sanity checks
@@ -198,7 +196,6 @@ class ClusteringMechanism:
             # and add z to it.
             new_cluster = Cluster(z, label, task_id)
             self.clusters.append(new_cluster)
-            return len(self.clusters) - 1
         else:
             # If the number of clusters has reached Q, find the closest cluster
             # based on Euclidean distance to its mean.
@@ -206,13 +203,11 @@ class ClusteringMechanism:
 
             # Add z to the identified closest cluster
             self.clusters[closest_cluster_idx].add_sample(z)
-            return closest_cluster_idx
 
     def add_allow_larger_clusters(self, z, label, task_id):
         # If there's space for another cluster, just add it
         if len(self.clusters) < self.Q:
             self.clusters.append(Cluster(z, label, task_id))
-            return len(self.clusters) - 1
 
         # Otherwise, find the cluster using the following algorithm:
         # Find the closest cluster to this sample
@@ -230,7 +225,6 @@ class ClusteringMechanism:
             dprint(f"Kept: {dist_to_new_sample} <= {dist_between}")
             # Add the sample to it's closest cluster instead
             self.clusters[closest_cluster_to_new_sample].add_sample(z, label, task_id)
-            return closest_cluster_to_new_sample
         else:
             dprint(f"Merged: {dist_to_new_sample} > {dist_between}")
             [
@@ -242,42 +236,33 @@ class ClusteringMechanism:
                 )
             ]
             self.clusters[cluster_to_merge_from] = Cluster(z, label, task_id)
-            return cluster_to_merge_from
 
     def _manage_by_cluster_size(self, new_idx):
         # If the cluster size exceeds P, remove the oldest sample
         if len(self.clusters[new_idx].samples) > self.P:
             self.clusters[new_idx].remove_one()
 
-    def _manage_by_pool_size(self, new_idx, timer=None):
-        """This function removes a sample from the largest cluster or the last-added
-        cluster if needed to remain under size restrictions
-
-        Args:
-            new_idx (int): index of the cluster most recently added to
+    def _manage_by_pool_size(self, timer=None):
+        """This function removes a sample from the largest cluster
+        if needed to remain under size restrictions
         """
         if timer: timer.start("manage_pool_inside")
         if len(self) <= self.max_size:
             if timer: timer.end("manage_pool_inside")
             return
 
-        elif max([len(cluster) for cluster in self.clusters]) == self.P:
-            if timer: timer.start("D")
-            self.clusters[new_idx].remove_one()
-            if timer: timer.end("D")
-        else:
-            if timer: timer.start("B")
-            largest_idx = max(
-                range(len(self.clusters)), key=lambda i: len(self.clusters[i])
-            )
-            if timer: timer.end("B")
-            # dprint(f"Before: {self.clusters[largest_idx]}")
-            # if DEBUG: self.visualize("Before")
-            if timer: timer.start("C")
-            self.clusters[largest_idx].remove_one()
-            if timer: timer.end("C")
-            # if DEBUG: self.visualize("After")
-            # dprint(f"After: {self.clusters[largest_idx]}")
+        if timer: timer.start("B")
+        largest_idx = max(range(len(self.clusters)), key=lambda i: len(self.clusters[i]))
+        # print("\n", largest_idx, [len(cluster) for cluster in self.clusters])
+        assert len(self.clusters[largest_idx]) > self.P
+        if timer: timer.end("B")
+        # dprint(f"Before: {self.clusters[largest_idx]}")
+        # if DEBUG: self.visualize("Before")
+        if timer: timer.start("C")
+        self.clusters[largest_idx].remove_one()
+        if timer: timer.end("C")
+        # if DEBUG: self.visualize("After")
+        # dprint(f"After: {self.clusters[largest_idx]}")
         assert len(self) <= self.max_size
         if timer: timer.end("manage_pool_inside")
         # Optional: Call it recursively in case multiple samples were added
