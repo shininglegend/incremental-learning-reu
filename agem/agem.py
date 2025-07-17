@@ -10,7 +10,7 @@ class AGEMHandler:
         device,
         batch_size=256,
         lr_scheduler=None,
-        epsilon=1e-3,  # Sensitivity parameter ε
+        epsilon=1e-3,  # Sensitivity parameter 
     ):
         self.model = model
         self.criterion = criterion
@@ -68,23 +68,23 @@ class AGEMHandler:
         """
         Balance current and reference gradients using MEGA-I approach based on loss information.
         
-        According to equation (6):
-        - If ℓt(w; ξ) > ε: α1(w) = 1, α2(w) = ℓref(w; ζ) / ℓt(w; ξ)
-        - If ℓt(w; ξ) ≤ ε: α1(w) = 0, α2(w) = 1
+        According to equation:
+        - If l_t(w; X) > e, then a1(w) = 1, a2(w) = l_ref(w; z) / l_t(w; X)
+        - If l_t(w; X) <= e, then a1(w) = 0, a2(w) = 1
         """
         if current_grad.numel() == 0 or ref_grad.numel() == 0:
             return current_grad
 
         if current_loss > self.epsilon:
-            # Case 1: Current loss > ε
+            # Case 1: Current loss > e
             alpha1 = 1.0
             alpha2 = ref_loss / current_loss if current_loss > 0 else 0.0
         else:
-            # Case 2: Current loss ≤ ε  
+            # Case 2: Current loss <= e  
             alpha1 = 0.0
             alpha2 = 1.0
 
-        # Balance the gradients: α1 * current_grad + α2 * ref_grad
+        # Balance the gradients: a1 * current_grad + a2 * ref_grad
         balanced_grad = alpha1 * current_grad + alpha2 * ref_grad
         
         return balanced_grad
