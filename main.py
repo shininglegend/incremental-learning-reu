@@ -166,8 +166,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     print(f"Pool sizes: {pool_sizes}")
     print(f"Task Training Time: {task_time:.2f}s")
 
-    clustering_memory.pools[1].visualize()
-
 t.end("training")
 print("\nTA-A-GEM training complete.")
 
