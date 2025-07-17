@@ -11,7 +11,11 @@ if not os.path.exists(SAVE_DIR):
 
 filename = input("Enter the filename to load (e.g., 'ta_agem_metrics_2025-07-01T15:45:44.660534.pkl'): ")
 
-with open(os.path.join("test_results", filename), 'rb') as file:
+# Look for it in the test_results directory, if not found, use the relative path
+if os.path.exists(os.path.join("test_results", filename)):
+    filename = os.path.join("test_results", filename)
+
+with open(filename, 'rb') as file:
     data = pickle.load(file)
 
     # Convert new format to legacy format if needed
