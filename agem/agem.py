@@ -10,7 +10,7 @@ class AGEMHandler:
         device,
         batch_size=256,
         lr_scheduler=None,
-        epsilon=1e-3,  # Sensitivity parameter 
+        epsilon=1e-3,  # Sensitivity parameter e for epsilon
     ):
         self.model = model
         self.criterion = criterion
