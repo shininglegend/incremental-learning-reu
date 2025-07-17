@@ -8,8 +8,45 @@ import argparse
 from datetime import datetime
 
 
+def debug_directory(directory):
+    """Debug function to check directory and files"""
+    print(f"DEBUG: Checking directory: {directory}")
+    print(f"DEBUG: Directory exists: {os.path.exists(directory)}")
+    print(f"DEBUG: Directory is directory: {os.path.isdir(directory)}")
+
+    if os.path.exists(directory):
+        print(f"DEBUG: Directory contents:")
+        try:
+            contents = os.listdir(directory)
+            for item in contents:
+                full_path = os.path.join(directory, item)
+                print(f"  {item} (file: {os.path.isfile(full_path)})")
+        except Exception as e:
+            print(f"DEBUG: Error listing directory: {e}")
+
+    # Check glob pattern
+    pattern = os.path.join(directory, "ta_agem_metrics_*.pkl")
+    print(f"DEBUG: Glob pattern: {pattern}")
+    pickle_files = glob.glob(pattern)
+    print(f"DEBUG: Found {len(pickle_files)} pickle files matching pattern")
+    for f in pickle_files:
+        print(f"  {f}")
+
+    # Check for any .pkl files
+    all_pkl_pattern = os.path.join(directory, "*.pkl")
+    print(f"DEBUG: All .pkl files pattern: {all_pkl_pattern}")
+    all_pkl_files = glob.glob(all_pkl_pattern)
+    print(f"DEBUG: Found {len(all_pkl_files)} .pkl files total")
+    for f in all_pkl_files:
+        print(f"  {f}")
+
+
 def load_pickle_files(directory="test_results", num_files=15):
     """Load pickle files from the test_results directory"""
+
+    debug_directory(directory)
+
+
     pickle_files = glob.glob(os.path.join(directory, "ta_agem_metrics_*.pkl"))
 
     # Sort files by modification time (newest first) and take only the specified number
@@ -26,6 +63,20 @@ def load_pickle_files(directory="test_results", num_files=15):
             task_type = "unknown"
             if "params" in data and "task_type" in data["params"]:
                 task_type = data["params"]["task_type"]
+
+            # Extract dataset_name - check both direct key and params
+            dataset_name = "unknown"
+            if "dataset_name" in data:
+                dataset_name = data["dataset_name"]
+            elif "params" in data and "dataset_name" in data["params"]:
+                dataset_name = data["params"]["dataset_name"]
+
+            # Extract removal - check both direct key and params
+            removal = "unknown"
+            if "removal" in data:
+                removal = data["removal"]
+            elif "params" in data and "removal" in data["params"]:
+                removal = data["params"]["removal"]
 
             # Extract final accuracy - handle both new and legacy formats
             final_accuracy = None
@@ -53,6 +104,8 @@ def load_pickle_files(directory="test_results", num_files=15):
                 {
                     "file": os.path.basename(file_path),
                     "task_type": task_type,
+                    "dataset_name": dataset_name,
+                    "removal": removal,
                     "final_accuracy": final_accuracy,
                     "timestamp": timestamp,
                     "data": data,
@@ -82,20 +135,24 @@ def compute_confidence_interval(data, confidence=0.99):
 def analyze_experiments(results):
     """Analyze experiments and compute statistics"""
 
-    # Group results by task type
+    # Group results by task type, dataset name, and removal
     task_groups = {}
     for result in results:
-        task_type = result["task_type"]
-        if task_type not in task_groups:
-            task_groups[task_type] = []
+        # Create a composite key for grouping
+        group_key = (result["task_type"], result["dataset_name"], result["removal"])
+
+        if group_key not in task_groups:
+            task_groups[group_key] = []
 
         if result["final_accuracy"] is not None:
-            task_groups[task_type].append(result["final_accuracy"])
+            task_groups[group_key].append(result["final_accuracy"])
 
-    # Compute statistics for each task type
+    # Compute statistics for each group
     statistics = []
 
-    for task_type, accuracies in task_groups.items():
+    for group_key, accuracies in task_groups.items():
+        task_type, dataset_name, removal = group_key
+
         if len(accuracies) == 0:
             continue
 
@@ -108,6 +165,8 @@ def analyze_experiments(results):
         statistics.append(
             {
                 "Task Type": task_type,
+                "Dataset Name": dataset_name,
+                "Removal": removal,
                 "Number of Runs": len(accuracies),
                 "Mean Accuracy": mean_accuracy,
                 "Std Deviation": std_accuracy,
@@ -158,13 +217,13 @@ def main():
     parser.add_argument(
         "--input_dir",
         type=str,
-        default="test_results",
+        default="../test_results",
         help="Directory containing the test results (default: test_results)",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="test_results",
+        default="../test_results",
         help="Directory to save the analysis results (default: test_results)",
     )
     args = parser.parse_args()
@@ -173,6 +232,7 @@ def main():
     print("=" * 50)
 
     # Load all pickle files
+    # args.input_dir = '../test_results/'
     results = load_pickle_files(directory=args.input_dir, num_files=args.num_runs)
 
     if not results:
@@ -198,15 +258,31 @@ def main():
 
         print(f"Test results are from {earliest_str} to {latest_str}")
 
-    # Show breakdown by task type
+    # Show breakdown by task type, dataset name, and removal
     task_counts = {}
+    dataset_counts = {}
+    removal_counts = {}
+
     for result in results:
         task_type = result["task_type"]
+        dataset_name = result["dataset_name"]
+        removal = result["removal"]
+
         task_counts[task_type] = task_counts.get(task_type, 0) + 1
+        dataset_counts[dataset_name] = dataset_counts.get(dataset_name, 0) + 1
+        removal_counts[removal] = removal_counts.get(removal, 0) + 1
 
     print("\nBreakdown by task type:")
     for task_type, count in task_counts.items():
         print(f"  {task_type}: {count} runs")
+
+    print("\nBreakdown by dataset name:")
+    for dataset_name, count in dataset_counts.items():
+        print(f"  {dataset_name}: {count} runs")
+
+    print("\nBreakdown by removal:")
+    for removal, count in removal_counts.items():
+        print(f"  {removal}: {count} runs")
 
     # Analyze experiments
     statistics = analyze_experiments(results)
@@ -216,23 +292,23 @@ def main():
         return
 
     # Sort for consistent viewing
-    statistics = sorted(statistics, key=lambda a: a["Task Type"])
+    statistics = sorted(statistics, key=lambda a: (a["Task Type"], a["Dataset Name"], a["Removal"]))
 
     # Create summary table
     display_df, full_df = create_summary_table(statistics)
 
     # Print results to terminal
-    print("\n" + "=" * 80)
+    print("\n" + "=" * 100)
     print("EXPERIMENT RESULTS SUMMARY")
-    print("=" * 80)
+    print("=" * 100)
     print(display_df.to_string(index=False))
 
     # Print detailed raw accuracies
-    print("\n" + "=" * 80)
+    print("\n" + "=" * 100)
     print("DETAILED RESULTS")
-    print("=" * 80)
+    print("=" * 100)
     for stat in statistics:
-        print(f"\n{stat['Task Type']} ({stat['Number of Runs']} runs):")
+        print(f"\n{stat['Task Type']} | {stat['Dataset Name']} | {stat['Removal']} ({stat['Number of Runs']} runs):")
         print(f"  Raw accuracies: {[f'{acc:.4f}' for acc in stat['Raw Accuracies']]}")
         print(f"  Mean: {stat['Mean Accuracy']:.4f} ± {stat['Std Deviation']:.4f}")
         print(f"  99% CI: [{stat['99% CI Lower']:.4f}, {stat['99% CI Upper']:.4f}]")
@@ -254,6 +330,8 @@ def main():
             detailed_results.append(
                 {
                     "Task Type": stat["Task Type"],
+                    "Dataset Name": stat["Dataset Name"],
+                    "Removal": stat["Removal"],
                     "Run Number": i + 1,
                     "Final Accuracy": accuracy,
                 }

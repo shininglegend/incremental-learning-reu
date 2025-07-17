@@ -10,11 +10,11 @@ from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms.functional as TF
 
 try:
-    from .load_dataset import DatasetLoader
-    from .dataset_utils import get_dataset_path
-except ImportError:
     from load_dataset import DatasetLoader
     from dataset_utils import get_dataset_path
+except ImportError:
+    from .load_dataset import DatasetLoader
+    from .dataset_utils import get_dataset_path
 
 
 #

@@ -183,15 +183,15 @@ def load_dataset(dataset_name: str, path_override: str = None) -> DatasetLoader:
     """
     if dataset_name.lower() == "mnist":
         try:
-            from .mnist import MnistDatasetLoader
-        except ImportError:
             from mnist import MnistDatasetLoader
+        except ImportError:
+            from .mnist import MnistDatasetLoader
         return MnistDatasetLoader(path_override)
     elif dataset_name.lower() == "fashion_mnist":
         try:
-            from .mnist_fashion import FashionMnistDatasetLoader
-        except ImportError:
             from mnist_fashion import FashionMnistDatasetLoader
+        except ImportError:
+            from .mnist_fashion import FashionMnistDatasetLoader
         return FashionMnistDatasetLoader(path_override)
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")

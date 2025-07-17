@@ -40,3 +40,11 @@ pools:
   class_split:
     num_pools: 2
     clusters_per_pool: 50
+
+# Removal method - experimental
+# for validating removal method at initialization
+removal: 'remove_oldest'
+# Options: 'remove_oldest', 'remove_based_on_mean', 'remove_furthest_from_mean',
+# or 'remove_random'
+# Not implemented in clustering_mechs.Cluster yet. Maybe I will one day.
+# For now if you want to change the removal function, go to clustering_mechs

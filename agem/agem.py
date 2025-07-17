@@ -108,31 +108,18 @@ class AGEMHandler:
         current_grad = torch.cat(current_grad) if current_grad else torch.tensor([])
 
         # If we have memory samples, compute reference gradient and project
-        if memory_samples is not None and len(memory_samples) > 0:
-            # Prepare memory data
-            mem_data_list = []
-            mem_labels_list = []
-
-            # Handle memory samples correctly
+        if memory_samples is not None:
             try:
-                for sample_item in memory_samples[: self.eps_mem_batch]:
-                    if isinstance(sample_item, (list, tuple)) and len(sample_item) >= 2:
-                        sample_data, sample_label = sample_item[0], sample_item[1]
-                    else:
-                        # Assume it's just data if not tuple/list
-                        sample_data, sample_label = sample_item, 0
+                # Memory samples now come as (samples_tensor, labels_tensor)
+                mem_data, mem_labels = memory_samples
 
-                    mem_data_list.append(sample_data)
-                    mem_labels_list.append(sample_label)
+                # Slice to get the batch size we want
+                batch_size = min(self.eps_mem_batch, len(mem_data))
+                mem_data = mem_data[:batch_size]
+                mem_labels = mem_labels[:batch_size]
 
-                if mem_data_list:
-                    mem_data = torch.stack(mem_data_list).to(self.device)
-                    mem_labels = (
-                        torch.stack(mem_labels_list).to(self.device)
-                        if isinstance(mem_labels_list[0], torch.Tensor)
-                        else torch.tensor(mem_labels_list).to(self.device)
-                    )
-
+                # Data is already on the right device, no conversion needed
+                if len(mem_data) > 0:
                     # Compute reference gradient on memory
                     ref_grad = self.compute_gradient(mem_data, mem_labels)
 
@@ -145,6 +132,7 @@ class AGEMHandler:
                 else:
                     # No valid memory samples, just do regular update
                     self.optimizer.step()
+
             except Exception as e:
                 # Fallback to regular update if memory processing fails
                 print(f"Memory processing failed: {e}")

@@ -144,6 +144,7 @@ def initialize_system():
         "task_type": config["task_type"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
         "verbose": config["verbose"],
+        "removal": config["removal"],
     }
 
     # Set up timer

@@ -34,6 +34,24 @@ class Cluster:
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
+        # for validating removal method at initialization
+        '''
+        removal_methods = {
+            'remove_oldest': self.remove_oldest,
+            'remove_based_on_mean': self.remove_based_on_mean,
+            'remove_furthest_from_mean': self.remove_furthest_from_mean,
+            'remove_random': self.remove_random
+        }
+
+        self.removal_fn = removal_methods.get(params['removal'])
+        if not self.removal_fn:
+            print("Unknown removal method detected. Performing remove_oldest. Updating params.")
+            params['removal'] = 'remove_oldest'
+            self.removal_fn = self.remove_oldest
+        '''
+        self.removal_fn = self.remove_oldest
+
+
     def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
@@ -52,7 +70,7 @@ class Cluster:
         """
         dprint("cl remove_one triggered")
 
-        return self.remove_oldest()
+        return self.removal_fn()
 
     def remove_based_on_mean(self):
         """
@@ -122,6 +140,87 @@ class Cluster:
                 self.mean = self.sum_samples / len(self.samples)
             else:
                 self.mean = torch.zeros_like(self.mean)  # If cluster becomes empty
+
+    def remove_furthest_from_mean(self):
+        """
+        Removes the sample furthest from the mean (including the newest sample).
+        """
+        dprint("cl remove_furthest_from_mean triggered")
+
+        if len(self.samples) <= 1:
+            return self.remove_oldest()
+
+        # Find sample furthest from mean, considering all samples
+        max_distance = -1
+        furthest_idx = 0
+
+        for i in range(len(self.samples)):
+            sample = self.samples[i]
+            distance = torch.norm(sample - self.mean)
+            if distance > max_distance:
+                max_distance = distance
+                furthest_idx = i
+
+        # Remove the furthest sample and its label
+        removed_sample = self.samples[furthest_idx]
+        removed_label = self.labels[furthest_idx]
+
+        # Convert deque to list for index-based removal
+        samples_list = list(self.samples)
+        labels_list = list(self.labels)
+
+        samples_list.pop(furthest_idx)
+        labels_list.pop(furthest_idx)
+
+        # Convert back to deque
+        self.samples = deque(samples_list)
+        self.labels = deque(labels_list)
+
+        # Update sum and mean
+        self.sum_samples -= removed_sample
+        if len(self.samples) > 0:
+            self.mean = self.sum_samples / len(self.samples)
+        else:
+            self.mean = torch.zeros_like(self.mean)
+
+        return removed_sample, removed_label
+
+    def remove_random(self):
+        """
+        Removes a random sample from the cluster and updates its mean.
+        """
+        dprint("cl remove_random triggered")
+
+        if len(self.samples) <= 0:
+            return None, None
+
+        # Generate random index
+        import random
+        random_idx = random.randint(0, len(self.samples) - 1)
+
+        # Remove the random sample and its label
+        removed_sample = self.samples[random_idx]
+        removed_label = self.labels[random_idx]
+
+        # Convert deque to list for index-based removal
+        samples_list = list(self.samples)
+        labels_list = list(self.labels)
+
+        samples_list.pop(random_idx)
+        labels_list.pop(random_idx)
+
+        # Convert back to deque
+        self.samples = deque(samples_list)
+        self.labels = deque(labels_list)
+
+        # Update sum and mean
+        self.sum_samples -= removed_sample
+        if len(self.samples) > 0:
+            self.mean = self.sum_samples / len(self.samples)
+        else:
+            self.mean = torch.zeros_like(self.mean)
+
+        return removed_sample, removed_label
 
     def __str__(self):
         return f"""Cluster with mean {self.mean} and samples {self.samples}"""
@@ -272,19 +371,31 @@ class ClusteringMechanism:
     def get_clusters_with_labels(self):
         """Gets the samples and their labels currently stored in the clusters
 
+        Optimized version that efficiently handles deques.
+
         Returns:
             tuple: (torch.Tensor of samples, list of labels)
         """
         dprint("clm get_clusters_with_labels triggered")
 
+        if not any(cluster.samples for cluster in self.clusters):
+            return torch.tensor([]), []
+
         all_samples = []
         all_labels = []
+
         for cluster in self.clusters:
-            for sample, label in zip(cluster.samples, cluster.labels):
-                all_samples.append(sample)
-                all_labels.append(label)
-        samples_array = torch.stack(all_samples) if all_samples else torch.tensor([])
-        return samples_array, all_labels
+            if cluster.samples:  # Only process non-empty clusters
+                # Convert deque to list once, then stack
+                cluster_samples_list = list(cluster.samples)
+                if cluster_samples_list:
+                    cluster_samples = torch.stack(cluster_samples_list)
+                    all_samples.append(cluster_samples)
+                    all_labels.extend(cluster.labels)
+
+        # Concatenate all cluster samples at once
+        samples_tensor = torch.cat(all_samples, dim=0) if all_samples else torch.tensor([])
+        return samples_tensor, all_labels
 
     def visualize(self):
         """

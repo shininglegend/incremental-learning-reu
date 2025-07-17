@@ -50,33 +50,45 @@ class ClusteringMemory:
     def get_memory_samples(self, timer=None):
         """Returns all samples currently stored across all pools as tuples of (sample, label).
 
+        Optimized version that batches tensor operations.
+
         Returns:
-            list: List of (sample, label) tuples from all pools
+            tuple: (torch.Tensor of samples, torch.Tensor of labels) or None if no samples
         """
         ts = lambda k: timer.start(k) if timer is not None else None
         te = lambda k: timer.end(k) if timer is not None else None
-        all_memory_samples = []
+
+        ts("total")
+        all_samples = []
+        all_labels = []
 
         # Collect samples from all pools
-        ts("total")
         for label, pool in self.pools.items():
             ts("from pool")
             samples, labels = pool.get_clusters_with_labels()
             te("from pool")
+
             if len(samples) == 0:
                 continue
 
-            # Convert tensors to device and pair with labels
-            ts("convert")
-            for sample, sample_label in zip(samples, labels):
-                sample_tensor = sample.to(self.device)
-                label_tensor = torch.tensor(
-                    sample_label if sample_label is not None else label
-                ).to(self.device)
-                all_memory_samples.append((sample_tensor, label_tensor))
-            te("convert")
+            # Add samples and labels to lists (no conversion yet)
+            all_samples.append(samples)
+            all_labels.extend(labels if labels else [label] * len(samples))
+
+        if not all_samples:
+            te("total")
+            return None
+
+        # Single batch conversion to device
+        ts("convert")
+        # Concatenate all samples at once
+        all_samples_tensor = torch.cat(all_samples, dim=0).to(self.device)
+        # Convert labels to tensor in one operation
+        all_labels_tensor = torch.tensor(all_labels, dtype=torch.long).to(self.device)
+        te("convert")
+
         te("total")
-        return all_memory_samples
+        return all_samples_tensor, all_labels_tensor
 
     def add_sample(self, sample_data, sample_label, task_id=None):
         """Add a sample to the appropriate pool based on its label.
