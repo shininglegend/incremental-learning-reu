@@ -35,7 +35,7 @@ t.start("training")
 print("Starting TA-A-GEM training...")
 print(
     f"""
-Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']} 
+Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
 Total tasks: {len(train_dataloaders)}"""
 )
 
@@ -72,12 +72,13 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Step 2: Update the clustered memory with current batch samples
             # This is where the core clustering for TA-A-GEM happens
             t.start("add samples")
-            for i in range(len(data)):
-                sample_data = data[i].cpu()  # Move to CPU for memory storage
-                sample_label = labels[i].cpu()  # Move to CPU for memory storage
-                clustering_memory.add_sample(
-                    sample_data, sample_label, task_id
-                )  # Add sample to clusters
+            # Add only first sample from batch
+            # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
+            sample_data = data[0].cpu()  # Move to CPU for memory storage
+            sample_label = labels[0].cpu()  # Move to CPU for memory storage
+            clustering_memory.add_sample(
+                sample_data, sample_label, task_id
+            )  # Add sample to clusters
             t.end("add samples")
 
             num_batches += 1
@@ -164,6 +165,8 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     )
     print(f"Pool sizes: {pool_sizes}")
     print(f"Task Training Time: {task_time:.2f}s")
+
+    clustering_memory.pools[1].visualize()
 
 t.end("training")
 print("\nTA-A-GEM training complete.")

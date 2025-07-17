@@ -11,7 +11,7 @@ dprint = lambda s: triggered.add(s) if DEBUG else None
 
 # Distance heuristic
 def distance_h(*args, **kwargs):
-    return torch.norm(*args, **kwargs)
+    return torch.linalg.vector_norm(*args, **kwargs)
 
 
 class Cluster:
