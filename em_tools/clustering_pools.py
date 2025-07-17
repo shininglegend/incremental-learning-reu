@@ -78,12 +78,13 @@ class ClusteringMemory:
         te("total")
         return all_memory_samples
 
-    def add_sample(self, sample_data, sample_label):
+    def add_sample(self, sample_data, sample_label, task_id=None):
         """Add a sample to the appropriate pool based on its label.
 
         Args:
             sample_data: The sample to add (tensor or array)
             sample_label: Label associated with the sample (determines which pool)
+            task_id: Optional task ID to track which task this sample came from
         """
 
         # Convert to tensor if needed
@@ -104,7 +105,7 @@ class ClusteringMemory:
 
         # Get the appropriate pool for this label and add the sample
         pool = self._get_or_create_pool(sample_label)
-        pool.add(sample_tensor, sample_label)
+        pool.add(sample_tensor, sample_label, task_id)
 
     def get_memory_size(self):
         """Get the current number of samples stored across all pools.

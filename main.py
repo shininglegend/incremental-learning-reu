@@ -33,9 +33,14 @@ t.start("training")
 
 # --- 2. Training Loop ---
 print("Starting TA-A-GEM training...")
-print(f"Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}")
+print(
+    f"""
+Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
+Total tasks: {len(train_dataloaders)}"""
+)
+
 for task_id, train_dataloader in enumerate(train_dataloaders):
-    print(f"\n--- Training on Task {task_id} ---")
+    print(f"\n--- Training on Task {task_id + 1} ---")
 
     task_start_time = time.time()
     task_epoch_losses = []
@@ -67,26 +72,29 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Step 2: Update the clustered memory with current batch samples
             # This is where the core clustering for TA-A-GEM happens
             t.start("add samples")
-            for i in range(len(data)):
-                sample_data = data[i].cpu()  # Move to CPU for memory storage
-                sample_label = labels[i].cpu()  # Move to CPU for memory storage
-                clustering_memory.add_sample(
-                    sample_data, sample_label
-                )  # Add sample to clusters
+            # Add only first sample from batch
+            # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
+            sample_data = data[0].cpu()  # Move to CPU for memory storage
+            sample_label = labels[0].cpu()  # Move to CPU for memory storage
+            clustering_memory.add_sample(
+                sample_data, sample_label, task_id
+            )  # Add sample to clusters
             t.end("add samples")
 
             num_batches += 1
 
             # Update progress bar every 50 batches or on last batch
-            if not QUICK_TEST_MODE and VERBOSE and (
-                batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1
+            if (
+                not QUICK_TEST_MODE
+                and VERBOSE
+                and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1)
             ):
                 progress = (batch_idx + 1) / len(train_dataloader)
                 bar_length = 30
                 filled_length = int(bar_length * progress)
                 bar = "█" * filled_length + "-" * (bar_length - filled_length)
                 print(
-                    f"\rTask {task_id:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
+                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
                     end="",
                     flush=True,
                 )
@@ -151,7 +159,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
     )
 
-    print(f"After Task {task_id}, Final Average Accuracy: {final_avg_accuracy:.4f}")
+    print(f"After Task {task_id + 1}, Final Average Accuracy: {final_avg_accuracy:.4f}")
     print(
         f"Memory Size: {final_memory_size} samples across {num_active_pools} active pools"
     )

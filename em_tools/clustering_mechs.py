@@ -11,6 +11,11 @@ dtriggered = lambda s: triggered.add(s) if DEBUG else None
 debug = lambda f, *args, **kwargs: f(*args, **kwargs) if DEBUG else None
 
 
+# Distance heuristic
+def distance_h(*args, **kwargs):
+    return torch.linalg.vector_norm(*args, **kwargs)
+
+
 class Cluster:
     """Represents a single cluster in the clustering mechanism."""
 
@@ -21,6 +26,11 @@ class Cluster:
         self.labels = (
             deque([initial_label]) if initial_label is not None else deque([None])
         )  # Stores labels in insertion order
+        self.task_ids = deque([initial_task_id])  # Stores task IDs for each sample
+        self.insertion_order = deque(
+            [0]
+        )  # Stores insertion order (age) for each sample
+        self.next_insertion_id = 1  # Counter for next insertion
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
@@ -43,6 +53,9 @@ class Cluster:
 
         self.samples.append(sample)
         self.labels.append(label)
+        self.task_ids.append(task_id)
+        self.insertion_order.append(self.next_insertion_id)
+        self.next_insertion_id += 1
         self.sum_samples += sample.clone().detach()
         self.mean = self.sum_samples / len(self.samples)
 
@@ -70,25 +83,31 @@ class Cluster:
         # Only consider samples except the newest (last one)
         for i in range(len(self.samples) - 1):
             sample = self.samples[i]
-            distance = torch.norm(sample - self.mean)
+            distance = distance_h(sample - self.mean)
             if distance > max_distance:
                 max_distance = distance
                 furthest_idx = i
 
-        # Remove the furthest sample and its label
+        # Remove the furthest sample and its metadata
         removed_sample = self.samples[furthest_idx]
         removed_label = self.labels[furthest_idx]
 
         # Convert deque to list for index-based removal
         samples_list = list(self.samples)
         labels_list = list(self.labels)
+        task_ids_list = list(self.task_ids)
+        insertion_order_list = list(self.insertion_order)
 
         samples_list.pop(furthest_idx)
         labels_list.pop(furthest_idx)
+        task_ids_list.pop(furthest_idx)
+        insertion_order_list.pop(furthest_idx)
 
         # Convert back to deque
         self.samples = deque(samples_list)
         self.labels = deque(labels_list)
+        self.task_ids = deque(task_ids_list)
+        self.insertion_order = deque(insertion_order_list)
 
         # Update sum and mean
         self.sum_samples -= removed_sample
@@ -109,6 +128,8 @@ class Cluster:
         if len(self.samples) > 0:
             oldest_sample = self.samples.popleft()
             self.labels.popleft()  # Also remove the corresponding label
+            self.task_ids.popleft()  # Also remove the corresponding task_id
+            self.insertion_order.popleft()  # Also remove the corresponding insertion_order
             self.sum_samples -= oldest_sample
             if len(self.samples) > 0:
                 self.mean = self.sum_samples / len(self.samples)
@@ -157,6 +178,7 @@ class ClusteringMechanism:
         Args:
             z (torch.Tensor): The sample (e.g., activation vector) to add.
             label: Optional label associated with the sample (does not affect clustering).
+            task_id: Optional task ID to track which task this sample came from.
         """
         dtriggered("clm add triggered")
 
@@ -299,19 +321,27 @@ class ClusteringMechanism:
 
         return self.dimensionality_reducer.transform(z)
 
-    def add_multi(self, z_list, labels=None):
+    def add_multi(self, z_list, labels=None, task_ids=None):
         """
         This adds a list of samples to the system. TM
 
         Args:
             z_list (torch.Tensor): list of samples to add
             labels: Optional list of labels corresponding to samples
+            task_ids: Optional list of task IDs corresponding to samples
         """
         dtriggered("clm add_multi triggered")
 
         self.fit_reducer(z_list)
-        if labels is not None:
+        if labels is not None and task_ids is not None:
+            [
+                self.add(z, label, task_id)
+                for z, label, task_id in zip(z_list, labels, task_ids)
+            ]
+        elif labels is not None:
             [self.add(z, label) for z, label in zip(z_list, labels)]
+        elif task_ids is not None:
+            [self.add(z, task_id=task_id) for z, task_id in zip(z_list, task_ids)]
         else:
             [self.add(z) for z in z_list]
 
@@ -361,16 +391,27 @@ class ClusteringMechanism:
             print("No clusters to visualize")
             return
 
-        # Collect all samples with cluster labels and true labels
+        # Collect all samples with cluster labels, task IDs, and insertion order
         all_samples = []
         cluster_labels = []
-        true_labels = []
+        task_labels = []
+        age_labels = []
 
         for cluster_idx, cluster in enumerate(self.clusters):
-            for sample, label in zip(cluster.samples, cluster.labels):
+            for sample, task_id, insertion_order in zip(
+                cluster.samples, cluster.task_ids, cluster.insertion_order
+            ):
                 all_samples.append(sample)
                 cluster_labels.append(f"Cluster {cluster_idx}")
-                true_labels.append(str(label) if label is not None else "None")
+                task_labels.append(
+                    f"Task {task_id + 1}" if task_id is not None else "Unknown"
+                )
+                # Invert insertion_order so oldest samples (lower insertion_order) are biggest
+                age_labels.append(
+                    max(cluster.insertion_order) - insertion_order + 1
+                    if insertion_order is not None
+                    else 1
+                )
 
         if not all_samples:
             print("No samples to visualize")
@@ -410,7 +451,8 @@ class ClusteringMechanism:
                 y_col: X_reduced[:, 1].numpy(),
                 z_col: X_reduced[:, 2].numpy(),
                 "Cluster": cluster_labels,
-                "Label": true_labels,
+                "Task": task_labels,
+                "Age": age_labels,
             }
         )
 

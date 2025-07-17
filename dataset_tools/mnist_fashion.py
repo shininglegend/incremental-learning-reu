@@ -73,7 +73,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         super().__init__()
         # Set file paths based on Fashion-MNIST datasets
         path = get_dataset_path(
-            "MNIST_FASHION", "zalando-research/fashionmnist", path_override=path_override
+            "FASHION_MNIST", "zalando-research/fashionmnist", path_override=path_override
         )
         print(f"Fashion-MNIST dataset is at {path}")
         self.training_images_filepath = join(path, "train-images-idx3-ubyte")
