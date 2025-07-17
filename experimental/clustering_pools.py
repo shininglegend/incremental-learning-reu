@@ -145,3 +145,4 @@ class ClusteringMemory:
             int: Number of active pools
         """
         return len(self.pools)
+

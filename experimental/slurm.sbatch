@@ -16,7 +16,7 @@
 #SBATCH --cpus-per-task=24    # How many CPU cores per instance. Baseline 24
 #SBATCH --mem=2G              # Request memory in Gigabytes. Baseline 2G
 #SBATCH --time="00:20:00"     # Wall-clock time limit (HH:MM:SS). Baseline 00:20:00
-#SBATCH --array=0-19          # Job Array Definition: 20 separate jobs (0 to 19)
+#SBATCH --array=0-9          # Job Array Definition: 20 separate jobs (0 to 19)
 #SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1 # Exclude problematic nodes
 
 # If your cluster requires a partition, uncomment and specify it here:

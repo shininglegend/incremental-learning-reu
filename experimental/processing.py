@@ -15,11 +15,19 @@ from config import params
 DEVICE = params['device']
 
 
+'''   Experimental   '''
+# from reclustering import Counter, recluster_memory, calculate_recluster_interval
+# interval_counter = Counter()
+reclustering_freq = params['reclustering_freq']
+# interval_baseline = calculate_recluster_interval(reclustering_freq)
+
+
+
 def run_sequential_training(params, task_dataloaders_nested, test_dataloaders):
     """Baseline sequential training"""
     print("Running sequential training...")
 
-    model = SimpleMLP(params['input_dim'], params['hidden_dim'], params['num_classes'])
+    model = SimpleMLP(params['input_dim'], params['hidden_dim'], params['num_classes']).to(DEVICE)
     model.to(params['device'])
     optimizer = optim.SGD(model.parameters(), lr=params['learning_rate'])
     criterion = nn.CrossEntropyLoss()
@@ -85,10 +93,8 @@ def run_sequential_training(params, task_dataloaders_nested, test_dataloaders):
                 if batch_loss is not None:
                     epoch_losses.append(batch_loss)
 
-                # Add current batch samples to memory (moved to CPU for storage)
-                for i in range(len(data)):
-                    sample_data = data[i].cpu()
-                    sample_label = labels[i].cpu()
+                # Add ts to memory
+                for sample_data, sample_label in zip(data,labels):
                     memory.add_sample(sample_data, sample_label)
 
         # --- Perform intermediate evaluation after each task is trained ---
@@ -112,7 +118,7 @@ def train_single_task(args):
 
     print(f"Worker starting Task {task_id}")
 
-    model = SimpleMLP(params['input_dim'], params['hidden_dim'], params['num_classes']).to(DEVICE)
+    model = SimpleMLP(params['input_dim'], params['hidden_dim'], params['num_classes'])
     if model_state_dict:
         model.load_state_dict(model_state_dict)
 
@@ -135,14 +141,6 @@ def train_single_task(args):
                                     device=params['device'])
     task_history = []
 
-    # Larger effective batch size through gradient accumulation
-    accumulation_steps = 4  # Effectively 4x larger batches
-
-    # Mixed precision training (if available)
-    use_amp = torch.cuda.is_available() and hasattr(torch.cuda, 'amp')
-    if use_amp:
-        scaler = torch.amp.GradScaler('cuda')
-        print(f"Task {task_id}: Using mixed precision training")
 
     for epoch in range(params['num_epochs']):
         model.train()
@@ -151,8 +149,6 @@ def train_single_task(args):
         step_count = 0
 
         for batch_idx, (data, labels) in enumerate(task_dataloader):
-            data = data.to(DEVICE)
-            labels = labels.to(DEVICE)
 
             # Get memory samples for A-GEM
             _samples = local_memory.get_memory_samples()
@@ -163,17 +159,29 @@ def train_single_task(args):
             if batch_loss is not None:
                 epoch_losses.append(batch_loss)
 
-            # Add current batch samples to memory (moved to CPU for storage)
+            # Add current batch samples to memory
             for i in range(len(data)):
-                sample_data = data[i].cpu()
-                sample_label = labels[i].cpu()
+                sample_data = data[i]
+                sample_label = labels[i]
                 local_memory.add_sample(sample_data, sample_label)
+
+            '''
+
+            # experimental reclustering. TODO: come back if it doesn't work
+            if interval_counter.get_count() >= interval_baseline:
+                print(f"It's been {interval_counter.get_count()} batches, so we're reclustering.")
+                # recluster_memory(local_memory)
+                interval_counter.reset()
+            else:
+                interval_counter.iterate()
+            '''
 
         avg_loss = np.mean(epoch_losses) if epoch_losses else 0.0
         task_history.append(avg_loss)
 
         if epoch % 5 == 0:
             print(f"Task {task_id}, Epoch {epoch + 1}/{params['num_epochs']}: Loss = {avg_loss:.4f}")
+
 
     print(f"Worker {task_id} completed!")
 

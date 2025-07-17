@@ -65,20 +65,19 @@ class MnistDatasetLoader(DatasetLoader):
 
         if params['sbatch']:
             args = parse_arguments()
-            params['input_path'] = args.data_dir
+            self.path = args.data_dir
             params['task_id'] = args.slurm_array_task_id
         else:
             # Download latest version (Uncomment if you're getting file not found errors)
-            # path = kagglehub.dataset_download("hojjatk/mnist-dataset")
-            params['input_path'] = "/home/NAS/reuadodd/incremental-learning-reu/datasets/mnist"
+            self.path = kagglehub.dataset_download("hojjatk/mnist-dataset")
+            # params['input_path'] = "/home/NAS/reuadodd/incremental-learning-reu/datasets/mnist"
 
-        self.path = params['input_path']
         self.training_images_filepath = join(self.path, 'train-images-idx3-ubyte/train-images-idx3-ubyte')
         self.training_labels_filepath = join(self.path, 'train-labels-idx1-ubyte/train-labels-idx1-ubyte')
         self.test_images_filepath = join(self.path, 't10k-images-idx3-ubyte/t10k-images-idx3-ubyte')
         self.test_labels_filepath = join(self.path, 't10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte')
 
-        print(f"Dataset is at {params['input_path']}") # debug
+        print(f"Dataset is at {self.path}") # debug
 
     def load_raw_data(self):
         """Load raw MNIST data."""

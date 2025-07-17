@@ -1,7 +1,27 @@
 import argparse
 import os
 
+'''   You can touch these   '''
 QUICK_TEST_MODE = False
+TASK_TYPE = 'permutation' # 'permutation', 'rotation', or 'class_split'
+DATASET_NAME = 'mnist' # 'mnist' or 'fashion_mnist'
+# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = 'cpu'
+SBATCH = True # Set to False when running files directly, True when running w/ SBATCH
+if SBATCH:
+    OUTPUT_DIR = "./what_the"
+else:
+    OUTPUT_DIR = "./output_results"
+
+# To add a new removal, make sure you update clustering_mechs!
+REMOVAL = 'remove_based_on_mean' # 'remove_oldest' or 'remove_based_on_mean'.
+# added 'remove_random' and 'remove_furthest_from_mean' as experimental options
+
+'''   Experimental stuff   '''
+RECLUSTERING_FREQ = 3 # how many times you want to recluster
+
+
+"""   Don't touch these, probably   """
 NUM_CLASSES = 10
 INPUT_DIM = 784
 HIDDEN_DIM = 200
@@ -11,22 +31,10 @@ BATCH_SIZE = 50 if QUICK_TEST_MODE else 10
 LEARNING_RATE = 1e-3
 NUM_EPOCHS = 20
 NUM_TASKS = 2 if QUICK_TEST_MODE else 5
-TASK_TYPE = 'class_split' # 'permutation', 'rotation', or 'class_split'
 NUM_POOLS = 10
 CLUSTERS_PER_POOL = 10
-DATASET_NAME = 'fashion_mnist' # 'mnist' or 'fashion_mnist'
-# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-DEVICE = 'cpu'
-STRATEGY = 3 # 1 for true parallel, 2 for hybrid, 3 for sequential. sequential is best fs
-SBATCH = True # Set to False when running files directly, True when running w/ SBATCH
 
-# To add a new removal, make sure you update clustering_mechs!
-REMOVAL = 'remove_oldest' # 'remove_oldest' or 'remove_based_on_mean'.
 
-if SBATCH:
-    OUTPUT_DIR = "./sbatch_results/class_split_fashion_mnist"
-else:
-    OUTPUT_DIR = "./output_results"
 
 params = {
     'input_dim': INPUT_DIM,
@@ -43,10 +51,10 @@ params = {
     'quick_test_mode': QUICK_TEST_MODE,
     'device': DEVICE,
     'dataset_name': DATASET_NAME,
-    'strategy': STRATEGY,
     'sbatch': SBATCH,
     'output_dir': OUTPUT_DIR,
     'removal': REMOVAL,
+    'reclustering_freq': RECLUSTERING_FREQ,
     }
 
 
