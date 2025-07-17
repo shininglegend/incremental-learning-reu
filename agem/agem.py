@@ -10,6 +10,7 @@ class AGEMHandler:
         device,
         batch_size=256,
         lr_scheduler=None,
+        epsilon=1e-3,  # Sensitivity parameter ε
     ):
         self.model = model
         self.criterion = criterion
@@ -17,6 +18,7 @@ class AGEMHandler:
         self.eps_mem_batch = batch_size  # Memory batch size for gradient computation
         self.device = device
         self.lr_scheduler = lr_scheduler
+        self.epsilon = epsilon  # Sensitivity parameter for MEGA-I
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
@@ -50,26 +52,42 @@ class AGEMHandler:
             else:
                 param.grad = None
 
-        return torch.cat(grads) if grads else torch.tensor([]).to(self.device)
+        return torch.cat(grads) if grads else torch.tensor([]).to(self.device), loss.item()
 
-    def project_gradient(self, current_grad, ref_grad):
-        """Project current gradient to not increase loss on reference gradient"""
-        if ref_grad.numel() == 0 or current_grad.numel() == 0:
+    def compute_loss(self, data, labels):
+        """Compute loss for given data and labels without affecting gradients"""
+        data, labels = data.to(self.device), labels.to(self.device)
+        
+        with torch.no_grad():
+            outputs = self.model(data)
+            loss = self.criterion(outputs, labels)
+        
+        return loss.item()
+
+    def mega_i_gradient_balance(self, current_grad, ref_grad, current_loss, ref_loss):
+        """
+        Balance current and reference gradients using MEGA-I approach based on loss information.
+        
+        According to equation (6):
+        - If ℓt(w; ξ) > ε: α1(w) = 1, α2(w) = ℓref(w; ζ) / ℓt(w; ξ)
+        - If ℓt(w; ξ) ≤ ε: α1(w) = 0, α2(w) = 1
+        """
+        if current_grad.numel() == 0 or ref_grad.numel() == 0:
             return current_grad
 
-        # Compute dot product
-        dot_product = torch.dot(current_grad, ref_grad)
+        if current_loss > self.epsilon:
+            # Case 1: Current loss > ε
+            alpha1 = 1.0
+            alpha2 = ref_loss / current_loss if current_loss > 0 else 0.0
+        else:
+            # Case 2: Current loss ≤ ε  
+            alpha1 = 0.0
+            alpha2 = 1.0
 
-        # If dot product is negative, project the gradient
-        if dot_product < 0:
-            ref_grad_norm_sq = torch.dot(ref_grad, ref_grad)
-            if ref_grad_norm_sq > 0:
-                projected_grad = (
-                    current_grad - (dot_product / ref_grad_norm_sq) * ref_grad
-                )
-                return projected_grad
-
-        return current_grad
+        # Balance the gradients: α1 * current_grad + α2 * ref_grad
+        balanced_grad = alpha1 * current_grad + alpha2 * ref_grad
+        
+        return balanced_grad
 
     def set_gradient(self, grad_vector):
         """Set model gradients from flattened gradient vector"""
@@ -86,7 +104,10 @@ class AGEMHandler:
                 pointer += num_param
 
     def optimize(self, data, labels, memory_samples=None):
-        """A-GEM optimization with gradient projection"""
+        """MEGA-I optimization with loss-based gradient balancing"""
+        # Move data to device
+        data, labels = data.to(self.device), labels.to(self.device)
+        
         # Compute loss for tracking
         self.model.zero_grad()
         outputs = self.model(data)
@@ -105,9 +126,9 @@ class AGEMHandler:
         for param in self.model.parameters():
             if param.grad is not None:
                 current_grad.append(param.grad.view(-1))
-        current_grad = torch.cat(current_grad) if current_grad else torch.tensor([])
+        current_grad = torch.cat(current_grad) if current_grad else torch.tensor([]).to(self.device)
 
-        # If we have memory samples, compute reference gradient and project
+        # If we have memory samples, apply MEGA-I gradient balancing
         if memory_samples is not None and len(memory_samples) > 0:
             # Prepare memory data
             mem_data_list = []
@@ -133,14 +154,16 @@ class AGEMHandler:
                         else torch.tensor(mem_labels_list).to(self.device)
                     )
 
-                    # Compute reference gradient on memory
-                    ref_grad = self.compute_gradient(mem_data, mem_labels)
+                    # Compute reference gradient and loss on memory
+                    ref_grad, ref_loss = self.compute_gradient(mem_data, mem_labels)
 
-                    # Project current gradient
-                    projected_grad = self.project_gradient(current_grad, ref_grad)
+                    # Apply MEGA-I gradient balancing
+                    balanced_grad = self.mega_i_gradient_balance(
+                        current_grad, ref_grad, current_loss, ref_loss
+                    )
 
-                    # Set projected gradient and optimize
-                    self.set_gradient(projected_grad)
+                    # Set balanced gradient and optimize
+                    self.set_gradient(balanced_grad)
                     self.optimizer.step()
                 else:
                     # No valid memory samples, just do regular update
