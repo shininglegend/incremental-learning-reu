@@ -100,7 +100,7 @@ if 'per_task_accuracies' in data and data['per_task_accuracies']:
 
     fig_task_acc.update_layout(
         title='Individual Task Accuracies Over Time',
-        xaxis_title='Tasks Completed',
+        xaxis_title='Epochs Completed',
         yaxis_title='Accuracy',
         yaxis=dict(range=[0, 1]),
         legend_title='Task',
