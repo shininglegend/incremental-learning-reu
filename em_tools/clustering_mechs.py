@@ -74,7 +74,7 @@ class Cluster:
         # Only consider samples except the newest (last one)
         for i in range(len(self.samples) - 1):
             sample = self.samples[i]
-            distance = distance_h(sample, self)
+            distance = distance_h(sample - self.mean)
             if distance > max_distance:
                 max_distance = distance
                 furthest_idx = i

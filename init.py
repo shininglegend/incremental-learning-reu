@@ -121,10 +121,11 @@ def initialize_system():
         config["num_tasks"] = 2
         config["batch_size"] = 50
 
-    # Determine pool configuration based on task type
-    pool_config = config["pools"][config["task_type"]]
-    config["num_pools"] = pool_config["num_pools"]
-    config["clusters_per_pool"] = pool_config["clusters_per_pool"]
+    # Determine configuration based on task type
+    task_specific_config = config["task_specific"][config["task_type"]]
+    config["num_pools"] = task_specific_config["num_pools"]
+    config["clusters_per_pool"] = task_specific_config["clusters_per_pool"]
+    config["num_tasks"] = task_specific_config["num_tasks"]
 
     # Create params dictionary for compatibility
     params = {
