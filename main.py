@@ -36,6 +36,7 @@ print("Starting TA-A-GEM training...")
 print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
+Removal method: {config.get("removal")}  |  Consider newest: {config.get('consider_newest')}
 Total tasks: {len(train_dataloaders)}"""
 )
 
@@ -176,7 +177,7 @@ print("\nGenerating comprehensive analysis...")
 timestamp = time.strftime("%Y%m%d_%H%M%S")
 visualizer.save_metrics(
     os.path.join(params["output_dir"], f"ta_agem_metrics_{timestamp}.pkl"),
-    params=params,
+    params=config,
 )
 
 # Generate simplified report with 3 key visualizations

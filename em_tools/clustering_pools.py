@@ -8,7 +8,7 @@ import torch
 
 
 class ClusteringMemory:
-    def __init__(self, Q, P, input_type, device, num_pools=10):
+    def __init__(self, Q, P, input_type, device, config, num_pools=10):
         """
         Initialize multi-pool clustering memory wrapper.
 
@@ -29,6 +29,12 @@ class ClusteringMemory:
         self.pools = {}
         self.pool_labels = set()  # Track which labels we've seen
 
+        # For initializing clusters
+        self.cluster_params = {
+            'removal': config['removal'],
+            'consider_newest': config['consider_newest'],
+        }
+
     def _get_or_create_pool(self, label) -> ClusteringMechanism:
         """Get clustering mechanism for a label, creating if needed.
 
@@ -41,7 +47,7 @@ class ClusteringMemory:
         if label not in self.pools:
             # Create new pool for this label
             self.pools[label] = ClusteringMechanism(
-                Q=self.Q, P=self.P, dimensionality_reducer=None
+                cluster_params=self.cluster_params, Q=self.Q, P=self.P, dimensionality_reducer=None
             )
             self.pool_labels.add(label)
 

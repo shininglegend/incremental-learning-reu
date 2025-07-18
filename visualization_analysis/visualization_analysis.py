@@ -110,6 +110,7 @@ class TAGemVisualizer:
             metrics["params"] = params
             metrics["dataset_name"] = params.get("dataset_name", "unknown")
             metrics["removal"] = params.get("removal", "unknown")
+            metrics["consider_newest"] = params.get("consider_newest", "unknown")
 
         with open(filepath, "wb") as f:
             pickle.dump(metrics, f)

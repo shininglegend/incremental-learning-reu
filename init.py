@@ -177,7 +177,9 @@ def initialize_system():
         P=config["memory_size_p"],
         input_type="samples",
         device=device,
+        config=config,
         num_pools=config["num_pools"],
+
     )
 
     agem_handler = agem.AGEMHandler(
