@@ -4,6 +4,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 
+# Debug and display controls
+DEBUG_MODE = False
+SHOW_INDIVIDUAL_PLOTS = False
 
 SAVE_DIR = "test_results"
 if not os.path.exists(SAVE_DIR):
@@ -11,7 +14,11 @@ if not os.path.exists(SAVE_DIR):
 
 filename = input("Enter the filename to load (e.g., 'ta_agem_metrics_2025-07-01T15:45:44.660534.pkl'): ")
 
-with open(os.path.join("test_results", filename), 'rb') as file:
+# Look for it in the test_results directory, if not found, use the relative path
+if os.path.exists(os.path.join("test_results", filename)):
+    filename = os.path.join("test_results", filename)
+
+with open(filename, 'rb') as file:
     data = pickle.load(file)
 
     # Convert new format to legacy format if needed
@@ -60,11 +67,15 @@ with open(os.path.join("test_results", filename), 'rb') as file:
 #  - timestamp: <class 'str'>
 
 # Print the first few entries of each key to inspect the data
-for key in data.keys():
-    if isinstance(data[key], list):
-        print(f"{key}: {data[key][:5]}")  # Print first 5 items for lists
-    else:
-        print(f"{key}: {data[key]}")  # Print the value directly for non-list types
+if DEBUG_MODE:
+    for key in data.keys():
+        if isinstance(data[key], list):
+            if len(data[key]) > 0 and isinstance(data[key][0], list):
+                print(f"{key}: {len(data[key])} items, first item: {data[key][0][:3] if len(data[key][0]) > 3 else data[key][0]}")
+            else:
+                print(f"{key}: {data[key][:5]}")  # Print first 5 items for lists
+        else:
+            print(f"{key}: {data[key]}")  # Print the value directly for non-list types
 
 # Create visualizations for accuracy and loss data
 
@@ -96,37 +107,37 @@ if 'per_task_accuracies' in data and data['per_task_accuracies']:
 
     fig_task_acc.update_layout(
         title='Individual Task Accuracies Over Time',
-        xaxis_title='Tasks Completed',
+        xaxis_title='Epoch',
         yaxis_title='Accuracy',
         yaxis=dict(range=[0, 1]),
         legend_title='Task',
         hovermode='x unified'
     )
-    fig_task_acc.write_html(os.path.join(SAVE_DIR, 'task_accuracies.html'), auto_open=True)
+    fig_task_acc.write_html(os.path.join(SAVE_DIR, 'task_accuracies.html'), auto_open=SHOW_INDIVIDUAL_PLOTS)
     #fig_task_acc.show()
 
 # 2. Per-Task Accuracies (Matrix/Heatmap)
 if 'per_task_accuracies' in data and data['per_task_accuracies']:
-    # Create a matrix showing accuracy for each task on each previous task
-    max_tasks = len(data['per_task_accuracies'])
+    # Create a matrix showing accuracy for each task at each epoch
+    max_tasks = max(len(epoch_accs) for epoch_accs in data['per_task_accuracies']) if data['per_task_accuracies'] else 0
     accuracy_matrix = []
 
-    for i, task_accs in enumerate(data['per_task_accuracies']):
-        row = task_accs + [None] * (max_tasks - len(task_accs))
+    for i, epoch_accs in enumerate(data['per_task_accuracies']):
+        row = epoch_accs + [None] * (max_tasks - len(epoch_accs))
         accuracy_matrix.append(row)
 
     fig_per_task = px.imshow(
         accuracy_matrix,
-        title='Per-Task Accuracies Matrix',
-        labels={'x': 'Task Being Evaluated', 'y': 'Current Task', 'color': 'Accuracy'},
+        title='Per-Task Accuracies Over Epochs',
+        labels={'x': 'Task', 'y': 'Epoch', 'color': 'Accuracy'},
         aspect='auto',
         color_continuous_scale='Viridis'
     )
     fig_per_task.update_layout(
-        xaxis_title='Task Being Evaluated',
-        yaxis_title='Current Task'
+        xaxis_title='Task',
+        yaxis_title='Epoch'
     )
-    fig_per_task.write_html(os.path.join(SAVE_DIR, 'per_task_accuracies.html'), auto_open=True)
+    fig_per_task.write_html(os.path.join(SAVE_DIR, 'per_task_accuracies.html'), auto_open=SHOW_INDIVIDUAL_PLOTS)
     #fig_per_task.show()
 
 # 3. Epoch Losses for Each Task
@@ -208,18 +219,18 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
     # Create subplots
     fig_combined = make_subplots(
         rows=2, cols=2,
-        subplot_titles=('Task Accuracies', 'Average Epoch Loss per Task', 'Individual Task Performance', 'Training Times'),
+        subplot_titles=('Overall Accuracy per Epoch', 'Average Epoch Loss per Task', 'Individual Task Performance', 'Forgetting per Task'),
         specs=[[{"secondary_y": False}, {"secondary_y": False}],
                [{"secondary_y": False}, {"secondary_y": False}]]
     )
 
-    # Task accuracies
+    # Task accuracies (overall accuracy per epoch)
     fig_combined.add_trace(
         go.Scatter(
             x=list(range(1, len(data['task_accuracies']) + 1)),
             y=data['task_accuracies'],
             mode='lines+markers',
-            name='Task Accuracy',
+            name='Overall Accuracy',
             line=dict(color='blue', width=3)
         ),
         row=1, col=1
@@ -263,17 +274,55 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
             row=2, col=1
         )
 
-    # Training times
-    if 'training_times' in data and data['training_times']:
-        fig_combined.add_trace(
-            go.Bar(
-                x=list(range(1, len(data['training_times']) + 1)),
-                y=data['training_times'],
-                name='Training Time',
-                marker_color='green',
-                showlegend=False
-            ),
-            row=2, col=2
+    # Calculate forgetting for each task over epochs
+    if 'per_task_accuracies' in data and data['per_task_accuracies']:
+        max_tasks = max(len(epoch_accs) for epoch_accs in data['per_task_accuracies']) if data['per_task_accuracies'] else 0
+
+        for task_id in range(max_tasks):
+            task_forgetting = []
+            x_values = []
+            max_so_far = 0
+
+            # Extract accuracies for this task across all epochs where it's evaluated
+            for epoch_idx, epoch_accs in enumerate(data['per_task_accuracies']):
+                if task_id < len(epoch_accs):
+                    accuracy = epoch_accs[task_id]
+                    if max_so_far == 0:  # First occurrence
+                        max_so_far = accuracy
+                    else:
+                        max_so_far = max(max_so_far, accuracy)
+
+                    # Calculate forgetting: Fl = max({Ai|i ≤ l}) − Al
+                    forgetting = max_so_far - accuracy
+                    task_forgetting.append(forgetting)
+                    x_values.append(epoch_idx + 1)
+
+            if task_forgetting:
+                # Add line for this task's forgetting over time
+                fig_combined.add_trace(
+                    go.Scatter(
+                        x=x_values,
+                        y=task_forgetting,
+                        mode='lines+markers',
+                        name=f'Task {task_id + 1} Forgetting',
+                        showlegend=True,
+                        line=dict(width=2)
+                    ),
+                    row=2, col=2
+                )
+                fig_combined.update_yaxes(range=[0.0, 1.0])
+
+        if DEBUG_MODE:
+            print(f"Calculated forgetting over epochs for {max_tasks} tasks")
+    else:
+        # Add placeholder text when no forgetting data available
+        fig_combined.add_annotation(
+            x=0.5, y=0.5,
+            text="No forgetting data available",
+            showarrow=False,
+            row=2, col=2,
+            xref="x domain", yref="y domain",
+            font=dict(size=14, color="gray")
         )
 
     fig_combined.update_layout(
@@ -283,14 +332,14 @@ if 'task_accuracies' in data and 'epoch_losses' in data and data['task_accuracie
     )
 
     # Update axis labels
-    fig_combined.update_xaxes(title_text="Task Number", row=1, col=1)
+    fig_combined.update_xaxes(title_text="Epoch", row=1, col=1)
     fig_combined.update_yaxes(title_text="Accuracy", row=1, col=1)
-    fig_combined.update_xaxes(title_text="Task Number", row=1, col=2)
+    fig_combined.update_xaxes(title_text="Task", row=1, col=2)
     fig_combined.update_yaxes(title_text="Average Loss", row=1, col=2)
-    fig_combined.update_xaxes(title_text="Task Number", row=2, col=1)
+    fig_combined.update_xaxes(title_text="Epoch", row=2, col=1)
     fig_combined.update_yaxes(title_text="Accuracy", row=2, col=1)
-    fig_combined.update_xaxes(title_text="Task Number", row=2, col=2)
-    fig_combined.update_yaxes(title_text="Time (seconds)", row=2, col=2)
+    fig_combined.update_xaxes(title_text="Epoch", row=2, col=2)
+    fig_combined.update_yaxes(title_text="Forgetting", row=2, col=2)
 
     fig_combined.write_html(os.path.join(SAVE_DIR, 'incremental_learning_dashboard.html'), auto_open=True)
     #fig_combined.show()
