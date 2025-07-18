@@ -199,7 +199,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         """Create rotation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
         test_dataloaders = []
-        angles = [i * (360 / num_tasks) for i in range(num_tasks)]
+        angles = [i * 20 for i in range(num_tasks)]
 
         # Split data into disjoint subsets for each task
         train_size_per_task = len(x_train_tensor) // num_tasks
