@@ -17,7 +17,7 @@ hidden_dim: 200 # Hidden layer dimension as per paper
 device: "cpu" # Override to use cuda, we found it was slower on average
 
 # Memory Configuration
-memory_size_q: 10 # Number of clusters per pool (Q)
+memory_size_q: 10 # Number of clusters per pool (Q), see below
 memory_size_p: 3 # Max samples per cluster (P) - as per paper
 
 # Training Configuration
