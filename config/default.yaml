@@ -17,26 +17,29 @@ hidden_dim: 200 # Hidden layer dimension as per paper
 device: "cpu" # Override to use cuda, we found it was slower on average
 
 # Memory Configuration
-memory_size_q: 10 # Number of clusters per pool (Q), see below
+# memory_size_q: 10 # Overridden below
 memory_size_p: 3 # Max samples per cluster (P) - as per paper
 
 # Training Configuration
 batch_size: 10 # Batch size for training (overridden to 50 in lite mode)
 learning_rate: 0.001 # Initial learning rate
 num_epochs: 20 # Number of epochs per task
-num_tasks: 5 # Number of tasks (overridden to 2 in lite mode)
+# num_tasks: 5 # Number of tasks (overridden to 2 in lite mode)
 
 # Learning Rate Scheduler
 use_learning_rate_scheduler: true # Use adaptive learning rate scheduler
 
-# Pool Configuration (task-dependent)
-pools:
+# Task Configuration
+task_specific:
   permutation:
+    num_tasks: 10
     num_pools: 10
     clusters_per_pool: 10
   rotation:
+    num_tasks: 10
     num_pools: 10
     clusters_per_pool: 10
   class_split:
+    num_tasks: 5
     num_pools: 2
     clusters_per_pool: 50
