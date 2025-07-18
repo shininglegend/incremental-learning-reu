@@ -210,7 +210,7 @@ class MnistDatasetLoader(DatasetLoader):
         train_dataloaders = []
         test_dataloaders = []
         # Fixed: Rotate by 20 degrees per task
-        angles = [i * 20 for i in range(num_tasks)]
+        angles = [i * (360 / num_tasks) for i in range(num_tasks)]
 
         # Split data into disjoint subsets for each task
         train_size_per_task = len(x_train_tensor) // num_tasks

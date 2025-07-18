@@ -32,11 +32,11 @@ use_learning_rate_scheduler: true # Use adaptive learning rate scheduler
 # Task Configuration
 task_specific:
   permutation:
-    num_tasks: 10
+    num_tasks: 5
     num_pools: 10
     clusters_per_pool: 10
   rotation:
-    num_tasks: 10
+    num_tasks: 5
     num_pools: 10
     clusters_per_pool: 10
   class_split:
