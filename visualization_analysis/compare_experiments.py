@@ -69,7 +69,7 @@ def extract_epoch_accuracies(results):
     return epoch_accuracies
 
 
-def perform_statistical_comparison(all_results):
+def perform_statistical_comparison(all_results, task_filter=None):
     """Compare results across directories using statistical tests"""
     # Organize data by task type and directory
     task_data = {}
@@ -80,6 +80,11 @@ def perform_statistical_comparison(all_results):
                 continue
 
             task_type = result["task_type"]
+
+            # Filter by task type if specified
+            if task_filter and task_type != task_filter:
+                continue
+
             if task_type not in task_data:
                 task_data[task_type] = {}
 
@@ -174,28 +179,43 @@ def perform_statistical_comparison(all_results):
     return comparison_results
 
 
-def create_epoch_plot(all_results):
+def create_epoch_plot(all_results, task_filter=None):
     """Create plotly graph showing accuracy vs epochs with std deviation bands"""
-    fig = go.Figure()
-
     colors = px.colors.qualitative.Set1
 
-    for idx, (directory, results) in enumerate(all_results.items()):
-        epoch_data = extract_epoch_accuracies(results)
+    # Group all data by task type first
+    all_task_data = {}
 
+    for directory, results in all_results.items():
+        epoch_data = extract_epoch_accuracies(results)
         if not epoch_data:
             continue
 
-        # Group by task type and calculate statistics
-        task_groups = {}
+        # Group by task type
         for item in epoch_data:
             task_type = item["task_type"]
-            if task_type not in task_groups:
-                task_groups[task_type] = []
-            task_groups[task_type].append(item["accuracies"])
 
-        # For each task type, calculate mean and std across epochs
-        for task_type, accuracy_lists in task_groups.items():
+            # Filter by task type if specified
+            if task_filter and task_type != task_filter:
+                continue
+
+            if task_type not in all_task_data:
+                all_task_data[task_type] = {}
+            if directory not in all_task_data[task_type]:
+                all_task_data[task_type][directory] = []
+            all_task_data[task_type][directory].append(item["accuracies"])
+
+    # Create separate plots for each task type
+    if task_filter:
+        # Single plot for specified task type
+        if task_filter not in all_task_data:
+            print(f"Warning: No data found for task type '{task_filter}'")
+            return go.Figure()
+
+        fig = go.Figure()
+        task_type = task_filter
+
+        for idx, (directory, accuracy_lists) in enumerate(all_task_data[task_type].items()):
             # Find maximum length to pad shorter sequences
             max_length = max(len(acc_list) for acc_list in accuracy_lists)
 
@@ -203,15 +223,12 @@ def create_epoch_plot(all_results):
             padded_accuracies = []
             for acc_list in accuracy_lists:
                 if len(acc_list) < max_length:
-                    # Pad with the last value
                     padded = acc_list + [acc_list[-1]] * (max_length - len(acc_list))
                 else:
                     padded = acc_list
                 padded_accuracies.append(padded)
 
             accuracy_matrix = np.array(padded_accuracies)
-
-            # Calculate mean and std across runs
             mean_accuracy = np.mean(accuracy_matrix, axis=0)
             std_accuracy = np.std(accuracy_matrix, axis=0)
 
@@ -223,33 +240,95 @@ def create_epoch_plot(all_results):
                 x=epochs,
                 y=mean_accuracy,
                 mode='lines',
-                name=f'{directory} ({task_type})',
+                name=f'{directory}',
                 line=dict(color=color),
-                legendgroup=f'{directory}_{task_type}'
+                legendgroup=f'{directory}'
             ))
 
             # Add std deviation band
             fig.add_trace(go.Scatter(
-                x=epochs + epochs[::-1],  # x values for both upper and lower bounds
+                x=epochs + epochs[::-1],
                 y=(mean_accuracy + std_accuracy).tolist() + (mean_accuracy - std_accuracy)[::-1].tolist(),
                 fill='tonexty',
                 fillcolor=f'rgba{tuple(list(px.colors.hex_to_rgb(color)) + [0.2])}',
                 line=dict(color='rgba(255,255,255,0)'),
                 showlegend=False,
                 hoverinfo='skip',
-                legendgroup=f'{directory}_{task_type}'
+                legendgroup=f'{directory}'
             ))
 
-    fig.update_layout(
-        title="Accuracy vs Epochs (Mean ± 1 Standard Deviation)",
-        xaxis_title="Epoch",
-        yaxis_title="Accuracy",
-        hovermode='x unified',
-        width=1000,
-        height=600
-    )
+        fig.update_layout(
+            title=f"Accuracy vs Epochs - {task_type.title()} (Mean ± 1 Standard Deviation)",
+            xaxis_title="Epoch",
+            yaxis_title="Accuracy",
+            hovermode='x unified',
+            width=1000,
+            height=600
+        )
 
-    return fig
+        return [fig]
+
+    else:
+        # Multiple plots - one for each task type
+        figures = []
+
+        for task_type, task_dirs in all_task_data.items():
+            fig = go.Figure()
+
+            for idx, (directory, accuracy_lists) in enumerate(task_dirs.items()):
+                # Find maximum length to pad shorter sequences
+                max_length = max(len(acc_list) for acc_list in accuracy_lists)
+
+                # Pad sequences and convert to numpy array
+                padded_accuracies = []
+                for acc_list in accuracy_lists:
+                    if len(acc_list) < max_length:
+                        padded = acc_list + [acc_list[-1]] * (max_length - len(acc_list))
+                    else:
+                        padded = acc_list
+                    padded_accuracies.append(padded)
+
+                accuracy_matrix = np.array(padded_accuracies)
+                mean_accuracy = np.mean(accuracy_matrix, axis=0)
+                std_accuracy = np.std(accuracy_matrix, axis=0)
+
+                epochs = list(range(len(mean_accuracy)))
+                color = colors[idx % len(colors)]
+
+                # Add mean line
+                fig.add_trace(go.Scatter(
+                    x=epochs,
+                    y=mean_accuracy,
+                    mode='lines',
+                    name=f'{directory}',
+                    line=dict(color=color),
+                    legendgroup=f'{directory}'
+                ))
+
+                # Add std deviation band
+                fig.add_trace(go.Scatter(
+                    x=epochs + epochs[::-1],
+                    y=(mean_accuracy + std_accuracy).tolist() + (mean_accuracy - std_accuracy)[::-1].tolist(),
+                    fill='tonexty',
+                    fillcolor=f'rgba{tuple(list(px.colors.hex_to_rgb(color)) + [0.2])}',
+                    line=dict(color='rgba(255,255,255,0)'),
+                    showlegend=False,
+                    hoverinfo='skip',
+                    legendgroup=f'{directory}'
+                ))
+
+            fig.update_layout(
+                title=f"Accuracy vs Epochs - {task_type.title()} (Mean ± 1 Standard Deviation)",
+                xaxis_title="Epoch",
+                yaxis_title="Accuracy",
+                hovermode='x unified',
+                width=1000,
+                height=600
+            )
+
+            figures.append((task_type, fig))
+
+        return figures
 
 
 def print_comparison_results(comparison_results):
@@ -309,6 +388,12 @@ Examples:
         default="comparison_results",
         help="Directory to save comparison results (default: comparison_results)"
     )
+    parser.add_argument(
+        "--task_type",
+        type=str,
+        choices=["permutation", "rotation", "class_split"],
+        help="Filter results to specific task type only"
+    )
     args = parser.parse_args()
 
     if len(args.directories) < 2:
@@ -326,18 +411,27 @@ Examples:
     all_results = load_multiple_directories(args.directories)
 
     # Perform statistical comparison
-    comparison_results = perform_statistical_comparison(all_results)
+    comparison_results = perform_statistical_comparison(all_results, args.task_type)
 
     # Print results
     print_comparison_results(comparison_results)
 
-    # Create and save plot
-    fig = create_epoch_plot(all_results)
+    # Create and save plot(s)
+    figures = create_epoch_plot(all_results, args.task_type)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    plot_filename = os.path.join(args.output_dir, f"accuracy_comparison_{timestamp}.html")
-    fig.write_html(plot_filename)
-    print(f"\nAccuracy plot saved to: {plot_filename}")
+
+    if args.task_type:
+        # Single plot for specific task type
+        plot_filename = os.path.join(args.output_dir, f"accuracy_comparison_{args.task_type}_{timestamp}.html")
+        figures[0].write_html(plot_filename)
+        print(f"\nAccuracy plot saved to: {plot_filename}")
+    else:
+        # Multiple plots - one for each task type
+        for task_type, fig in figures:
+            plot_filename = os.path.join(args.output_dir, f"accuracy_comparison_{task_type}_{timestamp}.html")
+            fig.write_html(plot_filename)
+            print(f"Accuracy plot for {task_type} saved to: {plot_filename}")
 
     # Save statistical results to CSV
     summary_data = []
