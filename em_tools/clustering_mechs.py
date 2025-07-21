@@ -4,7 +4,7 @@ import pandas
 from collections import deque
 import random
 
-DEBUG = True
+DEBUG = False
 
 triggered = set()
 dprint = lambda s: triggered.add(s) if DEBUG else None
@@ -43,6 +43,7 @@ class Cluster:
             'remove_furthest_from_mean': self.remove_furthest_from_mean,
             'remove_random': self.remove_random,
             'remove_furthest_from_new': self.remove_furthest_from_new,
+            'remove_based_on_mean': self.remove_based_on_mean,
         }
 
         if cluster_params['removal'] in self.removal_methods:
@@ -53,8 +54,8 @@ class Cluster:
 
         self.consider_newest = cluster_params['consider_newest']
 
-        print(f'Removal Function in cl: {self.removal_fn}')
-        print(f'Consider newest: {self.consider_newest}')
+        dprint(f'Removal Function in cl: {self.removal_fn}')
+        dprint(f'Consider newest: {self.consider_newest}')
 
 
     def add_sample(self, sample: torch.Tensor, label=None, task_id=None):

@@ -3,13 +3,13 @@ import torch
 
 class AGEMHandler:
     def __init__(
-        self,
-        model: torch.nn.Module,
-        criterion,
-        optimizer,
-        device,
-        batch_size=256,
-        lr_scheduler=None,
+            self,
+            model: torch.nn.Module,
+            criterion,
+            optimizer,
+            device,
+            batch_size=256,  # Memory batch size for gradient computation
+            lr_scheduler=None,
     ):
         self.model = model
         self.criterion = criterion
@@ -52,24 +52,30 @@ class AGEMHandler:
 
         return torch.cat(grads) if grads else torch.tensor([]).to(self.device)
 
-    def project_gradient(self, current_grad, ref_grad):
-        """Project current gradient to not increase loss on reference gradient"""
-        if ref_grad.numel() == 0 or current_grad.numel() == 0:
-            return current_grad
+    def project_gradient_agem(self, g, g_ref):
+        """
+        Project gradient g using A-GEM formula from Algorithm 2, line 12:
+        g_tilde = g - (g^T * g_ref) / (g_ref^T * g_ref) * g_ref
+        """
+        if g_ref.numel() == 0 or g.numel() == 0:
+            return g
 
-        # Compute dot product
-        dot_product = torch.dot(current_grad, ref_grad)
+        # Compute dot products
+        g_dot_g_ref = torch.dot(g, g_ref)  # g^T * g_ref
 
-        # If dot product is negative, project the gradient
-        if dot_product < 0:
-            ref_grad_norm_sq = torch.dot(ref_grad, ref_grad)
-            if ref_grad_norm_sq > 0:
-                projected_grad = (
-                    current_grad - (dot_product / ref_grad_norm_sq) * ref_grad
-                )
-                return projected_grad
+        # If g^T * g_ref >= 0, no projection needed (line 9-10)
+        if g_dot_g_ref >= 0:
+            return g
 
-        return current_grad
+        # Otherwise, apply projection (line 12)
+        g_ref_dot_g_ref = torch.dot(g_ref, g_ref)  # g_ref^T * g_ref
+
+        if g_ref_dot_g_ref > 0:
+            # g_tilde = g - (g^T * g_ref) / (g_ref^T * g_ref) * g_ref
+            projected_grad = g - (g_dot_g_ref / g_ref_dot_g_ref) * g_ref
+            return projected_grad
+
+        return g
 
     def set_gradient(self, grad_vector):
         """Set model gradients from flattened gradient vector"""
@@ -80,68 +86,99 @@ class AGEMHandler:
         for param in self.model.parameters():
             if param.grad is not None:
                 num_param = param.numel()
-                param.grad.data = grad_vector[pointer : pointer + num_param].view(
+                param.grad.data = grad_vector[pointer: pointer + num_param].view(
                     param.shape
                 )
                 pointer += num_param
 
-    def optimize(self, data, labels, memory_samples=None):
-        """A-GEM optimization with gradient projection"""
-        # Compute loss for tracking
+    def sample_from_memory(self, clustering_memory):
+        """Sample (x_ref, y_ref) from ClusteringMemory as in line 6 of Algorithm 2"""
+        memory_samples = clustering_memory.get_memory_samples()
+
+        if memory_samples is None:
+            return None, None
+
+        mem_data, mem_labels = memory_samples
+
+        if len(mem_data) == 0:
+            return None, None
+
+        # Randomly sample one example from memory
+        idx = torch.randint(0, len(mem_data), (1,)).item()
+        x_ref = mem_data[idx].unsqueeze(0)  # Add batch dimension
+        y_ref = mem_labels[idx].unsqueeze(0)  # Add batch dimension
+
+        return x_ref, y_ref
+
+    def optimize_single_example(self, x, y, clustering_memory):
+        """
+        A-GEM optimization for a single example (x, y) following Algorithm 2, lines 6-14
+        """
+        # Move data to device
+        x, y = x.to(self.device), y.to(self.device)
+
+        # Step 6: Sample (x_ref, y_ref) from memory M
+        x_ref, y_ref = self.sample_from_memory(clustering_memory)
+
+        # Step 8: Compute gradient g = ∇_θ ℓ(f_θ(x, t), y)
         self.model.zero_grad()
-        outputs = self.model(data)
-        loss = self.criterion(outputs, labels)
-        current_loss = loss.item()
-
-        # Update learning rate if scheduler is provided
-        if self.lr_scheduler is not None:
-            new_lr = self.lr_scheduler.step(current_loss)
-            for param_group in self.optimizer.param_groups:
-                param_group["lr"] = new_lr
-
-        # Compute gradient on current task
+        output = self.model(x.unsqueeze(0))  # Add batch dimension
+        loss = self.criterion(output, y.unsqueeze(0))
         loss.backward()
-        current_grad = []
+
+        # Extract current gradient g
+        g = []
         for param in self.model.parameters():
             if param.grad is not None:
-                current_grad.append(param.grad.view(-1))
-        current_grad = torch.cat(current_grad) if current_grad else torch.tensor([])
+                g.append(param.grad.view(-1))
+        g = torch.cat(g) if g else torch.tensor([]).to(self.device)
 
         # If we have memory samples, compute reference gradient and project
-        if memory_samples is not None:
-            try:
-                # Memory samples now come as (samples_tensor, labels_tensor)
-                mem_data, mem_labels = memory_samples
+        if x_ref is not None and y_ref is not None:
+            # Step 7: Compute g_ref = ∇_θ ℓ(f_θ(x_ref, t), y_ref)
+            g_ref = self.compute_gradient(x_ref, y_ref)
 
-                # Slice to get the batch size we want
-                batch_size = min(self.eps_mem_batch, len(mem_data))
-                mem_data = mem_data[:batch_size]
-                mem_labels = mem_labels[:batch_size]
+            # Steps 9-13: Project gradient if needed
+            g_tilde = self.project_gradient_agem(g, g_ref)
 
-                # Data is already on the right device, no conversion needed
-                if len(mem_data) > 0:
-                    # Compute reference gradient on memory
-                    ref_grad = self.compute_gradient(mem_data, mem_labels)
+            # Set the projected gradient
+            self.set_gradient(g_tilde)
 
-                    # Project current gradient
-                    projected_grad = self.project_gradient(current_grad, ref_grad)
+        # Step 14: Update parameters θ ← θ - α * g_tilde
+        self.optimizer.step()
 
-                    # Set projected gradient and optimize
-                    self.set_gradient(projected_grad)
-                    self.optimizer.step()
-                else:
-                    # No valid memory samples, just do regular update
-                    self.optimizer.step()
+        return loss.item()
 
-            except Exception as e:
-                # Fallback to regular update if memory processing fails
-                print(f"Memory processing failed: {e}")
-                self.optimizer.step()
-        else:
-            # No memory samples, just do regular update
-            self.optimizer.step()
+    def optimize_batch(self, data, labels, clustering_memory):
+        """
+        Optimize a batch by applying A-GEM to each example individually
+        following the algorithm structure
+        """
+        batch_losses = []
 
-        return current_loss
+        # Apply A-GEM to each example in the batch
+        for i in range(data.size(0)):
+            x_i = data[i]
+            y_i = labels[i]
+            loss = self.optimize_single_example(x_i, y_i, clustering_memory)
+            batch_losses.append(loss)
+
+        return sum(batch_losses) / len(batch_losses) if batch_losses else 0.0
+
+    # Clean interface for true A-GEM
+    def optimize(self, data, labels, clustering_memory):
+        """
+        Clean A-GEM optimization interface that requires clustering_memory
+
+        Args:
+            data: Batch of training data
+            labels: Batch of training labels
+            clustering_memory: ClusteringMemory instance for sampling reference examples
+
+        Returns:
+            float: Average loss for the batch
+        """
+        return self.optimize_batch(data, labels, clustering_memory)
 
 
 def evaluate_all_tasks(model, criterion, task_dataloaders, device):

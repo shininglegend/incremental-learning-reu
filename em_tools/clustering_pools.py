@@ -29,6 +29,9 @@ class ClusteringMemory:
         self.pools = {}
         self.pool_labels = set()  # Track which labels we've seen
 
+        self.max_samples = self.num_pools * self.Q * self.P
+        self.total_samples = 0
+
         # For initializing clusters
         self.cluster_params = {
             'removal': config['removal'],
@@ -125,6 +128,10 @@ class ClusteringMemory:
         pool = self._get_or_create_pool(sample_label)
         pool.add(sample_tensor, sample_label, task_id)
 
+        if self.total_samples < self.max_samples:
+            self.total_samples += 1
+
+
     def get_memory_size(self):
         """Get the current number of samples stored across all pools.
 
@@ -164,3 +171,6 @@ class ClusteringMemory:
             int: Number of active pools
         """
         return len(self.pools)
+
+    def get_num_samples(self):
+        return self.total_samples

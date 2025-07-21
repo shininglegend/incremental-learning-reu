@@ -55,14 +55,10 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Move data to device
             data, labels = data.to(device), labels.to(device)
 
-            # Step 1: Use A-GEM logic for current batch and current memory
-            # agem_handler.optimize handles model update and gradient projection
-            # It queries clustering_memory for the current reference samples
-            t.start("get samples")
-            _samples = clustering_memory.get_memory_samples()
-            t.end("get samples")
+            # Step 1: Use A-GEM logic for current batch with clustering memory
+            # Clean interface - pass clustering_memory directly
             t.start("optimize")
-            batch_loss = agem_handler.optimize(data, labels, _samples)
+            batch_loss = agem_handler.optimize(data, labels, clustering_memory)
             t.end("optimize")
 
             # Track batch loss
@@ -86,16 +82,16 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
             # Update progress bar every 50 batches or on last batch
             if (
-                not QUICK_TEST_MODE
-                and VERBOSE
-                and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1)
+                    not QUICK_TEST_MODE
+                    and VERBOSE
+                    and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1)
             ):
                 progress = (batch_idx + 1) / len(train_dataloader)
                 bar_length = 30
                 filled_length = int(bar_length * progress)
                 bar = "█" * filled_length + "-" * (bar_length - filled_length)
                 print(
-                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
+                    f"\rTask {task_id + 1:1}, Epoch {epoch + 1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
                     end="",
                     flush=True,
                 )
@@ -108,7 +104,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         avg_epoch_loss = epoch_loss / max(num_batches, 1)
         task_epoch_losses.append(avg_epoch_loss)
 
-        # Evaluate performance after each epoch
+        # Rest of evaluation code remains the same...
         t.start("eval")
         model.eval()
         avg_accuracy = agem.evaluate_tasks_up_to(
@@ -144,7 +140,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         # Print epoch summary
         if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
             print(
-                f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
+                f"  Epoch {epoch + 1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
 
     # Calculate training time for this task

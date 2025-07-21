@@ -116,16 +116,16 @@ def initialize_system():
     if args.data_dir is not None:
         config["data_dir"] = args.data_dir
 
-    # Apply lite mode overrides
-    if config["lite"]:
-        config["num_tasks"] = 2
-        config["batch_size"] = 50
-
     # Determine configuration based on task type
     task_specific_config = config["task_specific"][config["task_type"]]
     config["num_pools"] = task_specific_config["num_pools"]
     config["clusters_per_pool"] = task_specific_config["clusters_per_pool"]
     config["num_tasks"] = task_specific_config["num_tasks"]
+
+    # Apply lite mode overrides
+    if config["lite"]:
+        config["num_tasks"] = 2
+        config["batch_size"] = 50
 
     # Create params dictionary for compatibility
     params = {
@@ -155,7 +155,7 @@ def initialize_system():
     # Device configuration
     device = config["device"]
     if config["device"] == "cuda":
-        # Intelligently overwrite the cuda setting if cuda isn't avaliable
+        # Intelligently overwrite the cuda setting if cuda isn't availiable
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"Using device: {device}")
