@@ -45,8 +45,6 @@ def load_pickle_files(directory="test_results", num_files=15):
     """Load pickle files from the test_results directory"""
 
     debug_directory(directory)
-
-
     pickle_files = glob.glob(os.path.join(directory, "ta_agem_metrics_*.pkl"))
 
     # Sort files by modification time (newest first) and take only the specified number
@@ -120,7 +118,10 @@ def load_pickle_files(directory="test_results", num_files=15):
 
 
 def compute_confidence_interval(data, confidence=0.99):
-    """Compute confidence interval for given data"""
+    """Compute confidence interval for given data
+
+    NOTE: Used by compare_experiments.py - do not modify signature
+    """
     n = len(data)
     if n < 2:
         return np.nan, np.nan
@@ -133,7 +134,10 @@ def compute_confidence_interval(data, confidence=0.99):
 
 
 def analyze_experiments(results):
-    """Analyze experiments and compute statistics"""
+    """Analyze experiments and compute statistics
+
+    NOTE: Used by compare_experiments.py - do not modify signature
+    """
 
     # Group results by task type, dataset name, and removal
     task_groups = {}

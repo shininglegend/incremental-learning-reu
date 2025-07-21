@@ -209,7 +209,6 @@ class MnistDatasetLoader(DatasetLoader):
         """Create rotation-based tasks for MNIST."""
         train_dataloaders = []
         test_dataloaders = []
-        # Fixed: Rotate by 20 degrees per task
         angles = [i * 20 for i in range(num_tasks)]
 
         # Split data into disjoint subsets for each task
