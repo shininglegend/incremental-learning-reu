@@ -275,8 +275,8 @@ def create_task_plot(task_dirs, task_type, colors):
         xaxis_title="Epoch",
         yaxis_title="Accuracy",
         hovermode="x unified",
-        width=1000,
-        height=600,
+        yaxis=dict(range=[0, 1]),
+        height=700,
     )
 
     return fig
@@ -388,7 +388,7 @@ Examples:
         help="Directory to save comparison results (default: None)",
     )
     parser.add_argument(
-        "--task_type",
+        "--task_type", "-t",
         type=str,
         choices=["permutation", "rotation", "class_split"],
         help="Filter results to specific task type only",
