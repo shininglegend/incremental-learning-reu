@@ -145,6 +145,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             print(
                 f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
+    # Freeze the Synaptic Intelligence
+    # Comment this out for task-agnostic SI
+    si_handler.end_task()
 
     # Calculate training time for this task
     task_time = time.time() - task_start_time
