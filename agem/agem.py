@@ -1,5 +1,5 @@
 import torch
-import torch.nn.functional as F
+#import torch.nn.functional as F
 
 
 class AGEMHandler:
@@ -12,8 +12,9 @@ class AGEMHandler:
         batch_size=256,
         lr_scheduler=None,
         epsilon=1e-3,  # Sensitivity parameter e for epsilon
-        si_c=0.1,  # SI regularization strength
-        xi=1.0,  # SI damping parameter
+        si_lambda=0.1,  # Synaptic Intelligence regularization strength
+        si_xi=1.0,  # SI damping parameter
+        si_update_freq=100,  # How often to consolidate importance (steps), 0 = only manual
     ):
         self.model = model
         self.criterion = criterion
@@ -24,71 +25,82 @@ class AGEMHandler:
         self.epsilon = epsilon  # Sensitivity parameter for MEGA-I
         
         # Synaptic Intelligence parameters
-        self.si_c = si_c  # Regularization strength
-        self.xi = xi  # Damping parameter
+        self.si_lambda = si_lambda
+        self.si_xi = si_xi
+        self.si_update_freq = si_update_freq
+        self.si_step_count = 0  # Track steps for automatic consolidation
         
-        # Initialize SI variables
-        self._initialize_si()
+        # Initialize SI tracking variables
+        self.init_synaptic_intelligence()
 
-    def _initialize_si(self):
+    def init_synaptic_intelligence(self):
         """Initialize Synaptic Intelligence tracking variables"""
-        self.si_omega = {}  # Importance weights for each parameter
-        self.si_w_old = {}  # Previous parameter values
-        self.si_delta_w = {}  # Parameter changes during current task
-        self.si_gradients = {}  # Accumulated gradients during current task
+        self.si_omega = {}  # Parameter importance weights
+        self.si_W = {}      # Accumulated parameter changes
+        self.si_prev_params = {}  # Previous parameter values
+        self.prev_loss = None  # Previous loss value
         
-        # Initialize for each parameter
+        # Initialize tracking for all model parameters
         for name, param in self.model.named_parameters():
             if param.requires_grad:
                 self.si_omega[name] = torch.zeros_like(param.data).to(self.device)
-                self.si_w_old[name] = param.data.clone().to(self.device)
-                self.si_delta_w[name] = torch.zeros_like(param.data).to(self.device)
-                self.si_gradients[name] = torch.zeros_like(param.data).to(self.device)
+                self.si_W[name] = torch.zeros_like(param.data).to(self.device)
+                self.si_prev_params[name] = param.data.clone().to(self.device)
 
-    def update_si_gradients(self):
-        """Update accumulated gradients for SI importance calculation"""
+    def update_si_tracking(self, current_loss):
+        """Update Synaptic Intelligence tracking variables"""
+        if self.prev_loss is not None:
+            loss_diff = self.prev_loss - current_loss
+            
+            # Only update if loss actually decreased
+            if loss_diff > 0:
+                for name, param in self.model.named_parameters():
+                    if param.requires_grad and name in self.si_W:
+                        # Calculate parameter change
+                        param_change = param.data - self.si_prev_params[name]
+                        
+                        # Update accumulated parameter changes weighted by loss reduction
+                        if param.grad is not None:
+                            # W += -grad * param_change * loss_diff
+                            self.si_W[name] += -param.grad.data * param_change * loss_diff
+        
+        # Update previous parameters and loss
         for name, param in self.model.named_parameters():
-            if param.requires_grad and param.grad is not None and name in self.si_gradients:
-                self.si_gradients[name] += param.grad.data
+            if param.requires_grad and name in self.si_prev_params:
+                self.si_prev_params[name] = param.data.clone()
+        
+        self.prev_loss = current_loss
 
-    def update_si_deltas(self):
-        """Update parameter changes for SI importance calculation"""
-        for name, param in self.model.named_parameters():
-            if param.requires_grad and name in self.si_delta_w:
-                self.si_delta_w[name] += param.data - self.si_w_old[name]
-                self.si_w_old[name] = param.data.clone()
-
-    def compute_si_importance(self):
-        """Compute importance weights using Synaptic Intelligence"""
+    def consolidate_si_importance(self, reset_accumulation=True):
+        """Consolidate parameter importance - can be called continuously or at task boundaries"""
         for name, param in self.model.named_parameters():
             if param.requires_grad and name in self.si_omega:
-                # Compute importance: |gradient * delta_w| / (delta_w^2 + xi)
-                delta_w = self.si_delta_w[name]
-                grad_sum = self.si_gradients[name]
+                # Calculate parameter importance: omega = W / ((param_change)^2 + xi)
+                param_change = param.data - self.si_prev_params[name]
+                param_change_sq = param_change ** 2
                 
-                # Importance calculation with damping
-                importance = torch.abs(grad_sum * delta_w) / (delta_w.pow(2) + self.xi)
+                # Only update if there's meaningful parameter change
+                if param_change_sq.sum() > 1e-8:
+                    importance_update = self.si_W[name] / (param_change_sq + self.si_xi)
+                    self.si_omega[name] += importance_update.abs()  # Use absolute value for importance
                 
-                # Update omega (importance weights)
-                self.si_omega[name] += importance
-                
-                # Reset accumulators for next task
-                self.si_delta_w[name].zero_()
-                self.si_gradients[name].zero_()
+                # Optionally reset accumulated changes (for task boundaries)
+                if reset_accumulation:
+                    self.si_W[name] = torch.zeros_like(param.data).to(self.device)
 
     def compute_si_loss(self):
         """Compute Synaptic Intelligence regularization loss"""
         si_loss = 0.0
+        
         for name, param in self.model.named_parameters():
             if param.requires_grad and name in self.si_omega:
-                # SI penalty: c/2 * sum(omega * (w - w_old)^2)
-                w_old = self.si_w_old[name]
-                omega = self.si_omega[name]
-                si_loss += (omega * (param - w_old).pow(2)).sum()
+                # SI loss: lambda * sum(omega * (theta - theta_prev)^2)
+                param_diff = param - self.si_prev_params[name]
+                si_loss += (self.si_omega[name] * param_diff ** 2).sum()
         
-        return self.si_c / 2 * si_loss
+        return self.si_lambda * si_loss
 
-    def compute_gradient(self, data, labels, include_si=True):
+    def compute_gradient(self, data, labels, include_si_reg=True):
         """Compute gradients for given data and labels without corrupting model state"""
         # Move data to device
         data, labels = data.to(self.device), labels.to(self.device)
@@ -104,14 +116,17 @@ class AGEMHandler:
         # Compute new gradients
         self.model.zero_grad()
         outputs = self.model(data)
-        loss = self.criterion(outputs, labels)
+        base_loss = self.criterion(outputs, labels)
         
-        # Add SI regularization loss if requested
-        if include_si:
+        if include_si_reg:
+            # Add Synaptic Intelligence regularization
             si_loss = self.compute_si_loss()
-            loss += si_loss
-
-        loss.backward()
+            total_loss = base_loss + si_loss
+        else:
+            total_loss = base_loss
+        
+        #base_loss.backward() # added, gives major error
+        total_loss.backward() # computes all required gradients
 
         # Extract gradients
         grads = []
@@ -126,22 +141,19 @@ class AGEMHandler:
             else:
                 param.grad = None
 
-        return torch.cat(grads) if grads else torch.tensor([]).to(self.device), loss.item()
+        return torch.cat(grads) if grads else torch.tensor([]).to(self.device), base_loss.item()
 
-    def compute_loss(self, data, labels, include_si=True):
+    def compute_loss(self, data, labels):
         """Compute loss for given data and labels without affecting gradients"""
         data, labels = data.to(self.device), labels.to(self.device)
         
         with torch.no_grad():
             outputs = self.model(data)
-            loss = self.criterion(outputs, labels)
-            
-            # Add SI regularization loss if requested
-            if include_si:
-                si_loss = self.compute_si_loss()
-                loss += si_loss
+            base_loss = self.criterion(outputs, labels)
+            si_loss = self.compute_si_loss()
+            total_loss = base_loss + si_loss
         
-        return loss.item()
+        return base_loss.item()  # Return base loss for MEGA-I balancing
 
     def mega_i_gradient_balance(self, current_grad, ref_grad, current_loss, ref_loss):
         """
@@ -168,6 +180,26 @@ class AGEMHandler:
         
         return balanced_grad
 
+    def apply_si_regularization_to_gradient(self, grad_vector):
+        """Apply SI regularization directly to gradient vector"""
+        if grad_vector.numel() == 0:
+            return grad_vector
+            
+        # Compute SI gradient contribution
+        si_grad_components = []
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and name in self.si_omega:
+                # SI gradient: lambda * 2 * omega * (theta - theta_prev)
+                param_diff = param - self.si_prev_params[name]
+                si_grad = 2 * self.si_lambda * self.si_omega[name] * param_diff
+                si_grad_components.append(si_grad.view(-1))
+        
+        if si_grad_components:
+            si_grad_vector = torch.cat(si_grad_components)
+            return grad_vector + si_grad_vector
+        else:
+            return grad_vector
+        
     def set_gradient(self, grad_vector):
         """Set model gradients from flattened gradient vector"""
         if grad_vector.numel() == 0:
@@ -183,19 +215,15 @@ class AGEMHandler:
                 pointer += num_param
 
     def optimize(self, data, labels, memory_samples=None):
-        """MEGA-I optimization with loss-based gradient balancing and Synaptic Intelligence"""
+        """MEGA-I optimization with Synaptic Intelligence and loss-based gradient balancing"""
         # Move data to device
         data, labels = data.to(self.device), labels.to(self.device)
         
-        # Compute loss for tracking (including SI regularization)
+        # Compute base loss for tracking (without SI regularization for MEGA-I)
         self.model.zero_grad()
         outputs = self.model(data)
-        loss = self.criterion(outputs, labels)
-        
-        # Add SI regularization loss
-        si_loss = self.compute_si_loss()
-        total_loss = loss + si_loss
-        current_loss = total_loss.item()
+        base_loss = self.criterion(outputs, labels)
+        current_loss = base_loss.item()
 
         # Update learning rate if scheduler is provided
         if self.lr_scheduler is not None:
@@ -203,12 +231,8 @@ class AGEMHandler:
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = new_lr
 
-        # Compute gradient on current task (including SI)
-        total_loss.backward()
-        
-        # Update SI gradient accumulation
-        self.update_si_gradients()
-        
+        # Compute gradient on current task (WITHOUT SI regularization for pure task gradient)
+        base_loss.backward()
         current_grad = []
         for param in self.model.parameters():
             if param.grad is not None:
@@ -241,78 +265,68 @@ class AGEMHandler:
                         else torch.tensor(mem_labels_list).to(self.device)
                     )
 
-                    # Compute reference gradient and loss on memory (including SI)
-                    ref_grad, ref_loss = self.compute_gradient(mem_data, mem_labels, include_si=True)
+                    # Compute reference gradient on memory (WITHOUT SI regularization for pure task gradient)
+                    ref_grad, ref_loss = self.compute_gradient(mem_data, mem_labels, include_si_reg=False)
 
-                    # Apply MEGA-I gradient balancing
+                    # Apply MEGA-I gradient balancing (on pure task gradients)
                     balanced_grad = self.mega_i_gradient_balance(
                         current_grad, ref_grad, current_loss, ref_loss
                     )
 
-                    # Set balanced gradient and optimize
-                    self.set_gradient(balanced_grad)
+                    # Now apply SI regularization to the balanced gradient
+                    final_grad = self.apply_si_regularization_to_gradient(balanced_grad)
+
+                    # Set final gradient and optimize
+                    self.set_gradient(final_grad)
                     self.optimizer.step()
-                    
-                    # Update SI parameter deltas after optimization step
-                    self.update_si_deltas()
                 else:
-                    # No valid memory samples, just do regular update
+                    # No valid memory samples, apply SI regularization to current gradient
+                    final_grad = self.apply_si_regularization_to_gradient(current_grad)
+                    self.set_gradient(final_grad)
                     self.optimizer.step()
-                    self.update_si_deltas()
             except Exception as e:
-                # Fallback to regular update if memory processing fails
+                # Fallback to regular update with SI regularization
                 print(f"Memory processing failed: {e}")
+                final_grad = self.apply_si_regularization_to_gradient(current_grad)
+                self.set_gradient(final_grad)
                 self.optimizer.step()
-                self.update_si_deltas()
         else:
-            # No memory samples, just do regular update
+            # No memory samples, apply SI regularization to current gradient
+            final_grad = self.apply_si_regularization_to_gradient(current_grad)
+            self.set_gradient(final_grad)
             self.optimizer.step()
-            self.update_si_deltas()
+
+        # Update Synaptic Intelligence tracking
+        self.update_si_tracking(current_loss)
+        
+        # Automatic importance consolidation (truly task-agnostic)
+        if self.si_update_freq > 0:
+            self.si_step_count += 1
+            if self.si_step_count % self.si_update_freq == 0:
+                self.consolidate_si_importance(reset_accumulation=False)  # Don't reset for continuous learning
 
         return current_loss
 
-    def end_task(self):
-        """Call this method when finishing a task to update SI importance weights"""
-        print("Computing Synaptic Intelligence importance weights...")
-        self.compute_si_importance()
-        print("SI importance weights updated.")
+    # def task_finished(self):
+    #     """
+    #     OPTIONAL: Call this method when a task is completed to consolidate SI importance weights.
+    #     This is provided for compatibility but the system works task-agnostically without it.
+    #     """
+    #     self.consolidate_si_importance(reset_accumulation=True)
+    #     print("Task completed - Synaptic Intelligence importance weights consolidated.")
 
-    def get_si_stats(self):
-        """Get statistics about SI importance weights for monitoring"""
-        stats = {}
-        for name, omega in self.si_omega.items():
-            stats[name] = {
-                'mean_importance': omega.mean().item(),
-                'max_importance': omega.max().item(),
-                'std_importance': omega.std().item(),
-                'nonzero_params': (omega > 0).sum().item(),
-                'total_params': omega.numel()
-            }
-        return stats
-
-    def save_si_state(self, filepath):
-        """Save SI state for checkpointing"""
-        si_state = {
-            'si_omega': {name: omega.cpu() for name, omega in self.si_omega.items()},
-            'si_w_old': {name: w.cpu() for name, w in self.si_w_old.items()},
-            'si_c': self.si_c,
-            'xi': self.xi
-        }
-        torch.save(si_state, filepath)
-
-    def load_si_state(self, filepath):
-        """Load SI state from checkpoint"""
-        si_state = torch.load(filepath, map_location=self.device)
-        self.si_omega = {name: omega.to(self.device) for name, omega in si_state['si_omega'].items()}
-        self.si_w_old = {name: w.to(self.device) for name, w in si_state['si_w_old'].items()}
-        self.si_c = si_state['si_c']
-        self.xi = si_state['xi']
-        
-        # Reinitialize accumulators
-        for name, param in self.model.named_parameters():
-            if param.requires_grad and name in self.si_omega:
-                self.si_delta_w[name] = torch.zeros_like(param.data).to(self.device)
-                self.si_gradients[name] = torch.zeros_like(param.data).to(self.device)
+    # def get_si_importance_stats(self):
+    #     """Get statistics about current SI importance weights for analysis"""
+    #     stats = {}
+    #     for name, omega in self.si_omega.items():
+    #         stats[name] = {
+    #             'mean': omega.mean().item(),
+    #             'std': omega.std().item(),
+    #             'max': omega.max().item(),
+    #             'min': omega.min().item(),
+    #             'nonzero_ratio': (omega > 0).float().mean().item()
+    #         }
+    #     return stats
 
 
 def evaluate_all_tasks(model, criterion, task_dataloaders, device):
