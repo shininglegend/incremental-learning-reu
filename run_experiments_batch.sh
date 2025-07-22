@@ -39,7 +39,7 @@ if [[ -z "$save_location" ]]; then
 fi
 
 echo "Starting TA-A-GEM parallel experiments..."
-echo "Running 5 iterations for each task type: permutation, rotation, class_split"
+echo "Running 10 iterations for each task type: permutation, rotation, class_split"
 echo "Dataset: $dataset_name"
 
 # Array of task types
@@ -76,7 +76,7 @@ while true; do
     fi
 
     echo "Jobs still running: $RUNNING_JOBS ($(date))"
-    sleep 30
+    sleep 60
 done
 
 echo ""

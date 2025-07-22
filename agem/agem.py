@@ -1,5 +1,5 @@
 import torch
-
+from visualization_analysis.visualization_analysis import Timer
 
 class AGEMHandler:
     def __init__(
@@ -10,6 +10,7 @@ class AGEMHandler:
             device,
             batch_size=256,  # Memory batch size for gradient computation
             lr_scheduler=None,
+            t=None,
     ):
         self.model = model
         self.criterion = criterion
@@ -17,6 +18,7 @@ class AGEMHandler:
         self.eps_mem_batch = batch_size  # Memory batch size for gradient computation
         self.device = device
         self.lr_scheduler = lr_scheduler
+        self.t = t
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
@@ -118,7 +120,9 @@ class AGEMHandler:
         x, y = x.to(self.device), y.to(self.device)
 
         # Step 6: Sample (x_ref, y_ref) from memory M
+        self.t.start("sample from memory")
         x_ref, y_ref = self.sample_from_memory(clustering_memory)
+        self.t.end("sample from memory")
 
         # Step 8: Compute gradient g = ∇_θ ℓ(f_θ(x, t), y)
         self.model.zero_grad()
@@ -134,6 +138,7 @@ class AGEMHandler:
         g = torch.cat(g) if g else torch.tensor([]).to(self.device)
 
         # If we have memory samples, compute reference gradient and project
+        self.t.start("compute and project gradient")
         if x_ref is not None and y_ref is not None:
             # Step 7: Compute g_ref = ∇_θ ℓ(f_θ(x_ref, t), y_ref)
             g_ref = self.compute_gradient(x_ref, y_ref)
@@ -143,9 +148,12 @@ class AGEMHandler:
 
             # Set the projected gradient
             self.set_gradient(g_tilde)
+        self.t.end("compute and project gradient")
 
         # Step 14: Update parameters θ ← θ - α * g_tilde
+        self.t.start("optimizer.step")
         self.optimizer.step()
+        self.t.end("optimizer.step")
 
         return loss.item()
 
@@ -156,12 +164,14 @@ class AGEMHandler:
         """
         batch_losses = []
 
+        self.t.start("optimize batch")
         # Apply A-GEM to each example in the batch
         for i in range(data.size(0)):
             x_i = data[i]
             y_i = labels[i]
             loss = self.optimize_single_example(x_i, y_i, clustering_memory)
             batch_losses.append(loss)
+        self.t.end("optimize batch")
 
         return sum(batch_losses) / len(batch_losses) if batch_losses else 0.0
 
@@ -179,58 +189,3 @@ class AGEMHandler:
             float: Average loss for the batch
         """
         return self.optimize_batch(data, labels, clustering_memory)
-
-
-def evaluate_all_tasks(model, criterion, task_dataloaders, device):
-    """Evaluate model on all tasks using test data and return average accuracy"""
-    model.eval()
-    total_correct = 0
-    total_samples = 0
-
-    with torch.no_grad():
-        for task_dataloader in task_dataloaders:
-            for data, labels in task_dataloader:
-                data, labels = data.to(device), labels.to(device)
-                outputs = model(data)
-                _, predicted = torch.max(outputs.data, 1)
-                total_samples += labels.size(0)
-                total_correct += (predicted == labels).sum().item()
-
-    return total_correct / total_samples if total_samples > 0 else 0.0
-
-
-def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id, device):
-    """Evaluate model only on tasks seen so far using test data"""
-    model.eval()
-    total_correct = 0
-    total_samples = 0
-
-    with torch.no_grad():
-        for task_id in range(current_task_id + 1):
-            task_dataloader = task_dataloaders[task_id]
-            for data, labels in task_dataloader:
-                data, labels = data.to(device), labels.to(device)
-                outputs = model(data)
-                _, predicted = torch.max(outputs.data, 1)
-                total_samples += labels.size(0)
-                total_correct += (predicted == labels).sum().item()
-
-    return total_correct / total_samples if total_samples > 0 else 0.0
-
-
-def evaluate_single_task(model, criterion, task_dataloader, device):
-    """Evaluate model on a single task using test data and return accuracy"""
-    model.eval()
-    total_correct = 0
-    total_samples = 0
-
-    with torch.no_grad():
-        for data, labels in task_dataloader:
-            data, labels = data.to(device), labels.to(device)
-            outputs = model(data)
-            _, predicted = torch.max(outputs.data, 1)
-            total_samples += labels.size(0)
-            total_correct += (predicted == labels).sum().item()
-
-    return total_correct / total_samples if total_samples > 0 else 0.0
-

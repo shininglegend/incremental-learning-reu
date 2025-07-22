@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1 # Each array task runs one main script. Baseline 1
 #SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
 #SBATCH --mem=20G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
-#SBATCH --time="01:30:00" # Request a little extra.
-#SBATCH --array=0-9 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
+#SBATCH --time="01:00:00" # Request a little extra.
+#SBATCH --array=0-3 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
 #SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1,hpcl4-1,hpcl4-2,hpcl4-3 # these guys are bad
 # #SBATCH --partition="$PARTITION_NAME"
 
@@ -40,7 +40,7 @@ fi
 # Resource Requests per Program Instance (i.e., per Array Task)
 NODES_PER_INSTANCE=1             # Number of nodes each program instance needs. baseline 1
 CORES_PER_INSTANCE=24            # Number of CPU cores each program instance needs. 24 for a full node
-MEM_PER_INSTANCE_GB=2            # Memory in GB each program instance needs. 2G baseline
+MEM_PER_INSTANCE_GB=20            # Memory in GB each program instance needs. 2G baseline
 
 # --- EXECUTION ---
 
