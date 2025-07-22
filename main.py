@@ -46,6 +46,10 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     task_epoch_losses = []
 
     for epoch in range(NUM_EPOCHS):
+
+        # Initializes the loss normalization at the start of each epoch
+        agem_handler.start_epoch()
+        
         model.train()
         epoch_loss = 0.0
         num_batches = 0
