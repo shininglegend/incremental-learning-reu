@@ -86,12 +86,12 @@ python3 main.py
 
 ### Configuration Parameters
 
-Key parameters can be modified in `main.py`:
+Key parameters can be modified in `config/default.yaml` file.
 
 #### Task Configuration
 
-```python
-NUM_TASKS = 2 if QUICK_TEST_MODE else 5  # Number of continual learning tasks
+```yaml
+NUM_TASKS 2 if QUICK_TEST_MODE else 5  # Number of continual learning tasks
 TASK_TYPE = 'permutation'  # 'permutation', 'rotation', or 'class_split'
 ```
 
@@ -323,7 +323,8 @@ python main.py
 
 - Check internet connection
 - Manually download dataset
-- Update `path` variable
+- Pass in the location of the dataset with `--data_dir` - like `python main.py --data_dir ./datasets`
+  - The dataset should be in a subfolder inside the path you pass in, and named after the relevant dataset, like `MNIST`
 
 **Import Errors:**
 
@@ -359,24 +360,22 @@ QUICK_TEST_MODE = True
      - **For each batch:**
        - Compute A-GEM gradient projection using memory
        - Update model parameters
-       - Add samples to appropriate clustering pools
+       - Add 1 sample to appropriate clustering pool
    - Evaluate on all seen tasks
    - Update performance metrics
 
 3. **Post-training:**
-   - Generate analysis
    - Save metrics
 
 ### Memory Management Strategy
 
 **Pool Assignment:**
 
-- Permutation/Rotation: 10 pools (one per class)
-- Class Split: 2 pools (task-based assignment)
+- 1 pool per class
 
 **Clustering Within Pools:**
 
-- Maximum Q clusters per pool
+- Maximum Q clusters per pool (3)
 - Maximum P samples per cluster
 
 **Memory Retrieval:**
