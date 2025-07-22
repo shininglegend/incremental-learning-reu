@@ -56,7 +56,7 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="test_results",
+        default=None,
         help="Path to store the output in, should be a folder",
     )
     parser.add_argument("--data_dir", type=str, default=None, help="Path to dataset")

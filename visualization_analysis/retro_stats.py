@@ -215,7 +215,7 @@ def main():
         "-n",
         "--num_runs",
         type=int,
-        default=15,
+        default=30,
         help="Number of most recent test runs to analyze (default: 15)",
     )
     parser.add_argument(

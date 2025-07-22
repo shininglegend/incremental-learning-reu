@@ -4,8 +4,8 @@
 # Task Configuration
 task_type: "permutation" # Options: permutation, rotation, class_split
 lite: true # Quick test mode with fewer tasks and data
-show_images: true # Whether to show images
-output_dir: "./new_agem_results" # Where to put any output files
+show_images: false # Whether to show images
+output_dir: "./test_results" # Where to put any output files
 
 # Dataset Configuration
 dataset_name: "mnist" # Dataset to use: mnist or fashion_mnist

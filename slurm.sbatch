@@ -5,9 +5,9 @@
 #SBATCH --nodes=1 # Nodes per instance. 1 node = 24 CPUs. Baseline 1
 #SBATCH --ntasks=1 # Each array task runs one main script. Baseline 1
 #SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
-#SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
-#SBATCH --time="00:20:00" # 00:12:41 baseline. Request a little extra.
-#SBATCH --array=0-4 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
+#SBATCH --mem=20G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
+#SBATCH --time="01:30:00" # Request a little extra.
+#SBATCH --array=0-9 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
 #SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1,hpcl4-1,hpcl4-2,hpcl4-3 # these guys are bad
 # #SBATCH --partition="$PARTITION_NAME"
 
@@ -15,7 +15,7 @@
 # A Slurm batch script for running the program many times in parallel across CPUs
 
 # ------- GLOBAL CONFIG (CUSTOMIZE WITH YOUR FILE LOCATIONS) -------
-HOME_DIR="/home/NAS/$USER/incremental-learning-reu"
+HOME_DIR="/home/NAS/$USER/99-starting-anew"
 PYTHON_SCRIPT="$HOME_DIR/main.py" # Or wherever you put main.py
 
 # Define Python executable path relative to the script's directory
@@ -27,7 +27,7 @@ fi
 
 # General Job Settings
 JOB_NAME="parallel_taagem"          # A descriptive name for your job
-TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS)
+TIME_LIMIT="01:00:00"            # Max time for each task (HH:MM:SS)
 TASK_TYPE=$1 # Type of task: "permutation", "class_split", "rotation"
 DATASET_NAME=$2 # mnist or fashion_mnist
 if [[ -z "$TASK_TYPE" || -z "$DATASET_NAME" ]]; then
@@ -45,7 +45,7 @@ MEM_PER_INSTANCE_GB=2            # Memory in GB each program instance needs. 2G 
 # --- EXECUTION ---
 
 #JOB-SPECIFIC Directory for all sbatch stuff
-JOB_SCRATCH_DIR="$HOME_DIR/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+JOB_SCRATCH_DIR="$HOME_DIR/sbatch_results/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
 
 echo "DEBUG: SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
 echo "DEBUG: Attempting to create directory: \"$JOB_SCRATCH_DIR\""
