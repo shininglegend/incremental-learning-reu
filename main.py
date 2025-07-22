@@ -1,6 +1,6 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
 import time, os
-from agem import agem
+from utils import accuracy_test
 from init import initialize_system
 
 # --- 1. Configuration and Initialization ---
@@ -32,7 +32,7 @@ LEARNING_RATE = config["learning_rate"]
 t.start("training")
 
 # --- 2. Training Loop ---
-print("Starting TA-A-GEM training...")
+print("Starting training...")
 print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
@@ -107,7 +107,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         # Rest of evaluation code remains the same...
         t.start("eval")
         model.eval()
-        avg_accuracy = agem.evaluate_tasks_up_to(
+        avg_accuracy = accuracy_test.evaluate_tasks_up_to(
             model, criterion, test_dataloaders, task_id, device=device
         )
 
@@ -115,7 +115,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         individual_accuracies = []
         for eval_task_id in range(task_id + 1):
             eval_dataloader = test_dataloaders[eval_task_id]
-            task_acc = agem.evaluate_single_task(
+            task_acc = accuracy_test.evaluate_single_task(
                 model, criterion, eval_dataloader, device=device
             )
             individual_accuracies.append(task_acc)
@@ -164,7 +164,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     print(f"Task Training Time: {task_time:.2f}s")
 
 t.end("training")
-print("\nTA-A-GEM training complete.")
+print("\nTraining complete.")
 
 # --- 3. Comprehensive Visualization and Analysis ---
 print("\nGenerating comprehensive analysis...")

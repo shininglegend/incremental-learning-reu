@@ -233,3 +233,4 @@ def evaluate_single_task(model, criterion, task_dataloader, device):
             total_correct += (predicted == labels).sum().item()
 
     return total_correct / total_samples if total_samples > 0 else 0.0
+
