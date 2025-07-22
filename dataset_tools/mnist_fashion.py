@@ -349,39 +349,89 @@ if __name__ == "__main__":
     import random
     import matplotlib.pyplot as plt
 
-    # Load Fashion-MNIST data
+    # Initialize the loader
     loader = FashionMnistDatasetLoader()
-    x_train, y_train, x_test, y_test = loader.load_raw_data()
 
-    def show_images(images, title_texts):
+    def show_images(images, title_texts, figure_title=""):
         """Helper function to show a list of images with their relating titles."""
         cols = 5
         rows = int(len(images) / cols) + 1
-        plt.figure(figsize=(30, 20))
+        plt.figure(figsize=(15, 10))
+        if figure_title:
+            plt.suptitle(figure_title, fontsize=16)
         index = 1
         for x in zip(images, title_texts):
             image = x[0]
             title_text = x[1]
             plt.subplot(rows, cols, index)
-            plt.imshow(image, cmap="gray")
+            plt.imshow(image.reshape(28, 28) if len(image.shape) == 1 else image, cmap="gray")
             if title_text != "":
-                plt.title(title_text, fontsize=15)
+                plt.title(title_text, fontsize=10)
+            plt.axis('off')
             index += 1
+        plt.tight_layout()
         plt.show()
 
-    # Show some random training and test images
+    print("=== Fashion-MNIST Task Visualization ===")
+
+    # Load and preprocess data with quick_test for faster demonstration
+    x_train, y_train, x_test, y_test = loader.load_raw_data()
+    x_train, y_train, x_test, y_test = loader.preprocess_data(x_train, y_train, x_test, y_test, quick_test=True)
+
+    print(f"Dataset shapes: train {x_train.shape}, test {x_test.shape}")
+
+    # Original data samples
+    print("\n1. Original Fashion-MNIST samples:")
     images_2_show = []
     titles_2_show = []
-    for i in range(0, 10):
-        r = random.randint(1, len(x_train) - 1)
+    for i in range(10):
+        r = random.randint(0, len(x_train) - 1)
         images_2_show.append(x_train[r].numpy())
         class_name = FASHION_MNIST_CLASSES[y_train[r].item()]
-        titles_2_show.append(f"train [{r}] = {class_name} ({y_train[r].item()})")
+        titles_2_show.append(f"{class_name}")
+    show_images(images_2_show, titles_2_show, "Original Fashion-MNIST Samples")
 
-    for i in range(0, 5):
-        r = random.randint(1, len(x_test) - 1)
-        images_2_show.append(x_test[r].numpy())
-        class_name = FASHION_MNIST_CLASSES[y_test[r].item()]
-        titles_2_show.append(f"test [{r}] = {class_name} ({y_test[r].item()})")
+    # Permutation task samples
+    print("2. Permutation task samples:")
+    train_loaders, test_loaders = loader._create_permutation_tasks(x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32)
 
-    show_images(images_2_show, titles_2_show)
+    for task_id in range(3):
+        images_2_show = []
+        titles_2_show = []
+        # Get first batch from each task
+        batch_x, batch_y = next(iter(train_loaders[task_id]))
+        for i in range(min(5, len(batch_x))):
+            images_2_show.append(batch_x[i].numpy())
+            class_name = FASHION_MNIST_CLASSES[batch_y[i].item()]
+            titles_2_show.append(f"{class_name}")
+        show_images(images_2_show, titles_2_show, f"Permutation Task {task_id + 1}")
+
+    # Rotation task samples
+    print("3. Rotation task samples:")
+    train_loaders, test_loaders = loader._create_rotation_tasks(x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32)
+
+    for task_id in range(3):
+        images_2_show = []
+        titles_2_show = []
+        batch_x, batch_y = next(iter(train_loaders[task_id]))
+        for i in range(min(5, len(batch_x))):
+            images_2_show.append(batch_x[i].numpy())
+            class_name = FASHION_MNIST_CLASSES[batch_y[i].item()]
+            titles_2_show.append(f"{class_name}, {task_id * 20}°")
+        show_images(images_2_show, titles_2_show, f"Rotation Task {task_id + 1} ({task_id * 20}° rotation)")
+
+    # Class split task samples
+    print("4. Class split task samples:")
+    train_loaders, test_loaders = loader._create_class_split_tasks(x_train, y_train, x_test, y_test, num_tasks=5, batch_size=32)
+
+    for task_id in range(5):
+        images_2_show = []
+        titles_2_show = []
+        batch_x, batch_y = next(iter(train_loaders[task_id]))
+        for i in range(min(5, len(batch_x))):
+            images_2_show.append(batch_x[i].numpy())
+            orig_classes = [FASHION_MNIST_CLASSES[task_id*2], FASHION_MNIST_CLASSES[task_id*2+1]]
+            titles_2_show.append(f"{'/'.join(orig_classes)}, New: {batch_y[i].item()}")
+        show_images(images_2_show, titles_2_show, f"Class Split Task {task_id + 1} (classes {task_id*2}-{task_id*2+1})")
+
+    print("Visualization complete!")
