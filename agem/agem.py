@@ -10,15 +10,61 @@ class AGEMHandler:
         device,
         batch_size=256,
         lr_scheduler=None,
-        epsilon=1e-3,  # Sensitivity parameter e for epsilon
+        epsilon=1e-32,  # Now meaningful for normalized losses (0-1 range)
     ):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
-        self.eps_mem_batch = batch_size  # Memory batch size for gradient computation
+        self.eps_mem_batch = batch_size
         self.device = device
         self.lr_scheduler = lr_scheduler
-        self.epsilon = epsilon  # Sensitivity parameter for MEGA-I
+        self.epsilon = epsilon
+        
+        # For running min-max normalization
+        self.epoch_min_loss = float('inf')
+        self.epoch_max_loss = float('-inf')
+
+    def start_epoch(self):
+        """Call this at the beginning of each epoch"""
+        self.epoch_min_loss = float('inf')
+        self.epoch_max_loss = float('-inf')
+
+    def update_loss_bounds(self, loss_value):
+        """Update running min and max loss values"""
+        self.epoch_min_loss = min(self.epoch_min_loss, loss_value)
+        self.epoch_max_loss = max(self.epoch_max_loss, loss_value)
+
+    # Added, could do without (along with small changes to function below it)
+    def min_max_normalize(self, data):
+        """
+        Normalize a list of numbers using Min-Max scaling to the range [0, 1].
+        Parameters:
+            data (list or array-like): A list of numerical values.
+        Returns:
+            list: Normalized values in the range [0, 1].
+        """
+        min_val = min(data)
+        max_val = max(data)
+        
+        if min_val == max_val:
+            # Avoid division by zero if all values are the same
+            return [0.0 for _ in data]
+        
+        return [(x - min_val) / (max_val - min_val) for x in data]
+
+    def normalize_loss(self, loss_value):
+        """Wrapper to use the min_max_normalize function for a single loss value"""
+        # For single loss normalization, we need to use the epoch bounds
+        if self.epoch_max_loss == self.epoch_min_loss:
+            return 0.5  # Return middle value if all losses are the same
+        
+        if self.epoch_min_loss == float('inf') or self.epoch_max_loss == float('-inf'):
+            return 0.5  # Return middle value if bounds not initialized
+        
+        # Use the min_max_normalize approach
+        data = [self.epoch_min_loss, self.epoch_max_loss, loss_value]
+        normalized_data = self.min_max_normalize(data)
+        return normalized_data[2]  # Return the normalized version of loss_value
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
@@ -71,20 +117,29 @@ class AGEMHandler:
         According to equation:
         - If l_t(w; X) > e, then a1(w) = 1, a2(w) = l_ref(w; z) / l_t(w; X)
         - If l_t(w; X) <= e, then a1(w) = 0, a2(w) = 1
+
+        Normalized loss added
         """
         if current_grad.numel() == 0 or ref_grad.numel() == 0:
             return current_grad
 
-        if current_loss > self.epsilon:
-            # Case 1: Current loss > e
+        # Normalize the current loss
+        normalized_current_loss = self.normalize_loss(current_loss)
+        
+        print(f"Original loss: {current_loss:.6f}, Normalized loss: {normalized_current_loss:.6f}, epsilon: {self.epsilon}")
+
+        if normalized_current_loss > self.epsilon:
+            # Case 1: Normalized current loss > epsilon
             alpha1 = 1.0
             alpha2 = ref_loss / current_loss if current_loss > 0 else 0.0
         else:
-            # Case 2: Current loss <= e  
+            # Case 2: Normalized current loss <= epsilon
+            print("| ========== | IN THE DEFAULT CASE (LOW NORMALIZED LOSS) | ========== |")
+            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
             alpha1 = 0.0
             alpha2 = 1.0
 
-        # Balance the gradients: a1 * current_grad + a2 * ref_grad
+        # Balance the gradients
         balanced_grad = alpha1 * current_grad + alpha2 * ref_grad
         
         return balanced_grad
@@ -104,8 +159,7 @@ class AGEMHandler:
                 pointer += num_param
 
     def optimize(self, data, labels, memory_samples=None):
-        """MEGA-I optimization with loss-based gradient balancing"""
-        # Move data to device
+        """MEGA-I optimization with normalized loss-based gradient balancing"""
         data, labels = data.to(self.device), labels.to(self.device)
         
         # Compute loss for tracking
@@ -114,7 +168,10 @@ class AGEMHandler:
         loss = self.criterion(outputs, labels)
         current_loss = loss.item()
 
-        # Update learning rate if scheduler is provided
+        # Update running min/max bounds
+        self.update_loss_bounds(current_loss)
+
+        #Update learning rate if scheduler is provided
         if self.lr_scheduler is not None:
             new_lr = self.lr_scheduler.step(current_loss)
             for param_group in self.optimizer.param_groups:
@@ -157,7 +214,7 @@ class AGEMHandler:
                     # Compute reference gradient and loss on memory
                     ref_grad, ref_loss = self.compute_gradient(mem_data, mem_labels)
 
-                    # Apply MEGA-I gradient balancing
+                    # Apply MEGA-I gradient balancing with normalized loss
                     balanced_grad = self.mega_i_gradient_balance(
                         current_grad, ref_grad, current_loss, ref_loss
                     )
