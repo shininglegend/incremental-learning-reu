@@ -4,8 +4,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from agem import agem
+# from agem import agem
 from agem.learning_rate import TALearningRateScheduler
+from synaptic_intelligence.si import SynapticIntelligence
 from em_tools import clustering_pools
 from dataset_tools.load_dataset import load_dataset
 from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
@@ -180,9 +181,12 @@ def initialize_system():
         num_pools=config["num_pools"],
     )
 
-    agem_handler = agem.AGEMHandler(
+    si_handler = SynapticIntelligence(
         model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
     )
+    # agem_handler = agem.AGEMHandler(
+    #     model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
+    # )
 
     # Load dataset
     print("Loading dataset and preparing data loaders...")
@@ -209,7 +213,7 @@ def initialize_system():
         criterion,
         lr_scheduler,
         clustering_memory,
-        agem_handler,
+        si_handler,
         train_dataloaders,
         test_dataloaders,
         visualizer,

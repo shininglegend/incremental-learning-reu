@@ -17,7 +17,7 @@ from init import initialize_system
     criterion,
     lr_scheduler,
     clustering_memory,
-    agem_handler,
+    si_handler,
     train_dataloaders,
     test_dataloaders,
     visualizer,
@@ -54,14 +54,14 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Move data to device
             data, labels = data.to(device), labels.to(device)
 
-            # Step 1: Use A-GEM logic for current batch and current memory
-            # agem_handler.optimize handles model update and gradient projection
+            # Step 1: Use A-GEM or SI logic for current batch and current memory
+            # optimize() handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
             t.start("get samples")
             _samples = clustering_memory.get_memory_samples()
             t.end("get samples")
             t.start("optimize")
-            batch_loss = agem_handler.optimize(data, labels, _samples)
+            batch_loss = si_handler.optimize(data, labels, _samples)
             t.end("optimize")
 
             # Track batch loss
@@ -69,17 +69,17 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
-            # Step 2: Update the clustered memory with current batch samples
-            # This is where the core clustering for TA-A-GEM happens
-            t.start("add samples")
-            # Add only first sample from batch
-            # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
-            sample_data = data[0].cpu()  # Move to CPU for memory storage
-            sample_label = labels[0].cpu()  # Move to CPU for memory storage
-            clustering_memory.add_sample(
-                sample_data, sample_label, task_id
-            )  # Add sample to clusters
-            t.end("add samples")
+            # # Step 2: Update the clustered memory with current batch samples
+            # # This is where the core clustering for TA-A-GEM happens
+            # t.start("add samples")
+            # # Add only first sample from batch
+            # # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
+            # sample_data = data[0].cpu()  # Move to CPU for memory storage
+            # sample_label = labels[0].cpu()  # Move to CPU for memory storage
+            # clustering_memory.add_sample(
+            #     sample_data, sample_label, task_id
+            # )  # Add sample to clusters
+            # t.end("add samples")
 
             num_batches += 1
 
