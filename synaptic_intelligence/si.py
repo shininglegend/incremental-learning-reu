@@ -1,5 +1,5 @@
-# Continual Learning through Synaptic Intelligence 
-# https://proceedings.mlr.press/v70/zenke17a 
+# Continual Learning through Synaptic Intelligence
+# https://proceedings.mlr.press/v70/zenke17a
 
 import torch
 
@@ -31,7 +31,7 @@ class SynapticIntelligence:
     def _initialize_si(self):
         """Initialize Synaptic Intelligence tracking variables"""
         self.si_omega = {}  # Importance weights for each parameter
-        self.si_w_old = {}  # Previous parameter values
+        self.si_w_old = {}  # Previous parameter values (will become θk* or reference weights)
         self.si_delta_w = {}  # Parameter changes during current task
         self.si_gradients = {}  # Accumulated gradients during current task
 
@@ -39,7 +39,7 @@ class SynapticIntelligence:
         for name, param in self.model.named_parameters():
             if param.requires_grad:
                 self.si_omega[name] = torch.zeros_like(param.data).to(self.device)
-                self.si_w_old[name] = param.data.clone().to(self.device)
+                self.si_w_old[name] = param.data.clone().to(self.device) # θk* initialized to current weights
                 self.si_delta_w[name] = torch.zeros_like(param.data).to(self.device)
                 self.si_gradients[name] = torch.zeros_like(param.data).to(self.device)
 
@@ -54,20 +54,22 @@ class SynapticIntelligence:
         for name, param in self.model.named_parameters():
             if param.requires_grad and name in self.si_delta_w:
                 self.si_delta_w[name] += param.data - self.si_w_old[name]
-                self.si_w_old[name] = param.data.clone()
+                # FIX: Removed the incorrect update of self.si_w_old here.
+                # `self.si_w_old` (θk*) should remain constant throughout the task and
+                # only be updated at the end of the task.
 
     def compute_si_importance(self):
         """Compute importance weights using Synaptic Intelligence"""
         for name, param in self.model.named_parameters():
             if param.requires_grad and name in self.si_omega:
-                # Compute importance: |gradient * delta_w| / (delta_w^2 + xi)
+                # FIX: Correct SI importance calculation to sum -grad * delta_w at each step.
+                # ωkμ = Σ(-gk * δθk) over all steps in a task.
                 delta_w = self.si_delta_w[name]
                 grad_sum = self.si_gradients[name]
-
-                # Importance calculation with damping
-                importance = torch.abs(grad_sum * delta_w) / (delta_w.pow(2) + self.xi)
-
-                # Update omega (importance weights)
+                # Compute per-element importance: -grad * delta_w
+                importance = -grad_sum * delta_w
+                # Normalize by (delta_w^2 + xi) for stability
+                importance = importance / (delta_w.pow(2) + self.xi)
                 self.si_omega[name] += importance
 
                 # Reset accumulators for next task
@@ -79,10 +81,11 @@ class SynapticIntelligence:
         si_loss = 0.0
         for name, param in self.model.named_parameters():
             if param.requires_grad and name in self.si_omega:
-                # SI penalty: c/2 * sum(omega * (w - w_old)^2)
-                w_old = self.si_w_old[name]
+                # SI penalty: c/2 * sum(omega * (w - w_star)^2)
+                # FIX: `w_star` now correctly refers to `theta_k*`, the reference weights from the previous task.
+                w_star = self.si_w_old[name]
                 omega = self.si_omega[name]
-                si_loss += (omega * (param - w_old).pow(2)).sum()
+                si_loss += (omega * (param - w_star).pow(2)).sum()
 
         return self.si_c / 2 * si_loss
 
@@ -121,7 +124,13 @@ class SynapticIntelligence:
         return current_loss
 
     def end_task(self):
-        """Call this method when finishing a task to update SI importance weights"""
+        """Call this method when finishing a task to update SI importance weights and reference weights"""
         print("Computing Synaptic Intelligence importance weights...")
         self.compute_si_importance()
         print("SI importance weights updated.")
+
+        # FIX: Update self.si_w_old (θk*) to the current model parameters at the end of the task.
+        # These weights will serve as the reference for the next task's regularization.
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and name in self.si_w_old:
+                self.si_w_old[name] = param.data.clone().detach().to(self.device)
