@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument(
         "--config",
         type=str,
-        default="config/default.yaml",
+        default="utils/default.yaml",
         help="Path to configuration file",
     )
     parser.add_argument(
