@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 
 
 class AGEMHandler:
@@ -12,8 +11,6 @@ class AGEMHandler:
         batch_size=256,
         lr_scheduler=None,
         epsilon=1e-3,  # Sensitivity parameter e for epsilon
-        si_c=0.1,  # SI regularization strength
-        xi=1.0,  # SI damping parameter
     ):
         self.model = model
         self.criterion = criterion
@@ -22,73 +19,8 @@ class AGEMHandler:
         self.device = device
         self.lr_scheduler = lr_scheduler
         self.epsilon = epsilon  # Sensitivity parameter for MEGA-I
-        
-        # Synaptic Intelligence parameters
-        self.si_c = si_c  # Regularization strength
-        self.xi = xi  # Damping parameter
-        
-        # Initialize SI variables
-        self._initialize_si()
 
-    def _initialize_si(self):
-        """Initialize Synaptic Intelligence tracking variables"""
-        self.si_omega = {}  # Importance weights for each parameter
-        self.si_w_old = {}  # Previous parameter values
-        self.si_delta_w = {}  # Parameter changes during current task
-        self.si_gradients = {}  # Accumulated gradients during current task
-        
-        # Initialize for each parameter
-        for name, param in self.model.named_parameters():
-            if param.requires_grad:
-                self.si_omega[name] = torch.zeros_like(param.data).to(self.device)
-                self.si_w_old[name] = param.data.clone().to(self.device)
-                self.si_delta_w[name] = torch.zeros_like(param.data).to(self.device)
-                self.si_gradients[name] = torch.zeros_like(param.data).to(self.device)
-
-    def update_si_gradients(self):
-        """Update accumulated gradients for SI importance calculation"""
-        for name, param in self.model.named_parameters():
-            if param.requires_grad and param.grad is not None and name in self.si_gradients:
-                self.si_gradients[name] += param.grad.data
-
-    def update_si_deltas(self):
-        """Update parameter changes for SI importance calculation"""
-        for name, param in self.model.named_parameters():
-            if param.requires_grad and name in self.si_delta_w:
-                self.si_delta_w[name] += param.data - self.si_w_old[name]
-                self.si_w_old[name] = param.data.clone()
-
-    def compute_si_importance(self):
-        """Compute importance weights using Synaptic Intelligence"""
-        for name, param in self.model.named_parameters():
-            if param.requires_grad and name in self.si_omega:
-                # Compute importance: |gradient * delta_w| / (delta_w^2 + xi)
-                delta_w = self.si_delta_w[name]
-                grad_sum = self.si_gradients[name]
-                
-                # Importance calculation with damping
-                importance = torch.abs(grad_sum * delta_w) / (delta_w.pow(2) + self.xi)
-                
-                # Update omega (importance weights)
-                self.si_omega[name] += importance
-                
-                # Reset accumulators for next task
-                self.si_delta_w[name].zero_()
-                self.si_gradients[name].zero_()
-
-    def compute_si_loss(self):
-        """Compute Synaptic Intelligence regularization loss"""
-        si_loss = 0.0
-        for name, param in self.model.named_parameters():
-            if param.requires_grad and name in self.si_omega:
-                # SI penalty: c/2 * sum(omega * (w - w_old)^2)
-                w_old = self.si_w_old[name]
-                omega = self.si_omega[name]
-                si_loss += (omega * (param - w_old).pow(2)).sum()
-        
-        return self.si_c / 2 * si_loss
-
-    def compute_gradient(self, data, labels, include_si=True):
+    def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
         # Move data to device
         data, labels = data.to(self.device), labels.to(self.device)
@@ -105,12 +37,6 @@ class AGEMHandler:
         self.model.zero_grad()
         outputs = self.model(data)
         loss = self.criterion(outputs, labels)
-        
-        # Add SI regularization loss if requested
-        if include_si:
-            si_loss = self.compute_si_loss()
-            loss += si_loss
-
         loss.backward()
 
         # Extract gradients
@@ -128,18 +54,13 @@ class AGEMHandler:
 
         return torch.cat(grads) if grads else torch.tensor([]).to(self.device), loss.item()
 
-    def compute_loss(self, data, labels, include_si=True):
+    def compute_loss(self, data, labels):
         """Compute loss for given data and labels without affecting gradients"""
         data, labels = data.to(self.device), labels.to(self.device)
         
         with torch.no_grad():
             outputs = self.model(data)
             loss = self.criterion(outputs, labels)
-            
-            # Add SI regularization loss if requested
-            if include_si:
-                si_loss = self.compute_si_loss()
-                loss += si_loss
         
         return loss.item()
 
@@ -183,19 +104,15 @@ class AGEMHandler:
                 pointer += num_param
 
     def optimize(self, data, labels, memory_samples=None):
-        """MEGA-I optimization with loss-based gradient balancing and Synaptic Intelligence"""
+        """MEGA-I optimization with loss-based gradient balancing"""
         # Move data to device
         data, labels = data.to(self.device), labels.to(self.device)
         
-        # Compute loss for tracking (including SI regularization)
+        # Compute loss for tracking
         self.model.zero_grad()
         outputs = self.model(data)
         loss = self.criterion(outputs, labels)
-        
-        # Add SI regularization loss
-        si_loss = self.compute_si_loss()
-        total_loss = loss + si_loss
-        current_loss = total_loss.item()
+        current_loss = loss.item()
 
         # Update learning rate if scheduler is provided
         if self.lr_scheduler is not None:
@@ -203,12 +120,8 @@ class AGEMHandler:
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = new_lr
 
-        # Compute gradient on current task (including SI)
-        total_loss.backward()
-        
-        # Update SI gradient accumulation
-        self.update_si_gradients()
-        
+        # Compute gradient on current task
+        loss.backward()
         current_grad = []
         for param in self.model.parameters():
             if param.grad is not None:
@@ -241,8 +154,8 @@ class AGEMHandler:
                         else torch.tensor(mem_labels_list).to(self.device)
                     )
 
-                    # Compute reference gradient and loss on memory (including SI)
-                    ref_grad, ref_loss = self.compute_gradient(mem_data, mem_labels, include_si=True)
+                    # Compute reference gradient and loss on memory
+                    ref_grad, ref_loss = self.compute_gradient(mem_data, mem_labels)
 
                     # Apply MEGA-I gradient balancing
                     balanced_grad = self.mega_i_gradient_balance(
@@ -252,67 +165,18 @@ class AGEMHandler:
                     # Set balanced gradient and optimize
                     self.set_gradient(balanced_grad)
                     self.optimizer.step()
-                    
-                    # Update SI parameter deltas after optimization step
-                    self.update_si_deltas()
                 else:
                     # No valid memory samples, just do regular update
                     self.optimizer.step()
-                    self.update_si_deltas()
             except Exception as e:
                 # Fallback to regular update if memory processing fails
                 print(f"Memory processing failed: {e}")
                 self.optimizer.step()
-                self.update_si_deltas()
         else:
             # No memory samples, just do regular update
             self.optimizer.step()
-            self.update_si_deltas()
 
         return current_loss
-
-    def end_task(self):
-        """Call this method when finishing a task to update SI importance weights"""
-        print("Computing Synaptic Intelligence importance weights...")
-        self.compute_si_importance()
-        print("SI importance weights updated.")
-
-    def get_si_stats(self):
-        """Get statistics about SI importance weights for monitoring"""
-        stats = {}
-        for name, omega in self.si_omega.items():
-            stats[name] = {
-                'mean_importance': omega.mean().item(),
-                'max_importance': omega.max().item(),
-                'std_importance': omega.std().item(),
-                'nonzero_params': (omega > 0).sum().item(),
-                'total_params': omega.numel()
-            }
-        return stats
-
-    def save_si_state(self, filepath):
-        """Save SI state for checkpointing"""
-        si_state = {
-            'si_omega': {name: omega.cpu() for name, omega in self.si_omega.items()},
-            'si_w_old': {name: w.cpu() for name, w in self.si_w_old.items()},
-            'si_c': self.si_c,
-            'xi': self.xi
-        }
-        torch.save(si_state, filepath)
-
-    def load_si_state(self, filepath):
-        """Load SI state from checkpoint"""
-        si_state = torch.load(filepath, map_location=self.device)
-        self.si_omega = {name: omega.to(self.device) for name, omega in si_state['si_omega'].items()}
-        self.si_w_old = {name: w.to(self.device) for name, w in si_state['si_w_old'].items()}
-        self.si_c = si_state['si_c']
-        self.xi = si_state['xi']
-        
-        # Reinitialize accumulators
-        for name, param in self.model.named_parameters():
-            if param.requires_grad and name in self.si_omega:
-                self.si_delta_w[name] = torch.zeros_like(param.data).to(self.device)
-                self.si_gradients[name] = torch.zeros_like(param.data).to(self.device)
 
 
 def evaluate_all_tasks(model, criterion, task_dataloaders, device):
