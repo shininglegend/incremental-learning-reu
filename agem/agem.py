@@ -10,7 +10,7 @@ class AGEMHandler:
         device,
         batch_size=256,
         lr_scheduler=None,
-        epsilon=1e-32,  # Now meaningful for normalized losses (0-1 range)
+        epsilon=0.03,  # Now meaningful for normalized losses (0-1 range)
     ):
         self.model = model
         self.criterion = criterion
@@ -34,37 +34,30 @@ class AGEMHandler:
         self.epoch_min_loss = min(self.epoch_min_loss, loss_value)
         self.epoch_max_loss = max(self.epoch_max_loss, loss_value)
 
-    # Added, could do without (along with small changes to function below it)
-    def min_max_normalize(self, data):
-        """
-        Normalize a list of numbers using Min-Max scaling to the range [0, 1].
-        Parameters:
-            data (list or array-like): A list of numerical values.
-        Returns:
-            list: Normalized values in the range [0, 1].
-        """
-        min_val = min(data)
-        max_val = max(data)
+    def normalize_loss_sliding_window(self, loss_value):
+        """Normalize using a sliding window of recent losses"""
+        if not hasattr(self, 'loss_history'):
+            self.loss_history = []
         
-        if min_val == max_val:
-            # Avoid division by zero if all values are the same
-            return [0.0 for _ in data]
+        self.loss_history.append(loss_value)
         
-        return [(x - min_val) / (max_val - min_val) for x in data]
+        # Keep only last N losses for normalization bounds
+        window_size = 100  # Adjust as needed
+        if len(self.loss_history) > window_size:
+            self.loss_history = self.loss_history[-window_size:]
+        
+        if len(self.loss_history) < 2:
+            return 0.5  # Default for insufficient data
+        
+        min_val = min(self.loss_history)
+        max_val = max(self.loss_history)
 
-    def normalize_loss(self, loss_value):
-        """Wrapper to use the min_max_normalize function for a single loss value"""
-        # For single loss normalization, we need to use the epoch bounds
-        if self.epoch_max_loss == self.epoch_min_loss:
-            return 0.5  # Return middle value if all losses are the same
-        
-        if self.epoch_min_loss == float('inf') or self.epoch_max_loss == float('-inf'):
-            return 0.5  # Return middle value if bounds not initialized
-        
-        # Use the min_max_normalize approach
-        data = [self.epoch_min_loss, self.epoch_max_loss, loss_value]
-        normalized_data = self.min_max_normalize(data)
-        return normalized_data[2]  # Return the normalized version of loss_value
+        if min_val == max_val:
+            return 0.5
+    
+        print(f"Loss value: {loss_value:.6f}, min val: {min_val:.6f}, max val: {max_val:.6f}")
+
+        return (loss_value - min_val) / (max_val - min_val)
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
@@ -124,7 +117,7 @@ class AGEMHandler:
             return current_grad
 
         # Normalize the current loss
-        normalized_current_loss = self.normalize_loss(current_loss)
+        normalized_current_loss = self.normalize_loss_sliding_window(current_loss)
         
         print(f"Original loss: {current_loss:.6f}, Normalized loss: {normalized_current_loss:.6f}, epsilon: {self.epsilon}")
 
@@ -134,8 +127,8 @@ class AGEMHandler:
             alpha2 = ref_loss / current_loss if current_loss > 0 else 0.0
         else:
             # Case 2: Normalized current loss <= epsilon
-            print("| ========== | IN THE DEFAULT CASE (LOW NORMALIZED LOSS) | ========== |")
-            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+            #print("| ========== | IN THE DEFAULT CASE (LOW NORMALIZED LOSS) | ========== |")
+            #print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
             alpha1 = 0.0
             alpha2 = 1.0
 
@@ -218,6 +211,7 @@ class AGEMHandler:
                     balanced_grad = self.mega_i_gradient_balance(
                         current_grad, ref_grad, current_loss, ref_loss
                     )
+                    #print("balanced grad: ", balanced_grad)
 
                     # Set balanced gradient and optimize
                     self.set_gradient(balanced_grad)
