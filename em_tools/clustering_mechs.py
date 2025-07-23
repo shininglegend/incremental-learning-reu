@@ -5,7 +5,7 @@ from collections import deque
 
 DEBUG = False
 EPSILON = 0
-DEFAULT = True
+DEFAULT = False
 
 triggered = set()
 dprint = lambda s: triggered.add(s) if DEBUG else None
@@ -55,7 +55,7 @@ class Cluster:
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
         # Testing
-        if not DEFAULT: 
+        if not DEFAULT:
             self.new_buffer: Buffer | None = None
 
     def __len__(self):
@@ -77,6 +77,7 @@ class Cluster:
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
         if len(self) < 2 or DEFAULT:
+            dcount("Simply add")
             return self._add_sample(sample, label, task_id)
 
         # Check distance between mean and each sample, find max
@@ -86,32 +87,25 @@ class Cluster:
 
         # print(dist_to_new, max_curr_dist, abs(max_curr_dist - dist_to_new))
 
-        if dist_to_new <= max_curr_dist + EPSILON:
-            # If the new sample is closer to the mean than any current sample
-            # with some variance, add it to the cluster
-            dcount("save new sample")
-            if (
-                self.new_buffer is not None
-                and distance_h(self.new_buffer.sample - sample)
-                <= max_curr_dist + EPSILON
-            ):
-                # If the buffered sample is closer to the new sample than the
-                # maximum distance between any current sample and the mean, add it as well
-                dcount("added buffer because of new sample")
-                self._add_sample(self.new_buffer)
-            self.new_buffer = None
-            return self._add_sample(sample, label, task_id)
-        elif (
+        if (
             self.new_buffer is not None
-            and dist_to_new <= self.new_buffer.distance + EPSILON
+            and max_curr_dist <= distance_h(self.new_buffer.sample - sample) + EPSILON
         ):
-            # If the buffer is further from the center than the new sample is,
-            # Add it and the new sample. (NOTE: Logic a bit whacky?)
+            # If a buffer exists, and the new sample is closer to the buffer than
+            # any other sample is to the mean, add both
             dcount("save because of buffered sample")
             self._add_sample(self.new_buffer)
             self.new_buffer = None
             return self._add_sample(sample, label, task_id)
+        elif dist_to_new <= max_curr_dist + EPSILON:
+            # If the new sample is closer to the mean than any current sample
+            # with some variance, add it to the cluster. Since the buffer isn't closest,
+            # drop it.
+            dcount("save new sample")
+            self.new_buffer = None
+            return self._add_sample(sample, label, task_id)
         else:
+            # Otherwise, buffer the new sample
             dcount("buffer new sample")
             if self.new_buffer is not None:
                 dcount("buffer overwritten before adding")
