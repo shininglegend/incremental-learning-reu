@@ -14,7 +14,7 @@ input_dim: 784 # For MNIST (28*28)
 
 # Model Configuration
 hidden_dim: 200 # Hidden layer dimension as per paper
-device: "cuda" # Override to use cuda, we found it was slower on average
+device: "cuda" # Device to use. "cuda" for GPU, "cpu" for CPU.
 
 # Memory Configuration
 memory_size_q: 10 # Number of clusters per pool (Q), overridden below
@@ -46,6 +46,12 @@ task_specific:
 
 # Removal method - experimental
 # for validating removal method at initialization
-removal: remove_furthest_from_mean
-# Options: 'remove_oldest', 'remove_furthest_from_mean', 'remove_random', 'remove_furthest_from_new'
+removal: remove_furthest_from_new
+# Options:
+    # 'remove_oldest'
+    # 'remove_furthest_from_mean'
+    # 'remove_random'
+    # 'remove_furthest_from_new'
+    # 'remove_based_on_mean'
+    # 'remove_closest_to_new'
 consider_newest: false # Do you want to be able to remove the newest sample?

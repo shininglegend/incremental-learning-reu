@@ -84,7 +84,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             if (
                     not QUICK_TEST_MODE
                     and VERBOSE
-                    and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1)
+                    and ((batch_idx+1) % 10 == 0 or (batch_idx+1) == len(train_dataloader))
             ):
                 progress = (batch_idx + 1) / len(train_dataloader)
                 bar_length = 30
@@ -138,7 +138,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         )
 
         # Print epoch summary
-        if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
+        if QUICK_TEST_MODE:
             print(
                 f"  Epoch {epoch + 1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )

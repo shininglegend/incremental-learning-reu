@@ -44,6 +44,8 @@ class Cluster:
             'remove_random': self.remove_random,
             'remove_furthest_from_new': self.remove_furthest_from_new,
             'remove_based_on_mean': self.remove_based_on_mean,
+            'remove_closest_to_new': self.remove_closest_to_new,
+
         }
 
         if cluster_params['removal'] in self.removal_methods:
@@ -161,13 +163,35 @@ class Cluster:
         max_distance = -1
         least_similar_idx = 0
 
-        for i in range(len(self.samples)):
+        for i in range(len(self.samples) - 1):
             distance = torch.norm(self.samples[i] - new_sample)
             if distance > max_distance:
                 max_distance = distance
                 least_similar_idx = i
 
         return self._remove_by_index(least_similar_idx)
+
+    def remove_closest_to_new(self):
+        """
+        Removes the sample most similar to the newest one (last in deque).
+        """
+        dprint("cl remove_closest_to_new triggered")
+
+        if len(self.samples) <= 1:
+            return self.remove_oldest()
+
+        new_sample = self.samples[-1]
+
+        min_distance = float('inf')  # Start with infinity
+        most_similar_idx = 0
+
+        for i in range(len(self.samples) - 1):
+            distance = torch.norm(self.samples[i] - new_sample)
+            if distance < min_distance:
+                min_distance = distance
+                most_similar_idx = i
+
+        return self._remove_by_index(most_similar_idx)
 
     def remove_based_on_mean(self):
         """
