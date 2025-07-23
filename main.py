@@ -58,7 +58,10 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
             t.start("get samples")
-            _samples = clustering_memory.get_random_samples(len(data))
+            if config["random_memory"]:
+                _samples = clustering_memory.get_random_samples(len(data))
+            else:
+                _samples = clustering_memory.get_memory_samples()
             t.end("get samples")
             t.start("optimize")
             batch_loss = agem_handler.optimize(data, labels, _samples)
@@ -146,6 +149,8 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
 
+    clustering_memory.pools[0].visualize()
+
     # Calculate training time for this task
     task_time = time.time() - task_start_time
 
@@ -179,12 +184,13 @@ timestamp = time.strftime("%Y%m%d_%H%M%S")
 task_type_abbrev = {
     "class_incremental": "cla",
     "rotation": "rot",
-    "permutation": "perm"
+    "permutation": "perm",
 }.get(config["task_type"], config["task_type"][:3])
 
 quick_mode = "q-" if QUICK_TEST_MODE else ""
+random_sampling = "r-" if config["random_memory"] else ""
 dataset_name = config["dataset_name"].lower()
-filename = f"results-{quick_mode}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+filename = f"results-{random_sampling}{quick_mode}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
 
 visualizer.save_metrics(
     os.path.join(params["output_dir"], filename),

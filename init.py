@@ -61,6 +61,12 @@ def parse_args():
         help="Path to store the output in, should be a folder",
     )
     parser.add_argument("--data_dir", type=str, default=None, help="Path to dataset")
+    parser.add_argument(
+        "--random_em",
+        action="store_true",
+        default=None,
+        help="Use random sampling from episodic memory",
+    )
     return parser.parse_args()
 
 
@@ -102,6 +108,7 @@ def initialize_system():
     # Set some default values that aren't in the config file
     config["verbose"] = True
     config["data_dir"] = None
+    config["random_memory"] = False
 
     # Override config with command line arguments
     if args.task_type is not None:
@@ -116,6 +123,8 @@ def initialize_system():
         config["verbose"] = not args.no_verbose  # Note: Inverted.
     if args.data_dir is not None:
         config["data_dir"] = args.data_dir
+    if args.random_em is not None:
+        config["random_memory"] = args.random_em
 
     # Apply lite mode overrides
     if config["lite"]:
