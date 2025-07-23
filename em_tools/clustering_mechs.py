@@ -169,7 +169,7 @@ class Cluster:
         least_similar_idx = 0
 
         for i in range(len(self.samples) - 1):
-            distance = torch.norm(self.samples[i] - new_sample)
+            distance = distance_h(self.samples[i] - new_sample)
             if distance > max_distance:
                 max_distance = distance
                 least_similar_idx = i
@@ -191,7 +191,7 @@ class Cluster:
         most_similar_idx = 0
 
         for i in range(len(self.samples) - 1):
-            distance = torch.norm(self.samples[i] - new_sample)
+            distance = distance_h(self.samples[i] - new_sample)
             if distance < min_distance:
                 min_distance = distance
                 most_similar_idx = i
@@ -249,7 +249,7 @@ class Cluster:
 
         return removed_sample, removed_label
 
-    def remove_by_weighted_mean_distance(self, age_weight_factor=0.5):
+    def remove_by_weighted_mean_distance(self, age_weight_factor=0.02):
         """
         Removes the sample with the highest weighted distance from cluster mean.
         Older samples get lower weights (are less likely to be removed).
@@ -269,11 +269,12 @@ class Cluster:
 
         for i in range(len(self.samples) if self.consider_newest else len(self.samples) - 1):
             # Distance from cluster mean
-            distance = torch.norm(self.samples[i] - self.mean)
+            distance = distance_h(self.samples[i] - self.mean)
+            age = self.insertion_order[i]
 
             # Age weight: newer samples (higher index) get higher weights
             # This makes them more likely to be removed
-            age_weight = 1.0 + age_weight_factor * (i / (len(self.samples) - 1))
+            age_weight = 1.0 + age_weight_factor * age
 
             weighted_distance = distance * age_weight
 

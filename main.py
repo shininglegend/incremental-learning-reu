@@ -71,8 +71,8 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             t.start("add samples")
             # Add only first sample from batch
             # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
-            sample_data = data[0].cpu()  # Move to CPU for memory storage
-            sample_label = labels[0].cpu()  # Move to CPU for memory storage
+            sample_data = data[0].to(device)
+            sample_label = labels[0].to(device)
             clustering_memory.add_sample(
                 sample_data, sample_label, task_id
             )  # Add sample to clusters
@@ -86,7 +86,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                     and VERBOSE
                     and ((batch_idx+1) % 10 == 0 or (batch_idx+1) == len(train_dataloader))
             ):
-                t.start("progress bar")
                 progress = (batch_idx + 1) / len(train_dataloader)
                 bar_length = 30
                 filled_length = int(bar_length * progress)
@@ -96,7 +95,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                     end="",
                     flush=True,
                 )
-                t.end("progress bar")
 
         # Print newline after progress bar completion
         if not QUICK_TEST_MODE and VERBOSE:
@@ -193,6 +191,7 @@ visualizer.save_metrics(
 # Generate simplified report with 3 key visualizations
 visualizer.generate_simple_report(
     clustering_memory,
+    # clusters_to_show=clustering_memory.num_pools,
     show_images=config["show_images"],
 )
 
