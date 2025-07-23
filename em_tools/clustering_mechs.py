@@ -4,6 +4,7 @@ import pandas
 from collections import deque
 
 DEBUG = False
+EPSILON = 0
 
 triggered = set()
 dprint = lambda s: triggered.add(s) if DEBUG else None
@@ -11,7 +12,25 @@ dprint = lambda s: triggered.add(s) if DEBUG else None
 
 # Distance heuristic
 def distance_h(*args, **kwargs):
-    return torch.linalg.vector_norm(*args, **kwargs)
+    ans = torch.linalg.vector_norm(*args, **kwargs)
+    assert ans >= 0
+    return ans
+
+
+class Buffer:
+    def __init__(self, distance, sample, label=None, task_id=None):
+        self.sample = sample
+        self.label = label
+        self.task_id = task_id
+        self.distance = distance
+
+
+counter = {}
+dcount = lambda s: counter.update({s: counter.get(s, 0) + 1})
+
+
+def get_final_count():
+    return counter
 
 
 class Cluster:
@@ -34,13 +53,68 @@ class Cluster:
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
+        # Testing
+        self.new_buffer: Buffer | None = None
+
+    def __len__(self):
+        return len(self.samples) + (1 if self.new_buffer is not None else 0)
+
     def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
+        if len(self) < 2:
+            return self._add_sample(sample, label, task_id)
 
-        self.samples.append(sample)
-        self.labels.append(label)
-        self.task_ids.append(task_id)
+        # Check distance between mean and each sample, find max
+        curr_distances = [distance_h(self.mean - s) for s in self.samples]
+        max_curr_dist = max(curr_distances)
+        dist_to_new = distance_h(self.mean - sample)
+
+        # print(dist_to_new, max_curr_dist, abs(max_curr_dist - dist_to_new))
+
+        if dist_to_new <= max_curr_dist + EPSILON:
+            # If the new sample is closer to the mean than any current sample
+            # with some variance, add it to the cluster
+            dcount("save new sample")
+            if (
+                self.new_buffer is not None
+                and distance_h(self.new_buffer.sample - sample)
+                <= max_curr_dist + EPSILON
+            ):
+                # If the buffered sample is closer to the new sample than the
+                # maximum distance between any current sample and the mean, add it as well
+                dcount("added buffer because of new sample")
+                self._add_sample(self.new_buffer)
+            self.new_buffer = None
+            return self._add_sample(sample, label, task_id)
+        elif (
+            self.new_buffer is not None
+            and dist_to_new <= self.new_buffer.distance + EPSILON
+        ):
+            # If the buffer is further from the center than the new sample is,
+            # Add it and the new sample. (NOTE: Logic a bit whacky?)
+            dcount("save because of buffered sample")
+            self._add_sample(self.new_buffer)
+            self.new_buffer = None
+            return self._add_sample(sample, label, task_id)
+        else:
+            dcount("buffer new sample")
+            if self.new_buffer is not None:
+                dcount("buffer overwritten before adding")
+            self.new_buffer = Buffer(dist_to_new, sample, label, task_id)
+
+    def _add_sample(self, sample, label=None, task_id=None):
+        if isinstance(sample, Buffer):
+            self.samples.append(sample.sample)
+            self.labels.append(sample.label)
+            self.task_ids.append(sample.task_id)
+            # Overwrite the buffer obj with the sample itself for mean calculation
+            sample = sample.sample
+        else:
+            self.samples.append(sample)
+            self.labels.append(label)
+            self.task_ids.append(task_id)
+        assert isinstance(self.samples[-1], torch.Tensor), "Did not add a tensor!"
         self.insertion_order.append(self.next_insertion_id)
         self.next_insertion_id += 1
         self.sum_samples += sample.clone().detach()
@@ -146,6 +220,9 @@ class ClusteringMechanism:
         self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
 
+    def __len__(self):
+        return sum([len(c) for c in self.clusters])
+ 
     def add(self, z: torch.Tensor, label=None, task_id=None):
         """
         Adds a sample z to the appropriate cluster or forms a new one.
@@ -189,8 +266,8 @@ class ClusteringMechanism:
             q_star = self.clusters[closest_cluster_idx]
             q_star.add_sample(z, label, task_id)
 
-            # If the cluster size exceeds P, remove the oldest sample
-            if len(q_star.samples) > self.P:
+            # If the cluster size exceeds P, remove a sample
+            while len(q_star.samples) > self.P:
                 q_star.remove_one()
 
     def fit_reducer(self, z_list):
@@ -383,26 +460,92 @@ class ClusteringMechanism:
 if __name__ == "__main__":
     print("Testing Cluster Storage")
     NUM_SAMPLES = 20
-    VISUALIZE = True
+    CLUSTERS = 3
+    MAX_PER_CLUSTER = 3
+    VISUALIZE = False
     if VISUALIZE:
         import time
 
-    storage = ClusteringMechanism(Q=2, P=3)
-    samples = [
-        torch.randint(0, 100, (3,), dtype=torch.float32) for _ in range(NUM_SAMPLES)
-    ]
+    storage = ClusteringMechanism(Q=CLUSTERS, P=MAX_PER_CLUSTER)
+    # Generate CLUSTERS+1 clusters with outliers
+    import random, math
+
+    # Set seeds for consistent generation
+    torch.manual_seed(42)
+    random.seed(42)
+
+    samples = []
+    # Generate
+    samples_per_cluster = math.floor(NUM_SAMPLES / 3)
+    for _ in range(samples_per_cluster):
+        # Cluster 1: around [10, 10, 10]
+        samples.append(
+            torch.tensor([10, 10, 10], dtype=torch.float32) + torch.randn(3) * 2
+        )
+        # Cluster 2: around [50, 50, 50]
+        samples.append(
+            torch.tensor([50, 50, 50], dtype=torch.float32) + torch.randn(3) * 2
+        )
+        # Cluster 3: around [90, 90, 90]
+        samples.append(
+            torch.tensor([90, 90, 90], dtype=torch.float32) + torch.randn(3) * 2
+        )
+    # Outliers
+    for _ in range(NUM_SAMPLES - (samples_per_cluster * 3)):
+        samples.append(
+            torch.tensor([25, 75, 25], dtype=torch.float32) + torch.randn(3) * 3
+        )
+    assert NUM_SAMPLES == len(samples), "Did not get the expected number of samples"
+
+    # Shuffle samples
+    random.shuffle(samples)
+
     print(storage.get_clusters_with_labels())
     for i, sample in enumerate(samples):
-        storage.add(sample, label=torch.randint(1, 4, (1,)).item(), task_id=i % 3)
+        storage.add(sample, label=i)
+        print(storage.get_clusters_with_labels())
+
         if VISUALIZE:
-            # storage.visualize()
-            print(storage.get_clusters_with_labels())
-            # time.sleep(5)
+            storage.visualize()
+            time.sleep(5)
 
     if len(storage.clusters) == 0:
         raise Exception("No samples successfully added")
-    if VISUALIZE:
-        storage.visualize()
 
-    print(storage.get_clusters_with_labels())
+    [print(f"\n{i+1}:\n {storage.clusters[i]}\n") for i in range(len(storage.clusters))]
     print(sorted(list(triggered))) if len(triggered) > 0 else None
+    storage.visualize()
+
+    # Visualize samples in 3D
+    import plotly.graph_objects as go
+
+    sample_array = torch.stack(samples).numpy()
+    colors = (
+        ["red"] * samples_per_cluster
+        + ["blue"] * samples_per_cluster
+        + ["green"] * samples_per_cluster
+        + ["black"] * (NUM_SAMPLES - samples_per_cluster)
+    )
+    random.shuffle(colors)
+
+    fig = go.Figure(
+        data=[
+            go.Scatter3d(
+                x=sample_array[:, 0],
+                y=sample_array[:, 1],
+                z=sample_array[:, 2],
+                mode="markers",
+                marker=dict(size=8, color=colors, opacity=0.8),
+                text=[f"Sample {i}" for i in range(len(samples))],
+            )
+        ]
+    )
+
+    fig.update_layout(
+        title="Generated Test Samples (3 Clusters + Outliers)",
+        scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
+    )
+    if VISUALIZE:
+        fig.show()
+
+    print(get_final_count())

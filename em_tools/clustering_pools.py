@@ -125,10 +125,7 @@ class ClusteringMemory:
         Returns:
             dict: Mapping from label to number of samples in that pool
         """
-        pool_sizes = {}
-        for label, pool in self.pools.items():
-            samples, _ = pool.get_clusters_with_labels()
-            pool_sizes[label] = len(samples)
+        pool_sizes = {label: len(pool) for label, pool in self.pools.items()}
         return pool_sizes
 
     def get_clustering_mechanism(self):
