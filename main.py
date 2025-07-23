@@ -78,6 +78,8 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             )  # Add sample to clusters
             t.end("add samples")
 
+            # NEW: Update less frequently
+
             num_batches += 1
 
             # Update progress bar every 50 batches or on last batch

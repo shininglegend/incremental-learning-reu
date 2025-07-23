@@ -20,78 +20,74 @@ class AGEMHandler:
         self.lr_scheduler = lr_scheduler
         self.t = t
 
-    def compute_gradient(self, data, labels):
-        """Compute gradients for given data and labels without corrupting model state"""
-        # Move data to device
-        data, labels = data.to(self.device), labels.to(self.device)
-
-        # Save current gradients
-        current_grads = []
-        for param in self.model.parameters():
-            if param.grad is not None:
-                current_grads.append(param.grad.clone())
-            else:
-                current_grads.append(None)
-
-        # Compute new gradients
-        self.model.zero_grad()
-        outputs = self.model(data)
-        loss = self.criterion(outputs, labels)
-        loss.backward()
-
-        # Extract gradients
-        grads = []
-        for param in self.model.parameters():
-            if param.grad is not None:
-                grads.append(param.grad.view(-1))
-
-        # Restore original gradients
-        for param, original_grad in zip(self.model.parameters(), current_grads):
-            if original_grad is not None:
-                param.grad = original_grad
-            else:
-                param.grad = None
-
-        return torch.cat(grads) if grads else torch.tensor([]).to(self.device)
-
-    def project_gradient_agem(self, g, g_ref):
+    def compute_gradient(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """
-        Project gradient g using A-GEM formula from Algorithm 2, line 12:
-        g_tilde = g - (g^T * g_ref) / (g_ref^T * g_ref) * g_ref
+        Compute and return the flattened gradient vector for a single example (x, y).
+        g = ∇_θ ℓ(f_θ(x, t), y)
         """
-        if g_ref.numel() == 0 or g.numel() == 0:
+        # Move to correct device
+        x, y = x.to(self.device), y.to(self.device)
+
+        # Zero existing gradients
+        self.model.zero_grad(set_to_none=True)
+
+        # Forward + loss
+        output = self.model(x.unsqueeze(0))  # add batch dim
+        loss = self.criterion(output, y.view(1))
+
+        # Collect gradients
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        grads = torch.autograd.grad(
+            loss,
+            params,
+            retain_graph=False,
+            create_graph=False,
+            allow_unused=True
+        )
+
+        # Flatten, padding zeros for unused params
+        flat_grad = []
+        for g, p in zip(grads, params):
+            numel = p.numel()
+            if g is None:
+                flat_grad.append(torch.zeros(numel, device=self.device))
+            else:
+                flat_grad.append(g.contiguous().view(-1))
+        return torch.cat(flat_grad)
+
+    def project_gradient(self, g: torch.Tensor, g_ref: torch.Tensor) -> torch.Tensor:
+        """
+        A-GEM projection: g_tilde = g if no interference, else project onto non-conflicting direction.
+        """
+        # Empty gradients or no reference
+        if g.numel() == 0 or g_ref.numel() == 0:
             return g
 
-        # Compute dot products
-        g_dot_g_ref = torch.dot(g, g_ref)  # g^T * g_ref
+        # Ensure same device and shape
+        assert g.shape == g_ref.shape, "Gradient shape mismatch"
 
-        # If g^T * g_ref >= 0, no projection needed (line 9-10)
-        if g_dot_g_ref >= 0:
+        # Dot products
+        dot = torch.dot(g, g_ref)
+        if dot >= 0:
+            return g
+        norm_sq = torch.dot(g_ref, g_ref)
+        if norm_sq == 0:
             return g
 
-        # Otherwise, apply projection (line 12)
-        g_ref_dot_g_ref = torch.dot(g_ref, g_ref)  # g_ref^T * g_ref
+        # Projection
+        scale = dot / norm_sq
+        return g - scale * g_ref
 
-        if g_ref_dot_g_ref > 0:
-            # g_tilde = g - (g^T * g_ref) / (g_ref^T * g_ref) * g_ref
-            projected_grad = g - (g_dot_g_ref / g_ref_dot_g_ref) * g_ref
-            return projected_grad
-
-        return g
-
-    def set_gradient(self, grad_vector):
-        """Set model gradients from flattened gradient vector"""
-        if grad_vector.numel() == 0:
-            return
-
-        pointer = 0
-        for param in self.model.parameters():
-            if param.grad is not None:
-                num_param = param.numel()
-                param.grad.data = grad_vector[pointer: pointer + num_param].view(
-                    param.shape
-                )
-                pointer += num_param
+    def set_gradient(self, flat_grad: torch.Tensor):
+        """
+        Unpack and assign flattened gradient vector back to model parameters.
+        """
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        idx = 0
+        for p in params:
+            numel = p.numel()
+            p.grad = flat_grad[idx: idx + numel].view_as(p).clone()
+            idx += numel
 
     def sample_from_memory(self, clustering_memory):
         """Sample (x_ref, y_ref) from ClusteringMemory as in line 6 of Algorithm 2"""
@@ -187,31 +183,16 @@ class AGEMHandler:
 
     def optimize_single_example(self, x, y, clustering_memory):
         """
-        A-GEM optimization for a single example (x, y) following Algorithm 2, lines 6-14
+        A-GEM optimization for a single example (x, y) following Algorithm 2, lines 6-14 in A-GEM paper
         """
-        # Move data to device
-        x, y = x.to(self.device), y.to(self.device)
 
-        # Step 6: Sample (x_ref, y_ref) from memory M
-        self.t.start("sample from memory")
+        # Sample (x_ref, y_ref) from memory
         x_ref, y_ref = self.sample_from_memory_global_index(clustering_memory)
-        self.t.end("sample from memory")
-
 
         self.t.start("compute current gradient")
 
-        # Step 8: Compute gradient g = ∇_θ ℓ(f_θ(x, t), y)
-        self.model.zero_grad()
-        output = self.model(x.unsqueeze(0))  # Add batch dimension
-        loss = self.criterion(output, y.unsqueeze(0))
-        loss.backward()
-
-        # Extract current gradient g
-        g = []
-        for param in self.model.parameters():
-            if param.grad is not None:
-                g.append(param.grad.view(-1))
-        g = torch.cat(g) if g else torch.tensor([]).to(self.device)
+        # Step 8: Compute gradient
+        g = self.compute_gradient(x, y)
 
         self.t.end("compute current gradient")
 
@@ -222,10 +203,12 @@ class AGEMHandler:
             g_ref = self.compute_gradient(x_ref, y_ref)
 
             # Steps 9-13: Project gradient if needed
-            g_tilde = self.project_gradient_agem(g, g_ref)
-
-            # Set the projected gradient
-            self.set_gradient(g_tilde)
+            g_tilde = self.project_gradient(g, g_ref)
+        else:
+            g_tilde = g
+        
+        # Set the projected gradient
+        self.set_gradient(g_tilde)
         self.t.end("compute and project gradient")
 
         # Step 14: Update parameters θ ← θ - α * g_tilde
@@ -233,7 +216,9 @@ class AGEMHandler:
         self.optimizer.step()
         self.t.end("optimizer.step")
 
-        return loss.item()
+        with torch.no_grad():
+            out = self.model(x.unsqueeze(0))
+            return self.criterion(out, y.view(1)).item()
 
     def optimize_batch(self, data, labels, clustering_memory):
         """
