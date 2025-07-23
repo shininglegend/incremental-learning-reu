@@ -227,14 +227,12 @@ class AGEMHandler:
         """
         batch_losses = []
 
-        self.t.start("optimize batch")
         # Apply A-GEM to each example in the batch
         for i in range(data.size(0)):
             x_i = data[i]
             y_i = labels[i]
             loss = self.optimize_single_example(x_i, y_i, clustering_memory)
             batch_losses.append(loss)
-        self.t.end("optimize batch")
 
         return sum(batch_losses) / len(batch_losses) if batch_losses else 0.0
 
