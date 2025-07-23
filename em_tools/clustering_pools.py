@@ -5,6 +5,8 @@ except ImportError:
     from em_tools.clustering_mechs import ClusteringMechanism
 
 import torch
+import math
+import random
 
 
 class ClusteringMemory:
@@ -77,6 +79,60 @@ class ClusteringMemory:
             te("convert")
         te("total")
         return all_memory_samples
+
+    def get_random_samples(self, amount):
+        if sum([len(pool) for _, pool in self.pools.items()]) <= amount:
+            return self.get_memory_samples()
+        random_samples = []
+        get_from_each = 1
+        # Choose from random pools:
+        i = 0
+        if amount >= len(self.pools):
+            get_from_each = math.ceil(amount / len(self.pools))
+        for i in range(len(self.pools)):
+            i += 1
+            if len(random_samples) >= amount:
+                break
+            random_samples.extend(
+                self._get_random_samples_from_pool(
+                    i - 1,
+                    min(
+                        (get_from_each * i) - len(random_samples),
+                        amount - len(random_samples),
+                    )
+                )
+            )
+        assert amount >= len(random_samples), "Wrong number of samples"
+        if amount > len(random_samples):
+            print("\nNot enough samples stored to return.")
+        return random_samples
+
+    def _get_random_samples_from_pool(self, pool_idx, amount):
+        # Get pool labels as list for indexing
+        pool_labels = list(self.pools.keys())
+        assert pool_idx < len(pool_labels), "Invalid index!"
+
+        label = pool_labels[pool_idx]
+        pool = self.pools[label]
+
+        # Get all samples from this pool
+        samples, labels = pool.get_clusters_with_labels()
+        if len(samples) == 0:
+            return []
+
+        # Generate random indices for sampling
+        available_count = len(samples)
+        sample_count = min(amount, available_count)
+        random_indices = random.sample(range(available_count), sample_count)
+
+        # Extract samples at random indices
+        result = []
+        for idx in random_indices:
+            sample_tensor = samples[idx].to(self.device)
+            label_tensor = torch.tensor(labels[idx] if labels[idx] is not None else label).to(self.device)
+            result.append((sample_tensor, label_tensor))
+
+        return result
 
     def add_sample(self, sample_data, sample_label, task_id=None):
         """Add a sample to the appropriate pool based on its label.

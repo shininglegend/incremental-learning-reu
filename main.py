@@ -58,7 +58,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
             t.start("get samples")
-            _samples = clustering_memory.get_memory_samples()
+            _samples = clustering_memory.get_random_samples(len(data))
             t.end("get samples")
             t.start("optimize")
             batch_loss = agem_handler.optimize(data, labels, _samples)
