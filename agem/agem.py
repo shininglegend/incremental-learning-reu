@@ -138,7 +138,7 @@ class AGEMHandler:
         return x_ref, y_ref
 
     def sample_from_memory_global_index(self, clustering_memory):
-        """Sample using global index - O(1) complexity, no tensor operations"""
+        """Sample using global index"""
 
         mem_size = clustering_memory.get_memory_size()
 
@@ -181,7 +181,7 @@ class AGEMHandler:
                 current_idx += cluster_size
 
         # Should never reach here if total_samples is correct
-        print("ya done fucked something up. agem.py/sample_from_memory_global_index.")
+        print("ya done messed something up. agem.py/sample_from_memory_global_index.")
         print(f"mem size: {mem_size}. global_idx: {global_idx}")
         return None, None
 

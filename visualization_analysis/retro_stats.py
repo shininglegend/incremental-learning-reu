@@ -47,6 +47,11 @@ def load_pickle_files(directory="test_results", num_files=15):
     debug_directory(directory)
     pickle_files = glob.glob(os.path.join(directory, "ta_agem_metrics_*.pkl"))
 
+    """
+    NOTE: Used by compare_experiments.py - do not modify signature
+    """
+    pickle_files = glob.glob(os.path.join(directory, "*.pkl"))
+
     # Sort files by modification time (newest first) and take only the specified number
     pickle_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
     pickle_files = pickle_files[:num_files]
