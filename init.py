@@ -1,4 +1,5 @@
 import argparse
+import os
 import yaml
 import torch
 import torch.nn as nn
@@ -97,10 +98,10 @@ def initialize_system():
 
     # Load configuration
     config = load_config(args.config)
-    
+
     # Set some default values that aren't in the config file
-    config['verbose'] = True
-    config['data_dir'] = None
+    config["verbose"] = True
+    config["data_dir"] = None
 
     # Override config with command line arguments
     if args.task_type is not None:
@@ -150,6 +151,11 @@ def initialize_system():
     # Set up timer
     timer = Timer()
     timer.start("init")
+
+    # Ensure output dir exists
+    if not os.path.exists(config["output_dir"]) and os.path.isabs(config["output_dir"]):
+        raise FileNotFoundError("path is an absolute path and doesn't exist.")
+    os.makedirs(config["output_dir"], exist_ok=True)
 
     # Device configuration
     device = config["device"]
