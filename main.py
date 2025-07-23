@@ -86,6 +86,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                     and VERBOSE
                     and ((batch_idx+1) % 10 == 0 or (batch_idx+1) == len(train_dataloader))
             ):
+                t.start("progress bar")
                 progress = (batch_idx + 1) / len(train_dataloader)
                 bar_length = 30
                 filled_length = int(bar_length * progress)
@@ -95,6 +96,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                     end="",
                     flush=True,
                 )
+                t.end("progress bar")
 
         # Print newline after progress bar completion
         if not QUICK_TEST_MODE and VERBOSE:

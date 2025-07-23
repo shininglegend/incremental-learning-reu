@@ -112,6 +112,79 @@ class AGEMHandler:
 
         return x_ref, y_ref
 
+    def sample_from_memory_simple(self, clustering_memory):
+        """Sample from a random pool, then random sample within that pool"""
+
+        # Get non-empty pools
+        non_empty_pools = []
+        for label, pool in clustering_memory.pools.items():
+            samples, labels = pool.get_clusters_with_labels()
+            if len(samples) > 0:
+                non_empty_pools.append((samples, labels if labels else [label] * len(samples)))
+
+        if not non_empty_pools:
+            return None, None
+
+        # Pick a random pool
+        pool_idx = torch.randint(0, len(non_empty_pools), (1,)).item()
+        samples, labels = non_empty_pools[pool_idx]
+
+        # Pick random sample from that pool
+        sample_idx = torch.randint(0, len(samples), (1,)).item()
+
+        x_ref = samples[sample_idx].unsqueeze(0).to(clustering_memory.device)
+        y_ref = torch.tensor([labels[sample_idx]], dtype=torch.long).to(clustering_memory.device)
+
+        return x_ref, y_ref
+
+    def sample_from_memory_global_index(self, clustering_memory):
+        """Sample using global index - O(1) complexity, no tensor operations"""
+
+        mem_size = clustering_memory.get_memory_size()
+
+        if mem_size == 0:
+            return None, None
+
+        # Generate random global index
+        global_idx = torch.randint(0, mem_size, (1,)).item()
+
+        # Find the sample at this global index
+        current_idx = 0
+
+        for label, pool in clustering_memory.pools.items():
+            for i, cluster in enumerate(pool.clusters):
+                cluster_size = len(cluster.samples)
+
+                # Skip empty clusters entirely
+                if cluster_size == 0:
+                    continue
+
+                # Check if our target index is in this cluster
+                if global_idx < current_idx + cluster_size:
+                    # Found it! Get the local index within this cluster
+                    local_idx = global_idx - current_idx
+
+                    # Get the sample directly from the cluster
+                    try:
+                        sample = list(cluster.samples)[local_idx]
+                        cluster_label = cluster.labels[local_idx]
+
+                        # Move to device and add batch dimension
+                        x_ref = sample.unsqueeze(0).to(clustering_memory.device)
+                        y_ref = torch.tensor([cluster_label], dtype=torch.long).to(clustering_memory.device)
+
+                        return x_ref, y_ref
+                    except Exception as e:
+                        print(f"  ERROR: {e}")
+                        return None, None
+
+                current_idx += cluster_size
+
+        # Should never reach here if total_samples is correct
+        print("ya done fucked something up. agem.py/sample_from_memory_global_index.")
+        print(f"mem size: {mem_size}. global_idx: {global_idx}")
+        return None, None
+
     def optimize_single_example(self, x, y, clustering_memory):
         """
         A-GEM optimization for a single example (x, y) following Algorithm 2, lines 6-14
@@ -121,8 +194,11 @@ class AGEMHandler:
 
         # Step 6: Sample (x_ref, y_ref) from memory M
         self.t.start("sample from memory")
-        x_ref, y_ref = self.sample_from_memory(clustering_memory)
+        x_ref, y_ref = self.sample_from_memory_global_index(clustering_memory)
         self.t.end("sample from memory")
+
+
+        self.t.start("compute current gradient")
 
         # Step 8: Compute gradient g = ∇_θ ℓ(f_θ(x, t), y)
         self.model.zero_grad()
@@ -136,6 +212,8 @@ class AGEMHandler:
             if param.grad is not None:
                 g.append(param.grad.view(-1))
         g = torch.cat(g) if g else torch.tensor([]).to(self.device)
+
+        self.t.end("compute current gradient")
 
         # If we have memory samples, compute reference gradient and project
         self.t.start("compute and project gradient")

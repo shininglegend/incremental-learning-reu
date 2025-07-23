@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from agem import agem
 from agem.learning_rate import TALearningRateScheduler
-from em_tools import clustering_pools
+from em_tools import clustering_memory
 from dataset_tools.load_dataset import load_dataset
 from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
 
@@ -179,7 +179,7 @@ def initialize_system():
     )
 
     # Initialize TA-A-GEM components
-    clustering_memory = clustering_pools.ClusteringMemory(
+    memory = clustering_memory.ClusteringMemory(
         Q=config["clusters_per_pool"],
         P=config["memory_size_p"],
         input_type="samples",
@@ -217,7 +217,7 @@ def initialize_system():
         optimizer,
         criterion,
         lr_scheduler,
-        clustering_memory,
+        memory,
         agem_handler,
         train_dataloaders,
         test_dataloaders,

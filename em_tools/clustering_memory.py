@@ -1,8 +1,8 @@
 # Handles the pools of clusters
 try:
-    from clustering_mechs import ClusteringMechanism
+    from clustering_mechs import ClusterPool
 except ImportError:
-    from em_tools.clustering_mechs import ClusteringMechanism
+    from em_tools.clustering_mechs import ClusterPool
 
 import torch
 
@@ -24,21 +24,21 @@ class ClusteringMemory:
         self.P = P
         self.input_type = input_type
         self.num_pools = num_pools
+        self.total_samples = 0
+        self.max_samples = self.Q * self.P * self.num_pools
 
         # Create separate clustering mechanisms for each pool (class label)
         self.pools = {}
         self.pool_labels = set()  # Track which labels we've seen
 
-        self.max_samples = self.num_pools * self.Q * self.P
-        self.total_samples = 0
-
         # For initializing clusters
         self.cluster_params = {
             'removal': config['removal'],
             'consider_newest': config['consider_newest'],
+            'max_size_per_cluster': self.P
         }
 
-    def _get_or_create_pool(self, label) -> ClusteringMechanism:
+    def _get_or_create_pool(self, label) -> ClusterPool:
         """Get clustering mechanism for a label, creating if needed.
 
         Args:
@@ -49,7 +49,7 @@ class ClusteringMemory:
         """
         if label not in self.pools:
             # Create new pool for this label
-            self.pools[label] = ClusteringMechanism(
+            self.pools[label] = ClusterPool(
                 cluster_params=self.cluster_params, Q=self.Q, P=self.P, dimensionality_reducer=None
             )
             self.pool_labels.add(label)
@@ -126,11 +126,11 @@ class ClusteringMemory:
 
         # Get the appropriate pool for this label and add the sample
         pool = self._get_or_create_pool(sample_label)
-        pool.add(sample_tensor, sample_label, task_id)
+        removed = pool.add(sample_tensor, sample_label, task_id)
 
-        if self.total_samples < self.max_samples:
+        # Only iterate total samples if we didn't also remove a sample from memory
+        if not removed:
             self.total_samples += 1
-
 
     def get_memory_size(self):
         """Get the current number of samples stored across all pools.
@@ -138,11 +138,8 @@ class ClusteringMemory:
         Returns:
             int: Total number of samples currently stored across all pools
         """
-        total_samples = 0
-        for pool in self.pools.values():
-            samples, _ = pool.get_clusters_with_labels()
-            total_samples += len(samples)
-        return total_samples
+
+        return self.total_samples
 
     def get_pool_sizes(self):
         """Get the number of samples in each pool.
@@ -160,7 +157,7 @@ class ClusteringMemory:
         """Get access to all clustering mechanisms for visualization.
 
         Returns:
-            dict: Mapping from label to ClusteringMechanism instance
+            dict: Mapping from label to ClusterPool instance
         """
         return self.pools
 
@@ -171,6 +168,3 @@ class ClusteringMemory:
             int: Number of active pools
         """
         return len(self.pools)
-
-    def get_num_samples(self):
-        return self.total_samples

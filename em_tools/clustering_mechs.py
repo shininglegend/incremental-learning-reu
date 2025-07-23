@@ -35,6 +35,7 @@ class Cluster:
         self.next_insertion_id = 1  # Counter for next insertion
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
+        self.cluster_params = cluster_params
 
 
         # for validating removal method at initialization
@@ -45,16 +46,16 @@ class Cluster:
             'remove_furthest_from_new': self.remove_furthest_from_new,
             'remove_based_on_mean': self.remove_based_on_mean,
             'remove_closest_to_new': self.remove_closest_to_new,
-
+            'remove_by_weighted_mean_distance': self.remove_by_weighted_mean_distance,
         }
 
-        if cluster_params['removal'] in self.removal_methods:
+        if self.cluster_params['removal'] in self.removal_methods:
             self.removal_fn = self.removal_methods[cluster_params['removal']]
         else:
             print("Unknown removal method detected. Performing remove_based_on_mean.")
             self.removal_fn = self.remove_based_on_mean
 
-        self.consider_newest = cluster_params['consider_newest']
+        self.consider_newest = self.cluster_params['consider_newest']
 
         dprint(f'Removal Function in cl: {self.removal_fn}')
         dprint(f'Consider newest: {self.consider_newest}')
@@ -103,6 +104,10 @@ class Cluster:
     def remove_furthest_from_mean(self):
         """
         Removes the sample furthest from the mean (including the newest sample).
+
+        From Abby: I'm considering replacing this method with just return self.remove_by_weighted_mean_distance(0)
+        because a weight of 0 indicates no consideration of age when removing.
+        TODO: resolve this.
         """
         dprint("cl remove_furthest_from_mean triggered")
 
@@ -244,6 +249,40 @@ class Cluster:
 
         return removed_sample, removed_label
 
+    def remove_by_weighted_mean_distance(self, age_weight_factor=0.5):
+        """
+        Removes the sample with the highest weighted distance from cluster mean.
+        Older samples get lower weights (are less likely to be removed).
+
+        Args:
+            age_weight_factor: Controls how much age affects removal probability.
+                              Higher values = more resistance to removing old samples.
+                              0.0 = no age consideration, 1.0 = strong age bias.
+        """
+        dprint("cl remove_by_weighted_mean_distance triggered")
+
+        if len(self.samples) <= 1:
+            return self.remove_oldest()
+
+        max_weighted_distance = -1
+        worst_sample_idx = -1
+
+        for i in range(len(self.samples) if self.consider_newest else len(self.samples) - 1):
+            # Distance from cluster mean
+            distance = torch.norm(self.samples[i] - self.mean)
+
+            # Age weight: newer samples (higher index) get higher weights
+            # This makes them more likely to be removed
+            age_weight = 1.0 + age_weight_factor * (i / (len(self.samples) - 1))
+
+            weighted_distance = distance * age_weight
+
+            if weighted_distance > max_weighted_distance:
+                max_weighted_distance = weighted_distance
+                worst_sample_idx = i
+
+        return self._remove_by_index(worst_sample_idx)
+
     def _remove_by_index(self, idx: int):
         """
         Removes the sample (and its metadata) at `idx`.
@@ -283,11 +322,17 @@ class Cluster:
 
         return removed_sample, removed_label
 
+    def num_samples(self):
+        return len(self.samples)
+
+    def is_full(self):
+        return len(self.samples) >= self.cluster_params['max_size_per_cluster']
+
     def __str__(self):
         return f"""Cluster with mean {self.mean} and samples {self.samples}"""
 
 
-class ClusteringMechanism:
+class ClusterPool:
     """Implements the clustering mechanism described in Algorithm 3."""
 
     def __init__(self, cluster_params, Q=100, P=3, dimensionality_reducer=None):
@@ -321,6 +366,8 @@ class ClusteringMechanism:
 
         assert len(z.shape) == 1, "Sample should only have one axis."
 
+        removed = False
+
         # Apply dimensionality reduction if configured
         if self.dimensionality_reducer is not None:
             if not self.dimensionality_reducer.fitted:
@@ -330,30 +377,21 @@ class ClusteringMechanism:
             z = self.dimensionality_reducer.transform(z)
         # if z is a set of samples, add it one by one
         if len(self.clusters) < self.Q:
-            # If the number of clusters is less than Q, create a new cluster
-            # and add z to it.
+            # If the number of clusters is less than Q, create a new cluster and add z to it.
             new_cluster = Cluster(self.cluster_params, z, label, task_id)
             self.clusters.append(new_cluster)
         else:
             # If the number of clusters has reached Q, find the closest cluster
-            # based on Euclidean distance to its mean.
-            min_distance = float("inf")
-            closest_cluster_idx = -1
-
-            for i, cluster in enumerate(self.clusters):
-                # Calculate distance
-                distance = distance_h(z - cluster.mean)
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_cluster_idx = i
-
             # Add z to the identified closest cluster
-            q_star = self.clusters[closest_cluster_idx]
+            q_star = self.get_closest_cluster(z)
             q_star.add_sample(z, label, task_id)
 
-            # If the cluster size exceeds P, remove the oldest sample
+            # If the cluster size exceeds P, remove one sample
             if len(q_star.samples) > self.P:
                 q_star.remove_one()
+                removed = True
+
+        return removed
 
     def fit_reducer(self, z_list):
         """
@@ -370,6 +408,21 @@ class ClusteringMechanism:
             return
 
         self.dimensionality_reducer.fit(z_list)
+
+    def get_closest_cluster(self, z: torch.Tensor):
+        # based on Euclidean distance to mean.
+
+        min_distance = float("inf")
+        closest_cluster_idx = -1
+
+        for i, cluster in enumerate(self.clusters):
+            # Calculate distance
+            distance = distance_h(z - cluster.mean)
+            if distance < min_distance:
+                min_distance = distance
+                closest_cluster_idx = i
+
+        return self.clusters[closest_cluster_idx]
 
     def transform(self, z):
         """
@@ -561,7 +614,7 @@ if __name__ == "__main__":
     if VISUALIZE:
         import time
 
-    storage = ClusteringMechanism(Q=2, P=3)
+    storage = ClusterPool(Q=2, P=3)
     samples = [
         torch.randint(0, 100, (3,), dtype=torch.float32) for _ in range(NUM_SAMPLES)
     ]
