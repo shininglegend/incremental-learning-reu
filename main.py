@@ -183,7 +183,7 @@ task_type_abbrev = {
 }.get(config["task_type"], config["task_type"][:3])
 
 quick_mode = "q-" if QUICK_TEST_MODE else ""
-dataset_name = config["dataset"].lower()
+dataset_name = config["dataset_name"].lower()
 filename = f"results-{quick_mode}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
 
 visualizer.save_metrics(
