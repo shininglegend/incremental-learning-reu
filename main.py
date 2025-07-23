@@ -94,7 +94,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 filled_length = int(bar_length * progress)
                 bar = "█" * filled_length + "-" * (bar_length - filled_length)
                 print(
-                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
+                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} (Batch {batch_idx + 1}/{len(train_dataloader)})",
                     end="",
                     flush=True,
                 )
@@ -174,8 +174,20 @@ print("\nGenerating comprehensive analysis...")
 
 # Save metrics for future analysis
 timestamp = time.strftime("%Y%m%d_%H%M%S")
+
+# Build filename with task type, quick test mode, and dataset
+task_type_abbrev = {
+    "class_incremental": "cla",
+    "rotation": "rot",
+    "permutation": "perm"
+}.get(config["task_type"], config["task_type"][:3])
+
+quick_mode = "q-" if QUICK_TEST_MODE else ""
+dataset_name = config["dataset"].lower()
+filename = f"results-{quick_mode}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+
 visualizer.save_metrics(
-    os.path.join(params["output_dir"], f"ta_agem_metrics_{timestamp}.pkl"),
+    os.path.join(params["output_dir"], filename),
     params=params,
 )
 
