@@ -5,6 +5,7 @@ from collections import deque
 
 DEBUG = False
 EPSILON = 0
+DEFAULT = True
 
 triggered = set()
 dprint = lambda s: triggered.add(s) if DEBUG else None
@@ -54,9 +55,12 @@ class Cluster:
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
         # Testing
-        self.new_buffer: Buffer | None = None
+        if not DEFAULT: 
+            self.new_buffer: Buffer | None = None
 
     def __len__(self):
+        if DEFAULT:
+            return len(self.samples)
         return len(self.samples) + (1 if self.new_buffer is not None else 0)
 
     def get_sample_count(self):
@@ -72,7 +76,7 @@ class Cluster:
     def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
-        if len(self) < 2:
+        if len(self) < 2 or DEFAULT:
             return self._add_sample(sample, label, task_id)
 
         # Check distance between mean and each sample, find max
@@ -114,7 +118,7 @@ class Cluster:
             self.new_buffer = Buffer(dist_to_new, sample, label, task_id)
 
     def _add_sample(self, sample, label=None, task_id=None):
-        if isinstance(sample, Buffer):
+        if not DEFAULT and isinstance(sample, Buffer):
             self.samples.append(sample.sample)
             self.labels.append(sample.label)
             self.task_ids.append(sample.task_id)
