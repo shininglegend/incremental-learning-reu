@@ -59,6 +59,16 @@ class Cluster:
     def __len__(self):
         return len(self.samples) + (1 if self.new_buffer is not None else 0)
 
+    def get_sample_count(self):
+        """Returns number of actual samples (excluding buffer)."""
+        return len(self.samples)
+
+    def get_sample_at_index(self, idx):
+        """Returns (sample, label) at given index in samples (excluding buffer)."""
+        if idx >= len(self.samples):
+            raise IndexError("Sample index out of range")
+        return self.samples[idx], self.labels[idx]
+
     def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
@@ -222,7 +232,7 @@ class ClusteringMechanism:
 
     def __len__(self):
         return sum([len(c) for c in self.clusters])
- 
+
     def add(self, z: torch.Tensor, label=None, task_id=None):
         """
         Adds a sample z to the appropriate cluster or forms a new one.
@@ -362,6 +372,21 @@ class ClusteringMechanism:
                 all_labels.append(label)
         samples_array = torch.stack(all_samples) if all_samples else torch.tensor([])
         return samples_array, all_labels
+
+    def get_total_sample_count(self):
+        """Returns total number of actual samples across all clusters (excluding buffers)."""
+        return sum(cluster.get_sample_count() for cluster in self.clusters)
+
+    def get_sample_at_global_index(self, global_idx):
+        """Returns (sample, label) at global index across all clusters (excluding buffers)."""
+        current_offset = 0
+        for cluster in self.clusters:
+            cluster_size = cluster.get_sample_count()
+            if global_idx < current_offset + cluster_size:
+                local_idx = global_idx - current_offset
+                return cluster.get_sample_at_index(local_idx)
+            current_offset += cluster_size
+        raise IndexError("Global sample index out of range")
 
     def visualize(self):
         """

@@ -115,21 +115,21 @@ class ClusteringMemory:
         label = pool_labels[pool_idx]
         pool = self.pools[label]
 
-        # Get all samples from this pool
-        samples, labels = pool.get_clusters_with_labels()
-        if len(samples) == 0:
+        # Use efficient count method (excludes buffers)
+        available_count = pool.get_total_sample_count()
+        if available_count == 0:
             return []
 
         # Generate random indices for sampling
-        available_count = len(samples)
         sample_count = min(amount, available_count)
         random_indices = random.sample(range(available_count), sample_count)
 
-        # Extract samples at random indices
+        # Extract samples at random indices using direct access
         result = []
         for idx in random_indices:
-            sample_tensor = samples[idx].to(self.device)
-            label_tensor = torch.tensor(labels[idx] if labels[idx] is not None else label).to(self.device)
+            sample, sample_label = pool.get_sample_at_global_index(idx)
+            sample_tensor = sample.to(self.device)
+            label_tensor = torch.tensor(sample_label if sample_label is not None else label).to(self.device)
             result.append((sample_tensor, label_tensor))
 
         return result
