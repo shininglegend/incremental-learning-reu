@@ -66,19 +66,21 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
-            # Step 2: Update the clustered memory with current batch samples
-            # This is where the core clustering for TA-A-GEM happens
-            t.start("add samples")
-            # Add only first sample from batch
-            # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
-            sample_data = data[0].to(device)
-            sample_label = labels[0].to(device)
-            clustering_memory.add_sample(
-                sample_data, sample_label, task_id
-            )  # Add sample to clusters
-            t.end("add samples")
+            t.start('add samples')
+            mem_update = batch_idx % (task_id + 1) == 0
 
-            # NEW: Update less frequently
+            if mem_update:
+                # Step 2: Update the clustered memory with current batch samples
+
+                # Add only first sample from batch
+                # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
+                sample_data = data[0].to(device)
+                sample_label = labels[0].to(device)
+                clustering_memory.add_sample(
+                    sample_data, sample_label, task_id
+                )  # Add sample to clusters
+
+            t.end("add samples")
 
             num_batches += 1
 

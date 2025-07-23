@@ -45,7 +45,7 @@ task_specific:
     clusters_per_pool: 50
 
 # Removal method - experimental
-removal: 'remove_by_weighted_mean_distance'
+removal: 'remove_by_log_weighted_mean_distance'
 # Options:
     # 'remove_oldest'
     # 'remove_furthest_from_mean'
@@ -54,4 +54,5 @@ removal: 'remove_by_weighted_mean_distance'
     # 'remove_based_on_mean'
     # 'remove_closest_to_new'
     # 'remove_by_weighted_mean_distance'
-consider_newest: true # Do you want to be able to remove the newest sample?
+    # 'remove_by_log_weighted_mean_distance'
+consider_newest: false # Do you want to be able to remove the newest sample?

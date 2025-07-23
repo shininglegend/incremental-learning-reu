@@ -1,4 +1,6 @@
 # Handles the clusters themselves - assigning and removing as needed
+import math
+
 import torch
 import pandas
 from collections import deque
@@ -47,6 +49,7 @@ class Cluster:
             'remove_based_on_mean': self.remove_based_on_mean,
             'remove_closest_to_new': self.remove_closest_to_new,
             'remove_by_weighted_mean_distance': self.remove_by_weighted_mean_distance,
+            'remove_by_log_weighted_mean_distance': self.remove_by_log_weighted_mean_distance,
         }
 
         if self.cluster_params['removal'] in self.removal_methods:
@@ -275,6 +278,32 @@ class Cluster:
             # Age weight: newer samples (higher index) get higher weights
             # This makes them more likely to be removed
             age_weight = 1.0 + age_weight_factor * age
+
+            weighted_distance = distance * age_weight
+
+            if weighted_distance > max_weighted_distance:
+                max_weighted_distance = weighted_distance
+                worst_sample_idx = i
+
+        return self._remove_by_index(worst_sample_idx)
+
+    def remove_by_log_weighted_mean_distance(self, age_weight_factor=0.1):
+        """
+        Removes the sample with the highest weighted distance from cluster mean.
+        Uses logarithmic age weighting for gentle age influence.
+        """
+        if len(self.samples) <= 1:
+            return self.remove_oldest()
+
+        max_weighted_distance = -1
+        worst_sample_idx = -1
+
+        for i in range(len(self.samples) if self.consider_newest else len(self.samples) - 1):
+            distance = distance_h(self.samples[i] - self.mean)
+            age = self.insertion_order[i]
+
+            # Logarithmic age weight - gentle scaling
+            age_weight = 1.0 + age_weight_factor * math.log(1 + age)
 
             weighted_distance = distance * age_weight
 
