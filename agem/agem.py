@@ -10,7 +10,7 @@ class AGEMHandler:
         device,
         batch_size=256,
         lr_scheduler=None,
-        epsilon=0.03,  # Now meaningful for normalized losses (0-1 range)
+        epsilon=0.00001,  # Now meaningful for normalized losses (0-1 range)
     ):
         self.model = model
         self.criterion = criterion
@@ -21,18 +21,18 @@ class AGEMHandler:
         self.epsilon = epsilon
         
         # For running min-max normalization
-        self.epoch_min_loss = float('inf')
-        self.epoch_max_loss = float('-inf')
+        #self.epoch_min_loss = float('inf')
+        #self.epoch_max_loss = float('-inf')
 
     def start_epoch(self):
         """Call this at the beginning of each epoch"""
         self.epoch_min_loss = float('inf')
         self.epoch_max_loss = float('-inf')
 
-    def update_loss_bounds(self, loss_value):
-        """Update running min and max loss values"""
-        self.epoch_min_loss = min(self.epoch_min_loss, loss_value)
-        self.epoch_max_loss = max(self.epoch_max_loss, loss_value)
+    # def update_loss_bounds(self, loss_value):
+    #     """Update running min and max loss values"""
+    #     self.epoch_min_loss = min(self.epoch_min_loss, loss_value)
+    #     self.epoch_max_loss = max(self.epoch_max_loss, loss_value)
 
     def normalize_loss_sliding_window(self, loss_value):
         """Normalize using a sliding window of recent losses"""
@@ -42,7 +42,7 @@ class AGEMHandler:
         self.loss_history.append(loss_value)
         
         # Keep only last N losses for normalization bounds
-        window_size = 100  # Adjust as needed
+        window_size = 200  # Adjust as needed
         if len(self.loss_history) > window_size:
             self.loss_history = self.loss_history[-window_size:]
         
@@ -55,9 +55,27 @@ class AGEMHandler:
         if min_val == max_val:
             return 0.5
     
-        print(f"Loss value: {loss_value:.6f}, min val: {min_val:.6f}, max val: {max_val:.6f}")
+        #print(f"Loss value: {loss_value:.6f}, min val: {min_val:.6f}, max val: {max_val:.6f}")
 
         return (loss_value - min_val) / (max_val - min_val)
+    
+    def normalize_reference_loss(self, ref_loss):
+        """
+        Normalize reference loss using the same sliding window approach as current loss.
+        This ensures both losses are on the same scale for proper comparison.
+        """
+        # Use the same loss history for consistent normalization
+        if not hasattr(self, 'loss_history') or len(self.loss_history) < 2:
+            return 0.5
+        
+        all_losses = self.loss_history + [ref_loss]
+        min_val = min(all_losses)
+        max_val = max(all_losses)
+        
+        if min_val == max_val:
+            return 0.5
+        
+        return (ref_loss - min_val) / (max_val - min_val)
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
@@ -118,16 +136,20 @@ class AGEMHandler:
 
         # Normalize the current loss
         normalized_current_loss = self.normalize_loss_sliding_window(current_loss)
+        # Normalize the reference loss
+        normalized_ref_loss = self.normalize_reference_loss(ref_loss)
         
-        print(f"Original loss: {current_loss:.6f}, Normalized loss: {normalized_current_loss:.6f}, epsilon: {self.epsilon}")
+        #print(f"Original loss: {current_loss:.6f}, Normalized loss: {normalized_current_loss:.6f}, epsilon: {self.epsilon}")
 
         if normalized_current_loss > self.epsilon:
             # Case 1: Normalized current loss > epsilon
+            #print("| ========== | CASE 1111111111 | ========== |")
+            #print("*****************************************************************************************")
             alpha1 = 1.0
-            alpha2 = ref_loss / current_loss if current_loss > 0 else 0.0
+            alpha2 = normalized_ref_loss / normalized_current_loss if normalized_current_loss > 0 else 0.0
         else:
             # Case 2: Normalized current loss <= epsilon
-            #print("| ========== | IN THE DEFAULT CASE (LOW NORMALIZED LOSS) | ========== |")
+            #print("| ========== | CASE 2222222222 | ========== |")
             #print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
             alpha1 = 0.0
             alpha2 = 1.0
@@ -162,7 +184,7 @@ class AGEMHandler:
         current_loss = loss.item()
 
         # Update running min/max bounds
-        self.update_loss_bounds(current_loss)
+        #self.update_loss_bounds(current_loss)
 
         #Update learning rate if scheduler is provided
         if self.lr_scheduler is not None:
