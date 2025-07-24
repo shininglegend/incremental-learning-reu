@@ -174,21 +174,27 @@ class ClusteringMechanism:
                 )
             z = self.dimensionality_reducer.transform(z)
 
-        if timer: timer.start("adding")
+        if timer:
+            timer.start("adding")
         self.add_allow_larger_clusters(z, label, task_id)
-        if timer: timer.end("adding")
+        if timer:
+            timer.end("adding")
 
         # Change this to decide how to manage max cluster size
         # self._manage_by_cluster_size(new_cluster)
-        if timer: timer.start("manage_pool")
+        if timer:
+            timer.start("manage_pool")
         self._manage_by_pool_size(timer)
-        if timer: timer.end("manage_pool")
+        if timer:
+            timer.end("manage_pool")
 
         # Sanity checks
-        if timer: timer.start("sanity")
+        if timer:
+            timer.start("sanity")
         assert len(self) <= self.max_size, "Max pool size exceeded"
         assert len(self.clusters) <= self.Q, "Max number of clusters exceeded"
-        if timer: timer.end("sanity")
+        if timer:
+            timer.end("sanity")
 
     def add_normal(self, z, label, task_id):
         if len(self.clusters) < self.Q:
@@ -218,7 +224,7 @@ class ClusteringMechanism:
         (closest_cluster_to_new_sample, dist_to_new_sample) = (
             self._find_closest_cluster(z)
         )
-        (cluster_to_merge_into, cluster_to_merge_from, dist_between) = (
+        (cluster_to_merge_from, cluster_to_merge_into, dist_between) = (
             self._find_two_closest_clusters()
         )
         if dist_to_new_sample <= dist_between:
@@ -246,25 +252,34 @@ class ClusteringMechanism:
         """This function removes a sample from the largest cluster
         if needed to remain under size restrictions
         """
-        if timer: timer.start("manage_pool_inside")
+        if timer:
+            timer.start("manage_pool_inside")
         if len(self) <= self.max_size:
-            if timer: timer.end("manage_pool_inside")
+            if timer:
+                timer.end("manage_pool_inside")
             return
 
-        if timer: timer.start("B")
-        largest_idx = max(range(len(self.clusters)), key=lambda i: len(self.clusters[i]))
+        if timer:
+            timer.start("B")
+        largest_idx = max(
+            range(len(self.clusters)), key=lambda i: len(self.clusters[i])
+        )
         # print("\n", largest_idx, [len(cluster) for cluster in self.clusters])
         assert len(self.clusters[largest_idx]) > self.P
-        if timer: timer.end("B")
+        if timer:
+            timer.end("B")
         # dprint(f"Before: {self.clusters[largest_idx]}")
         # if DEBUG: self.visualize("Before")
-        if timer: timer.start("C")
+        if timer:
+            timer.start("C")
         self.clusters[largest_idx].remove_one()
-        if timer: timer.end("C")
+        if timer:
+            timer.end("C")
         # if DEBUG: self.visualize("After")
         # dprint(f"After: {self.clusters[largest_idx]}")
         assert len(self) <= self.max_size
-        if timer: timer.end("manage_pool_inside")
+        if timer:
+            timer.end("manage_pool_inside")
         # Optional: Call it recursively in case multiple samples were added
         # self._manage_by_pool_size(new_idx, timer)
 
@@ -512,7 +527,7 @@ if __name__ == "__main__":
     for _ in range(samples_per_cluster):
         # Cluster 1: around [10, 10, 10]
         samples.append(
-            torch.tensor([10, 10, 10], dtype=torch.float32) + torch.randn(3) * 2
+            torch.tensor([45, 45, 45], dtype=torch.float32) + torch.randn(3) * 2
         )
         # Cluster 2: around [50, 50, 50]
         samples.append(
@@ -522,15 +537,21 @@ if __name__ == "__main__":
         samples.append(
             torch.tensor([90, 90, 90], dtype=torch.float32) + torch.randn(3) * 2
         )
-    # Outliers
-    for _ in range(NUM_SAMPLES - (samples_per_cluster * 3)):
+        # Cluster 4: Around [85, 85, 85]
         samples.append(
-            torch.tensor([25, 75, 25], dtype=torch.float32) + torch.randn(3) * 3
+            torch.tensor([90, 90, 90], dtype=torch.float32) + torch.randn(3) * 2
         )
-    assert NUM_SAMPLES == len(samples), "Did not get the expected number of samples"
+    # Outliers
+    for i in range(NUM_SAMPLES - (samples_per_cluster * 3)):
+        samples.append(
+            torch.tensor([25 * (i + 1), 75, 25 * (i + 1)], dtype=torch.float32)
+            + torch.randn(3) * 3
+        )
+    # assert NUM_SAMPLES == len(samples), "Did not get the expected number of samples"
 
     # Shuffle samples
-    random.shuffle(samples)
+    # random.shuffle(samples)
+    # samples = reversed(samples)
 
     print(storage.get_clusters_with_labels())
     for i, sample in enumerate(samples):
@@ -556,9 +577,10 @@ if __name__ == "__main__":
         ["red"] * samples_per_cluster
         + ["blue"] * samples_per_cluster
         + ["green"] * samples_per_cluster
+        + ["purple"] * samples_per_cluster
         + ["black"] * (NUM_SAMPLES - samples_per_cluster)
     )
-    random.shuffle(colors)
+    # random.shuffle(colors)
 
     fig = go.Figure(
         data=[
@@ -577,5 +599,6 @@ if __name__ == "__main__":
         title="Generated Test Samples (3 Clusters + Outliers)",
         scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
     )
+    VISUALIZE = True
     if VISUALIZE:
         fig.show()
