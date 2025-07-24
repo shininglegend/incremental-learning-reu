@@ -1,10 +1,6 @@
 #!/bin/bash
 
 # run_experiments.sh
-# Script to run TA-A-GEM experiments 5 times for each task type
-
-echo "Starting TA-A-GEM experiments..."
-echo "Running 5 iterations for each task type: permutation, rotation, class_split"
 
 # Array of task types
 TASK_TYPES=("permutation" "rotation" "class_split")
@@ -15,6 +11,31 @@ NUM_RUNS=5
 # Create timestamp for this batch of experiments
 BATCH_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 echo "Batch timestamp: $BATCH_TIMESTAMP"
+
+# Choose dataset based on user input (restrict to mnist or fashion_mnist)
+if [[ "$1" == "mnist" || "$1" == "fashion_mnist" ]]; then
+    DATASET_NAME=$1
+else
+    echo "Usage: $0 <dataset_name> <save_location>"
+    echo "Example: $0 mnist test-new-remove-one"
+    exit 1
+fi
+
+# Add a folder to save test results based on user input
+if [[ -z "$2" ]]; then
+    echo "Usage: $0 <dataset_name> <save_location>"
+    echo "Example: $0 mnist test-new-remove-one"
+    exit 1
+fi
+if [[ ! -d "test_results/$2" ]]; then
+    mkdir -p "test_results/$2"
+fi
+SAVE_LOCATION="test_results/$2"
+echo "Results will be saved to: $SAVE_LOCATION"
+
+echo "Starting experiments..."
+echo "Running 5 iterations for each task type: ${TASK_TYPES[*]}"
+
 
 # Counter for total experiments
 TOTAL_EXPERIMENTS=$((${#TASK_TYPES[@]} * NUM_RUNS))
@@ -32,7 +53,7 @@ for task_type in "${TASK_TYPES[@]}"; do
         echo "Started at: $(date)"
 
         # Run the experiment
-        python main.py --task_type $task_type
+        python main.py --task_type $task_type --output_dir "$SAVE_LOCATION" --dataset "$DATASET_NAME"
 
         # Check if the run was successful
         if [ $? -eq 0 ]; then
@@ -50,7 +71,7 @@ echo ""
 echo "Running analysis script..."
 
 # Run the analysis script
-python visualization_analysis/retro_stats.py
+python visualization_analysis/retro_stats.py --input_dir "$SAVE_LOCATION" --output_dir "$SAVE_LOCATION"
 
 echo "Analysis complete!"
-echo "Results saved to test_results/ directory"
+echo "Results saved to $SAVE_LOCATION"
