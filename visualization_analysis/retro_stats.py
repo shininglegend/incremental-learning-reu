@@ -9,8 +9,11 @@ from datetime import datetime
 
 
 def load_pickle_files(directory="test_results", num_files=15):
-    """Load pickle files from the test_results directory"""
-    pickle_files = glob.glob(os.path.join(directory, "ta_agem_metrics_*.pkl"))
+    """Load pickle files from the test_results directory
+
+    NOTE: Used by compare_experiments.py - do not modify signature
+    """
+    pickle_files = glob.glob(os.path.join(directory, "*.pkl"))
 
     # Sort files by modification time (newest first) and take only the specified number
     pickle_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
@@ -67,7 +70,10 @@ def load_pickle_files(directory="test_results", num_files=15):
 
 
 def compute_confidence_interval(data, confidence=0.99):
-    """Compute confidence interval for given data"""
+    """Compute confidence interval for given data
+
+    NOTE: Used by compare_experiments.py - do not modify signature
+    """
     n = len(data)
     if n < 2:
         return np.nan, np.nan
@@ -80,7 +86,10 @@ def compute_confidence_interval(data, confidence=0.99):
 
 
 def analyze_experiments(results):
-    """Analyze experiments and compute statistics"""
+    """Analyze experiments and compute statistics
+
+    NOTE: Used by compare_experiments.py - do not modify signature
+    """
 
     # Group results by task type
     task_groups = {}
@@ -164,7 +173,7 @@ def main():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="test_results",
+        default=None,
         help="Directory to save the analysis results (default: test_results)",
     )
     args = parser.parse_args()
@@ -238,33 +247,34 @@ def main():
         print(f"  99% CI: [{stat['99% CI Lower']:.4f}, {stat['99% CI Upper']:.4f}]")
 
     # Save results to CSV
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if args.output_dir is not None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Save summary table
-    summary_filename = os.path.join(
-        args.output_dir, f"experiment_analysis_{timestamp}.csv"
-    )
-    display_df.to_csv(summary_filename, index=False)
-    print(f"\nSummary results saved to: {summary_filename}")
+        # Save summary table
+        summary_filename = os.path.join(
+            args.output_dir, f"experiment_analysis_{timestamp}.csv"
+        )
+        display_df.to_csv(summary_filename, index=False)
+        print(f"\nSummary results saved to: {summary_filename}")
 
-    # Save detailed results
-    detailed_results = []
-    for stat in statistics:
-        for i, accuracy in enumerate(stat["Raw Accuracies"]):
-            detailed_results.append(
-                {
-                    "Task Type": stat["Task Type"],
-                    "Run Number": i + 1,
-                    "Final Accuracy": accuracy,
-                }
-            )
+        # Save detailed results
+        detailed_results = []
+        for stat in statistics:
+            for i, accuracy in enumerate(stat["Raw Accuracies"]):
+                detailed_results.append(
+                    {
+                        "Task Type": stat["Task Type"],
+                        "Run Number": i + 1,
+                        "Final Accuracy": accuracy,
+                    }
+                )
 
-    detailed_df = pd.DataFrame(detailed_results)
-    detailed_filename = os.path.join(
-        args.output_dir, f"detailed_results_{timestamp}.csv"
-    )
-    detailed_df.to_csv(detailed_filename, index=False)
-    print(f"Detailed results saved to: {detailed_filename}")
+        detailed_df = pd.DataFrame(detailed_results)
+        detailed_filename = os.path.join(
+            args.output_dir, f"detailed_results_{timestamp}.csv"
+        )
+        detailed_df.to_csv(detailed_filename, index=False)
+        print(f"Detailed results saved to: {detailed_filename}")
 
     print("\nAnalysis complete!")
 
