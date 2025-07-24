@@ -169,6 +169,15 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 t.end("training")
 print("\nTraining complete.")
 
+# Calculate and display final average accuracy over all epochs and tasks
+if visualizer.epoch_data:
+    total_accuracy = sum(ep["overall_accuracy"] for ep in visualizer.epoch_data)
+    total_epochs = len(visualizer.epoch_data)
+    final_average_accuracy = total_accuracy / total_epochs
+    print(
+        f"\nFinal Average Accuracy (all epochs, all tasks): {final_average_accuracy:.4f}"
+    )
+
 # --- 3. Comprehensive Visualization and Analysis ---
 print("\nGenerating comprehensive analysis...")
 
@@ -179,7 +188,7 @@ timestamp = time.strftime("%Y%m%d_%H%M%S")
 task_type_abbrev = {
     "class_incremental": "cla",
     "rotation": "rot",
-    "permutation": "perm"
+    "permutation": "perm",
 }.get(config["task_type"], config["task_type"][:3])
 
 quick_mode = "q-" if QUICK_TEST_MODE else ""
