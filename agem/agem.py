@@ -19,63 +19,46 @@ class AGEMHandler:
         self.device = device
         self.lr_scheduler = lr_scheduler
         self.epsilon = epsilon
-        
-        # For running min-max normalization
-        #self.epoch_min_loss = float('inf')
-        #self.epoch_max_loss = float('-inf')
 
     def start_epoch(self):
         """Call this at the beginning of each epoch"""
         self.epoch_min_loss = float('inf')
         self.epoch_max_loss = float('-inf')
 
-    # def update_loss_bounds(self, loss_value):
-    #     """Update running min and max loss values"""
-    #     self.epoch_min_loss = min(self.epoch_min_loss, loss_value)
-    #     self.epoch_max_loss = max(self.epoch_max_loss, loss_value)
-
-    def normalize_loss_sliding_window(self, loss_value):
+    def normalize_loss_sliding_window(self, loss_value, add_to_history=True):
         """Normalize using a sliding window of recent losses"""
         if not hasattr(self, 'loss_history'):
             self.loss_history = []
         
-        self.loss_history.append(loss_value)
-        
-        # Keep only last N losses for normalization bounds
-        window_size = 200  # Adjust as needed
-        if len(self.loss_history) > window_size:
-            self.loss_history = self.loss_history[-window_size:]
+        # Only add to history if requested (for current losses, not reference losses)
+        if add_to_history:
+            self.loss_history.append(loss_value)
+            
+            # Keep only last N losses for normalization bounds
+            window_size = 200  # Adjust as needed (50-250, ...)
+            if len(self.loss_history) > window_size:
+                self.loss_history = self.loss_history[-window_size:]
         
         if len(self.loss_history) < 2:
             return 0.5  # Default for insufficient data
         
-        min_val = min(self.loss_history)
-        max_val = max(self.loss_history)
-
-        if min_val == max_val:
-            return 0.5
-    
-        #print(f"Loss value: {loss_value:.6f}, min val: {min_val:.6f}, max val: {max_val:.6f}")
-
-        return (loss_value - min_val) / (max_val - min_val)
-    
-    def normalize_reference_loss(self, ref_loss):
-        """
-        Normalize reference loss using the same sliding window approach as current loss.
-        This ensures both losses are on the same scale for proper comparison.
-        """
-        # Use the same loss history for consistent normalization
-        if not hasattr(self, 'loss_history') or len(self.loss_history) < 2:
-            return 0.5
-        
-        all_losses = self.loss_history + [ref_loss]
+        # For consistent normalization, always include the current value in bounds calculation
+        # but only permanently store it if add_to_history=True
+        all_losses = self.loss_history if add_to_history else self.loss_history + [loss_value]
         min_val = min(all_losses)
         max_val = max(all_losses)
-        
+
         if min_val == max_val:
             return 0.5
-        
-        return (ref_loss - min_val) / (max_val - min_val)
+
+        return (loss_value - min_val) / (max_val - min_val)
+
+    def normalize_reference_loss(self, ref_loss):
+        """
+        Normalize reference loss using the same approach as current loss
+        but without adding to history permanently.
+        """
+        return self.normalize_loss_sliding_window(ref_loss, add_to_history=False)
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
@@ -135,7 +118,7 @@ class AGEMHandler:
             return current_grad
 
         # Normalize the current loss
-        normalized_current_loss = self.normalize_loss_sliding_window(current_loss)
+        normalized_current_loss = self.normalize_loss_sliding_window(current_loss, add_to_history=True)
         # Normalize the reference loss
         normalized_ref_loss = self.normalize_reference_loss(ref_loss)
         
@@ -182,9 +165,6 @@ class AGEMHandler:
         outputs = self.model(data)
         loss = self.criterion(outputs, labels)
         current_loss = loss.item()
-
-        # Update running min/max bounds
-        #self.update_loss_bounds(current_loss)
 
         #Update learning rate if scheduler is provided
         if self.lr_scheduler is not None:

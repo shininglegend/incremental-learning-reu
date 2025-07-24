@@ -1,3 +1,48 @@
+def normalize_loss_sliding_window(self, loss_value):
+        """Normalize using a sliding window of recent losses"""
+        if not hasattr(self, 'loss_history'):
+            self.loss_history = []
+        
+        self.loss_history.append(loss_value)
+        
+        # Keep only last N losses for normalization bounds
+        window_size = 200  # Adjust as needed
+        if len(self.loss_history) > window_size:
+            self.loss_history = self.loss_history[-window_size:]
+        
+        if len(self.loss_history) < 2:
+            return 0.5  # Default for insufficient data
+        
+        min_val = min(self.loss_history)
+        max_val = max(self.loss_history)
+
+        if min_val == max_val:
+            return 0.5
+    
+        #print(f"Loss value: {loss_value:.6f}, min val: {min_val:.6f}, max val: {max_val:.6f}")
+
+        return (loss_value - min_val) / (max_val - min_val)
+    
+    def normalize_reference_loss(self, ref_loss):
+        """
+        Normalize reference loss using the same sliding window approach as current loss.
+        This ensures both losses are on the same scale for proper comparison.
+        """
+        # Use the same loss history for consistent normalization
+        if not hasattr(self, 'loss_history') or len(self.loss_history) < 2:
+            return 0.5
+        
+        all_losses = self.loss_history + [ref_loss]
+        min_val = min(all_losses)
+        max_val = max(all_losses)
+        
+        if min_val == max_val:
+            return 0.5
+        
+        return (ref_loss - min_val) / (max_val - min_val)
+
+
+
 def normalize_loss(self, loss_value):
         """Normalize loss using running min-max normalization"""
         if self.epoch_max_loss == self.epoch_min_loss:

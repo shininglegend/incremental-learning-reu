@@ -164,6 +164,15 @@ Run 1B - Version 1 - epsilon = 0.001 - windowSize = 100
 	  99% CI: [0.7214, 0.8405]
 
 
+Run 1C - Version 3 - epsilon = 0.00001, window = 200
+
+	================================================================================
+	EXPERIMENT RESULTS SUMMARY
+	================================================================================
+  	Task Type  Number of Runs Mean Accuracy Std Deviation 99% CI Lower 99% CI Upper
+	 permutation               1        0.7928        0.0000          N/A          N/A
+
+
 Quick testing:
 
 	epsilon=0.00000000000000000001 (20), window=100 --> 1, 1, 1, 1, 1, .84, .76, .95, .92, .93
