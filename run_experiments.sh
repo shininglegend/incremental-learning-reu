@@ -53,7 +53,7 @@ for task_type in "${TASK_TYPES[@]}"; do
         echo "Started at: $(date)"
 
         # Run the experiment
-        python main.py --task_type $task_type --output_dir "$SAVE_LOCATION" --dataset "$DATASET_NAME" --experiment_name "$2"
+        python main.py --task_type $task_type --output_dir "$SAVE_LOCATION" --dataset "$DATASET_NAME" --experiment_name "$2" --random_em
 
         # Check if the run was successful
         if [ $? -eq 0 ]; then

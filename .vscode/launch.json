@@ -17,7 +17,7 @@
       "request": "launch",
       "program": "main.py",
       "console": "integratedTerminal",
-      "args": "--experiment_name debug-perm-mnist"
+      "args": "--experiment_name debug-perm-mnist --random_em"
     },
     {
       "name": "Python Debugger: Quick Test Mode with Permutations",
