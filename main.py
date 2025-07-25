@@ -48,18 +48,20 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     task_epoch_losses = []
 
     # Query clustering_memory for the current reference samples, if any
-    t.start("get samples")
-    if config["random_em"]:
-        # Use random episodic memory instead of clustering memory
-        _samples = clustering_memory.get_random_samples(BATCH_SIZE)
-    else:
+    if not config["random_em"]:
+        t.start("get samples")
         _samples = clustering_memory.get_memory_samples()
-    t.end("get samples")
+        t.end("get samples")
 
     for epoch in range(NUM_EPOCHS):
         model.train()
         epoch_loss = 0.0
         num_batches = 0
+        # Use random episodic memory per batch instead of all samples
+        if config["random_em"]:
+            t.start("get samples")
+            _samples = clustering_memory.get_random_samples(BATCH_SIZE)
+            t.end("get samples")
 
         for batch_idx, (data, labels) in enumerate(train_dataloader):
             # Move data to device
@@ -195,8 +197,11 @@ task_type_abbrev = {
 }.get(config["task_type"], config["task_type"][:3])
 
 quick_mode = "q-" if QUICK_TEST_MODE else ""
+random_em = "rem-" if config["random_em"] else ""
 dataset_name = config["dataset_name"].lower()
-filename = f"results-{quick_mode}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+filename = (
+    f"results-{quick_mode}{random_em}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+)
 
 visualizer.save_metrics(
     os.path.join(params["output_dir"], filename),
