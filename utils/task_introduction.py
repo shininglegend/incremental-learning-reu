@@ -3,6 +3,8 @@
 import math
 import random
 
+from dataset_tools.load_dataset import DatasetLoader
+
 
 def get_epoch_order(config: dict):
     '''
@@ -36,6 +38,7 @@ def get_epoch_order(config: dict):
 def get_random_epoch_order(config: dict):
     epoch_order = get_pure_sequential_order(config)
     random.shuffle(epoch_order)
+    print("ts random i promise")
     return epoch_order
 
 
@@ -69,7 +72,8 @@ def get_pure_sequential_order(config: dict):
 
     epoch_order = []
 
-    for task_id, num_epochs in enumerate(config['num_epochs']):
+    for task_id in config['num_epochs']:
+        num_epochs = config['num_epochs'][task_id]
         for i in range(num_epochs):
             epoch_order.append(task_id)
 
@@ -81,14 +85,14 @@ def get_pure_sequential_order(config: dict):
 
 
 def check_num_epochs_type(num_epochs_per_task):
-    '''
+    """
     Checks the type of num_epochs_per_task and performs the necessary functions.
 
     Long term, I would like for this file to support a dictionary for num_epochs_per_task,
     where the keys are task IDs and the values are the number of epochs per task.
 
     wait why don't i juse use a list.
-    '''
+    """
 
     if isinstance(num_epochs_per_task, list):
         print("You gave a list for epochs per task.")
@@ -97,3 +101,18 @@ def check_num_epochs_type(num_epochs_per_task):
         exit("Goodbye.")
 
     assert isinstance(num_epochs_per_task, dict), "config['num_epochs'] should be an dict."
+
+
+def continuous_change(train_dataloaders: list[DatasetLoader], config: dict):
+    '''
+    Takes in num_tasks train_dataloaders and alters them for continual learning.
+    See "section F.5. Continuous change experiments" in the Lamers appendix for more details.
+    '''
+
+
+
+
+
+
+
+    return

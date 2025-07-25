@@ -271,11 +271,22 @@ class AGEMHandler:
             self.t.end("criterion")
             return criterion
 
-    def optimize_batch(self, data, labels, clustering_memory):
+    def optimize(self, data, labels, clustering_memory):
         """
-        Optimize a batch by applying A-GEM to each example individually
-        following the algorithm structure
+        A-GEM optimization interface that requires clustering_memory
+
+        Args:
+            data: Batch of training data
+            labels: Batch of training labels
+            clustering_memory: ClusteringMemory instance for sampling reference examples
+
+        Returns:
+            float: Average loss for the batch
         """
+        """
+                Optimize a batch by applying A-GEM to each example individually
+                following the algorithm structure
+                """
         batch_losses = []
 
         # Apply A-GEM to each example in the batch
@@ -286,18 +297,3 @@ class AGEMHandler:
             batch_losses.append(loss)
 
         return sum(batch_losses) / len(batch_losses) if batch_losses else 0.0
-
-    # Clean interface for true A-GEM
-    def optimize(self, data, labels, clustering_memory):
-        """
-        Clean A-GEM optimization interface that requires clustering_memory
-
-        Args:
-            data: Batch of training data
-            labels: Batch of training labels
-            clustering_memory: ClusteringMemory instance for sampling reference examples
-
-        Returns:
-            float: Average loss for the batch
-        """
-        return self.optimize_batch(data, labels, clustering_memory)

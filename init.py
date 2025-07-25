@@ -212,6 +212,7 @@ def initialize_system():
         num_epochs_dict = {}
         for i in range(config['num_tasks']):
             num_epochs_dict[i] = config['num_epochs']
+        config['total_epochs'] = config['num_epochs'] * config['num_tasks']
         config['num_epochs'] = num_epochs_dict
     else:
         # We assume config['num_epochs'] is a dictionary

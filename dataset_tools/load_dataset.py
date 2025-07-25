@@ -8,6 +8,13 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List, Any
 import torch
 from torch.utils.data import DataLoader
+import random
+
+
+def get_q_values(num_epochs=10, batches_per_epoch=100):
+    total_batches = num_epochs * batches_per_epoch
+    return torch.linspace(1.0, 0.0, total_batches)
+
 
 
 class DatasetLoader(ABC):
@@ -169,6 +176,36 @@ class DatasetLoader(ABC):
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create class-split-based tasks."""
         pass
+
+
+def mixed_batch_generator(datasetA, datasetB, batch_size, num_epochs, batches_per_epoch):
+    q_values = get_q_values(num_epochs, batches_per_epoch)
+    idx = 0
+
+    for epoch in range(num_epochs):
+        # Shuffle datasets
+        shuffled_A = random.sample(datasetA, len(datasetA))
+        shuffled_B = random.sample(datasetB, len(datasetB))
+
+        # Create iterators
+        iterA = iter(shuffled_A)
+        iterB = iter(shuffled_B)
+
+        for _ in range(batches_per_epoch):
+            q = q_values[idx].item()
+            idx += 1
+
+            n_A = int(q * batch_size)
+            n_B = batch_size - n_A  # Automatically does ceil-ish logic
+
+            batch_A = [next(iterA) for _ in range(n_A)]
+            batch_B = [next(iterB) for _ in range(n_B)]
+
+            mixed_batch = batch_A + batch_B
+            random.shuffle(mixed_batch)
+
+            yield mixed_batch
+
 
 
 def load_dataset(dataset_name: str, path_override: str = None) -> DatasetLoader:
