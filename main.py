@@ -58,7 +58,11 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # agem_handler.optimize handles model update and gradient projection
             # It queries clustering_memory for the current reference samples
             t.start("get samples")
-            _samples = clustering_memory.get_memory_samples()
+            if config["random_em"]:
+                # Use random episodic memory instead of clustering memory
+                _samples = clustering_memory.get_random_samples(len(data))
+            else:
+                _samples = clustering_memory.get_memory_samples()
             t.end("get samples")
             t.start("optimize")
             batch_loss = agem_handler.optimize(data, labels, _samples)

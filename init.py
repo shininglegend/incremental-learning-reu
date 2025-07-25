@@ -66,6 +66,12 @@ def parse_args():
         default="test_results",
         help="Path to store the output in, should be a folder",
     )
+    parser.add_argument(
+        "--random_em",
+        action="store_true",
+        default=None,
+        help="Use random episodic memory instead of clustering memory",
+    )
     parser.add_argument("--data_dir", type=str, default=None, help="Path to dataset")
     return parser.parse_args()
 
@@ -108,6 +114,7 @@ def initialize_system():
     # Set some default values that aren't in the config file
     config["verbose"] = True
     config["data_dir"] = None
+    config["random_em"] = False
 
     # Override config with command line arguments
     if args.task_type is not None:
@@ -124,6 +131,8 @@ def initialize_system():
         config["data_dir"] = args.data_dir
     if args.experiment_name is not None:
         config["experiment_name"] = args.experiment_name
+    if args.random_em is not None:
+        config["random_em"] = args.random_em
 
     # Apply lite mode overrides
     if config["lite"]:
@@ -152,6 +161,7 @@ def initialize_system():
         "num_tasks": config["num_tasks"],
         "output_dir": config["output_dir"],
         "quick_test_mode": config["lite"],
+        "random_em": config["random_em"],
         "task_type": config["task_type"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
         "verbose": config["verbose"],
