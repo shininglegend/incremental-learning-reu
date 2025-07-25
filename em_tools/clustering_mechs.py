@@ -5,7 +5,6 @@ import pandas
 from collections import deque
 
 DEBUG = False
-DISTANCE_MULTI = 2
 
 triggered = set()
 dsave = lambda s: triggered.add(s) if DEBUG else None
@@ -15,14 +14,6 @@ dprint = lambda *args: print(*args) if DEBUG else None
 # Distance heuristic
 def distance_h(*args, **kwargs):
     return torch.linalg.vector_norm(*args, **kwargs)
-
-
-counter = {}
-dcount = lambda s: counter.update({s: counter.get(s, 0) + 1})
-
-
-def get_final_count():
-    return counter
 
 
 class Cluster:
@@ -223,7 +214,6 @@ class ClusteringMechanism:
     def add_allow_larger_clusters(self, z, label, task_id):
         # If there's space for another cluster, just add it
         if len(self.clusters) < self.Q:
-            dcount("Added")
             self.clusters.append(Cluster(z, label, task_id))
             return
 
@@ -239,18 +229,12 @@ class ClusteringMechanism:
         (cluster_to_merge_from, cluster_to_merge_into, dist_between) = (
             self._find_dense_clusters()
         )
-        # Use distance because the script uses the 2 closest clusters to find the density
-        if (
-            cluster_to_merge_from is None
-            or (DISTANCE_MULTI * dist_to_new_sample) <= dist_between
-        ):
-            dprint(f"Kept: {(DISTANCE_MULTI * dist_to_new_sample)} <= {dist_between}")
-            dcount("Kept")
+        if cluster_to_merge_from is None or (2 * dist_to_new_sample) <= dist_between:
+            dprint(f"Kept: {(2 * dist_to_new_sample)} <= {dist_between}")
             # Add the sample to it's closest cluster instead
             self.clusters[closest_cluster_to_new_sample].add_sample(z, label, task_id)
         else:
-            dprint(f"Merged: {(DISTANCE_MULTI * dist_to_new_sample)} > {dist_between}")
-            dcount("Merged")
+            dprint(f"Merged: {(2 * dist_to_new_sample)} > {dist_between}")
             [
                 self.clusters[cluster_to_merge_into].add_sample(z, label, task_id)
                 for (z, label, task_id) in zip(
@@ -339,7 +323,7 @@ class ClusteringMechanism:
 
         Returns:
             - The cluster to merge
-            - Which cluster to merge it into
+            - Which cluster to merge it into 
             - Dist to that cluster
         """
         if len(self.clusters) < 3:
@@ -390,11 +374,7 @@ class ClusteringMechanism:
             if density.sum() < total_dist:
                 total_dist = density.sum()
                 densest_cluster = density
-        return (
-            densest_cluster.indx,
-            densest_cluster.a.indx,
-            densest_cluster.a.dist + densest_cluster.b.dist,
-        )
+        return densest_cluster.indx, densest_cluster.a.indx, densest_cluster.a.dist
 
     def fit_reducer(self, z_list):
         """
