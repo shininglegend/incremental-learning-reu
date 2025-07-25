@@ -181,19 +181,67 @@ class AGEMHandler:
         print(f"mem size: {mem_size}. global_idx: {global_idx}")
         return None, None
 
+    def sample_from_memory_pool(self, label, clustering_memory):
+
+        # get the pool that corresponds to the new sample
+        pool = clustering_memory.pools[label]
+        if pool is None:
+            print("Sampling from a pool that doesn't exist.")
+
+        pool_size = pool.num_samples
+        if pool_size == 0:
+            return None, None
+
+        # Retrieve random sample from this pool
+        idx = torch.randint(0, pool_size, (1,)).item()
+        current_idx = 0
+
+        # Return the random sample
+        for i, cluster in enumerate(pool.clusters):
+            cluster_size = len(cluster.samples)
+
+            # Skip empty clusters entirely
+            if cluster_size == 0:
+                continue
+
+            # Check if our target index is in this cluster
+            if idx < current_idx + cluster_size:
+                # Found it! Get the local index within this cluster
+                local_idx = idx - current_idx
+
+                # Get the sample directly from the cluster
+                try:
+                    sample = list(cluster.samples)[local_idx]
+                    cluster_label = cluster.labels[local_idx]
+
+                    # Move to device and add batch dimension
+                    x_ref = sample.unsqueeze(0).to(clustering_memory.device)
+                    y_ref = torch.tensor([cluster_label], dtype=torch.long).to(clustering_memory.device)
+
+                    return x_ref, y_ref
+                except Exception as e:
+                    print(f"  ERROR: {e}")
+                    return None, None
+
+            current_idx += cluster_size
+
+        print("oops no sample!")
+        return None, None
+
     def optimize_single_example(self, x, y, clustering_memory):
         """
         A-GEM optimization for a single example (x, y) following Algorithm 2, lines 6-14 in A-GEM paper
         """
 
+        self.t.start("sample from memory")
         # Sample (x_ref, y_ref) from memory
         x_ref, y_ref = self.sample_from_memory_global_index(clustering_memory)
+        # x_ref, y_ref = self.sample_from_memory_pool(clustering_memory, y)
+        self.t.end("sample from memory")
 
         self.t.start("compute current gradient")
-
         # Step 8: Compute gradient
         g = self.compute_gradient(x, y)
-
         self.t.end("compute current gradient")
 
         # If we have memory samples, compute reference gradient and project
@@ -216,9 +264,12 @@ class AGEMHandler:
         self.optimizer.step()
         self.t.end("optimizer.step")
 
+        self.t.start("criterion")
         with torch.no_grad():
             out = self.model(x.unsqueeze(0))
-            return self.criterion(out, y.view(1)).item()
+            criterion = self.criterion(out, y.view(1)).item()
+            self.t.end("criterion")
+            return criterion
 
     def optimize_batch(self, data, labels, clustering_memory):
         """

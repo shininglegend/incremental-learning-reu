@@ -50,6 +50,7 @@ class Cluster:
             'remove_closest_to_new': self.remove_closest_to_new,
             'remove_by_weighted_mean_distance': self.remove_by_weighted_mean_distance,
             'remove_by_log_weighted_mean_distance': self.remove_by_log_weighted_mean_distance,
+            'remove_oldest_with_distance_override': self.remove_oldest_with_distance_override,
         }
 
         if self.cluster_params['removal'] in self.removal_methods:
@@ -206,51 +207,7 @@ class Cluster:
         Removes the sample furthest from the mean, excluding the newest sample.
         """
         dprint("cl remove_based_on_mean triggered")
-
-        if len(self.samples) <= 1:
-            return self.remove_oldest()
-
-        # Find sample furthest from mean, excluding newest (last) sample
-        max_distance = -1
-        furthest_idx = 0
-
-        # Only consider samples except the newest (last one)
-        for i in range(len(self.samples) - 1):
-            sample = self.samples[i]
-            distance = distance_h(sample - self.mean)
-            if distance > max_distance:
-                max_distance = distance
-                furthest_idx = i
-
-        # Remove the furthest sample and its metadata
-        removed_sample = self.samples[furthest_idx]
-        removed_label = self.labels[furthest_idx]
-
-        # Convert deque to list for index-based removal
-        samples_list = list(self.samples)
-        labels_list = list(self.labels)
-        task_ids_list = list(self.task_ids)
-        insertion_order_list = list(self.insertion_order)
-
-        samples_list.pop(furthest_idx)
-        labels_list.pop(furthest_idx)
-        task_ids_list.pop(furthest_idx)
-        insertion_order_list.pop(furthest_idx)
-
-        # Convert back to deque
-        self.samples = deque(samples_list)
-        self.labels = deque(labels_list)
-        self.task_ids = deque(task_ids_list)
-        self.insertion_order = deque(insertion_order_list)
-
-        # Update sum and mean
-        self.sum_samples -= removed_sample
-        if len(self.samples) > 0:
-            self.mean = self.sum_samples / len(self.samples)
-        else:
-            self.mean = torch.zeros_like(self.mean)
-
-        return removed_sample, removed_label
+        return self.remove_furthest_from_mean()
 
     def remove_by_weighted_mean_distance(self, age_weight_factor=0.02):
         """
@@ -287,7 +244,7 @@ class Cluster:
 
         return self._remove_by_index(worst_sample_idx)
 
-    def remove_by_log_weighted_mean_distance(self, age_weight_factor=0.1):
+    def remove_by_log_weighted_mean_distance(self, age_weight_factor=0.5):
         """
         Removes the sample with the highest weighted distance from cluster mean.
         Uses logarithmic age weighting for gentle age influence.
@@ -312,6 +269,35 @@ class Cluster:
                 worst_sample_idx = i
 
         return self._remove_by_index(worst_sample_idx)
+
+    def remove_oldest_with_distance_override(self, distance_threshold_multiplier=2.0):
+        """
+        Removes oldest sample (leftmost in deque) unless a newer sample is much worse.
+        New sample must be 1.5x worse than old sample to get removed.
+        """
+        if len(self.samples) <= 1:
+            return self.remove_oldest()
+
+        # Oldest is at index 0, newest at index -1
+        oldest_distance = distance_h(self.samples[0] - self.mean)
+
+        # Find worst distance among newer samples (indices 1 to end)
+        worst_newer_idx = 0
+        worst_newer_distance = oldest_distance
+
+        end_range = len(self.samples) if self.consider_newest else len(self.samples) - 1
+        for i in range(1, end_range):
+            distance = distance_h(self.samples[i] - self.mean)
+            if distance > worst_newer_distance:
+                worst_newer_distance = distance
+                worst_newer_idx = i
+
+        # Remove the bad newer sample if it's significantly worse
+        if worst_newer_distance > oldest_distance * distance_threshold_multiplier:
+            # print("override engaged. let's hack the mainframe.")
+            return self._remove_by_index(worst_newer_idx)
+        else:
+            return self._remove_by_index(0)  # Remove oldest (leftmost)
 
     def _remove_by_index(self, idx: int):
         """
@@ -377,6 +363,7 @@ class ClusterPool:
         dprint("clm init triggered")
 
         self.clusters: list[Cluster] = []  # List of Cluster objects
+        self.num_samples = 0
         self.Q = Q  # Max number of clusters
         self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
@@ -410,15 +397,18 @@ class ClusterPool:
             # If the number of clusters is less than Q, create a new cluster and add z to it.
             new_cluster = Cluster(self.cluster_params, z, label, task_id)
             self.clusters.append(new_cluster)
+            self.num_samples += 1
         else:
             # If the number of clusters has reached Q, find the closest cluster
             # Add z to the identified closest cluster
             q_star = self.get_closest_cluster(z)
             q_star.add_sample(z, label, task_id)
+            self.num_samples += 1
 
             # If the cluster size exceeds P, remove one sample
             if len(q_star.samples) > self.P:
                 q_star.remove_one()
+                self.num_samples -= 1
                 removed = True
 
         return removed
@@ -516,8 +506,6 @@ class ClusterPool:
 
     def get_clusters_with_labels(self):
         """Gets the samples and their labels currently stored in the clusters
-
-        Optimized version that efficiently handles deques.
 
         Returns:
             tuple: (torch.Tensor of samples, list of labels)

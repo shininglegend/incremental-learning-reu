@@ -1,11 +1,12 @@
 # Handles the pools of clusters
+
 try:
     from clustering_mechs import ClusterPool
 except ImportError:
     from em_tools.clustering_mechs import ClusterPool
 
 import torch
-
+import math
 
 class ClusteringMemory:
     def __init__(self, Q, P, input_type, device, config, num_pools=10):
@@ -26,6 +27,9 @@ class ClusteringMemory:
         self.num_pools = num_pools
         self.total_samples = 0
         self.max_samples = self.Q * self.P * self.num_pools
+        self.num_batches = 0
+
+        self.interval = 1 # dont mind me!
 
         # Create separate clustering mechanisms for each pool (class label)
         self.pools = {}
@@ -168,3 +172,49 @@ class ClusteringMemory:
             int: Number of active pools
         """
         return len(self.pools)
+
+    def update_memory(self, sample_data, sample_label, task_id=None):
+        self.num_batches += 1
+
+        if self.time_to_update():
+            # self.num_batches = 0
+            self.add_sample(sample_data, sample_label, task_id)
+
+    def time_to_update(self):
+
+        return True # unstaggered
+
+        # fuck you
+        threshold = 600 * 20 # after how many batches do you want to change the interval between additions
+        mem_update = False
+        # if self.num_batches % math.ceil(self.interval / 2) == 0:  # slow staggered
+        if self.num_batches % self.interval == 0:  # fast staggered
+            mem_update = True
+        if self.num_batches >= threshold:
+            self.num_batches = 0
+            self.interval += 1
+        return mem_update
+
+
+
+
+
+
+
+
+        # if self.num_batches >= 60000: return False
+        # else: return True
+
+        if self.num_batches == 0:
+            return False
+
+        scale_factor = 10000  # Adjust this to control how slow the progression is
+        max_interval = 500
+
+        # Square root progression for very slow growth
+        interval = min(math.floor(math.sqrt(self.num_batches / scale_factor)) + 1, max_interval)
+
+        return (self.num_batches % interval) == 0
+        # mem_update = batch_idx % (task_id + 1) == 0  # fast staggered
+        # if self.num_batches % math.ceil(self.interval / 2) == 0: # slow staggered
+        # mem_update = True # unstaggered

@@ -10,6 +10,7 @@ from agem.learning_rate import TALearningRateScheduler
 from em_tools import clustering_memory
 from dataset_tools.load_dataset import load_dataset
 from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
+from utils import task_introduction
 
 
 def load_config(config_path="config/default.yaml"):
@@ -186,7 +187,6 @@ def initialize_system():
         device=device,
         config=config,
         num_pools=config["num_pools"],
-
     )
 
     agem_handler = agem.AGEMHandler(
@@ -202,6 +202,30 @@ def initialize_system():
         batch_size=config["batch_size"],
         quick_test=config["lite"],
     )
+
+
+    # DEBUG: experimental
+    config['total_epochs'] = 0
+    if isinstance(config['num_epochs'], int):
+        # Assume it's the same number of epochs per task
+        config['total_epochs'] = config['num_epochs'] * config['num_tasks']
+        num_epochs_dict = {}
+        for i in range(config['num_tasks']):
+            num_epochs_dict[i] = config['num_epochs']
+        config['num_epochs'] = num_epochs_dict
+    else:
+        # We assume config['num_epochs'] is a dictionary
+        for task_id, num_epochs in enumerate(config['num_epochs']):
+            config['total_epochs'] += num_epochs
+
+    epoch_order = task_introduction.get_epoch_order(config)
+    task_times = []
+    epochs_visited = []
+    tasks_seen = []
+    for i in range(config['num_tasks']):
+        task_times.append(0)
+        epochs_visited.append(0)
+
 
     # Initialize visualizer
     visualizer = TAGemVisualizer()
@@ -222,4 +246,8 @@ def initialize_system():
         train_dataloaders,
         test_dataloaders,
         visualizer,
+        epoch_order,
+        epochs_visited,
+        task_times,
+        tasks_seen,
     )
