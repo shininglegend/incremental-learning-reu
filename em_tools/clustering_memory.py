@@ -106,6 +106,8 @@ class ClusteringMemory:
         return all_samples_tensor, all_labels_tensor
 
     def get_random_samples(self, amount):
+        if self.num_pools == 0:
+            return []
         if sum([len(pool) for _, pool in self.pools.items()]) <= amount:
             return self.get_memory_samples()
         random_samples = []

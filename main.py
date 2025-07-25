@@ -35,6 +35,8 @@ NUM_EPOCHS = config["num_epochs"][0] # I changed this to a dictionary.
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
 
+BATCH_SIZE = config["batch_size"]
+
 t.start("training")
 
 # --- 2. Training Loop ---
@@ -42,148 +44,143 @@ print("Starting training...")
 print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
-Removal method: {config.get("removal")}  |  Consider newest: {config.get('consider_newest')}
-Total tasks: {len(train_dataloaders)}  |  Task introduction style: {config['task_introduction']}"""
+Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
+Total tasks: {len(train_dataloaders)}"""
+
 )
 
 # For a print statement in the main loop, lowk unnecessary but I like it
 check_tasks_seen = True
 
-for epoch, task_id in enumerate(epoch_order):
-    epochs_visited[task_id] += 1  # We've seen one more epoch of this task
-    if task_id not in tasks_seen:
-        tasks_seen.append(task_id)
+for task_id, train_dataloader in enumerate(train_dataloaders):
+    print(f"\n--- Training on Task {task_id + 1} ---")
 
-    print(f"\n--- Training on Task {task_id + 1}, Epoch {epochs_visited[task_id]} ---")
-
-    epoch_start_time = time.time()
+    task_start_time = time.time()
     task_epoch_losses = []
 
-    model.train()
-    epoch_loss = 0.0
-    num_batches = 0
+    # Query clustering_memory for the current reference samples, if any
+    if not config["random_em"]:
+        t.start("get samples")
+        _samples = clustering_memory.get_memory_samples()
+        t.end("get samples")
 
-    train_dataloader = train_dataloaders[task_id]
+    for epoch in range(NUM_EPOCHS):
+        model.train()
+        epoch_loss = 0.0
+        num_batches = 0
+        # Use random episodic memory per batch instead of all samples
+        if config["random_em"]:
+            t.start("get samples")
+            _samples = clustering_memory.get_random_samples(BATCH_SIZE)
+            t.end("get samples")
 
-    for batch_idx, (data, labels) in enumerate(train_dataloader):
-        # Move data to device
-        data, labels = data.to(device), labels.to(device)
+        for batch_idx, (data, labels) in enumerate(train_dataloader):
+            # Move data to device
+            data, labels = data.to(device), labels.to(device)
+            # Step 1: Use A-GEM logic for current batch and current memory
+            # agem_handler.optimize handles model update and gradient projection
+            t.start("optimize")
+            batch_loss = agem_handler.optimize(data, labels, _samples)
+            t.end("optimize")
 
-        # Step 1: Use A-GEM logic for current batch with clustering memory
-        t.start("optimize")
-        batch_loss = agem_handler.optimize(data, labels, clustering_memory)
-        t.end("optimize")
+            # Track batch loss
+            if batch_loss is not None:
+                epoch_loss += batch_loss
+                visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
-        # Track batch loss
-        if batch_loss is not None:
-            epoch_loss += batch_loss
-            visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
+            num_batches += 1
 
-        t.start('add samples')
-        # Step 2: Update the clustered memory with current batch samples
-        sample_data = data[0].to(device)
-        sample_label = labels[0].to(device)
-        clustering_memory.update_memory(
-            sample_data, sample_label, task_id
-        )  # Add sample to clusters
-        t.end("add samples")
-
-        num_batches += 1
-
-        # Update progress bar every 10 batches or on last batch
-        if (
+            # Update progress bar every 50 batches or on last batch
+            if (
                 not QUICK_TEST_MODE
                 and VERBOSE
-                and ((batch_idx + 1) % 10 == 0 or (batch_idx + 1) == len(train_dataloader))
-        ):
-            progress = (batch_idx + 1) / len(train_dataloader)
-            bar_length = 30
-            filled_length = int(bar_length * progress)
-            bar = "█" * filled_length + "-" * (bar_length - filled_length)
-            print(
-                f"\rTask {task_id + 1:1}, Epoch {epochs_visited[task_id]}/{NUM_EPOCHS}: |{bar}| {progress:.1%} (Batch {batch_idx + 1}/{len(train_dataloader)})",
-                end="",
-                flush=True,
-            )
+                and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1)
+            ):
+                progress = (batch_idx + 1) / len(train_dataloader)
+                bar_length = 30
+                filled_length = int(bar_length * progress)
+                bar = "█" * filled_length + "-" * (bar_length - filled_length)
+                print(
+                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} (Batch {batch_idx + 1}/{len(train_dataloader)})",
+                    end="",
+                    flush=True,
+                )
 
         # Print newline after progress bar completion
-    if not QUICK_TEST_MODE and VERBOSE:
-        print()
+        if not QUICK_TEST_MODE and VERBOSE:
+            print()
 
         # Track epoch loss
-    avg_epoch_loss = epoch_loss / max(num_batches, 1)
-    task_epoch_losses.append(avg_epoch_loss)
+        avg_epoch_loss = epoch_loss / max(num_batches, 1)
+        task_epoch_losses.append(avg_epoch_loss)
 
-    # Evaluation code
-    t.start("eval")
-    model.eval()
-
-    # Evaluate on individual tasks for detailed tracking
-    individual_accuracies = []
-    for _, eval_task_id in enumerate(tasks_seen):
-        eval_dataloader = test_dataloaders[eval_task_id]
-        task_acc = accuracy_test.evaluate_single_task(
-            model, criterion, eval_dataloader, device=device
+        # Evaluate performance after each epoch
+        t.start("eval")
+        model.eval()
+        avg_accuracy = accuracy_test.evaluate_tasks_up_to(
+            model, criterion, test_dataloaders, task_id, device=device
         )
-        individual_accuracies.append(task_acc)
 
-    avg_accuracy = sum(individual_accuracies) / len(individual_accuracies)
+        # Evaluate on individual tasks for detailed tracking
+        individual_accuracies = []
+        for eval_task_id in range(task_id + 1):
+            eval_dataloader = test_dataloaders[eval_task_id]
+            task_acc = accuracy_test.evaluate_single_task(
+                model, criterion, eval_dataloader, device=device
+            )
+            individual_accuracies.append(task_acc)
+        t.end("eval")
 
-    t.end("eval")
+        # Update visualizer with epoch metrics
+        memory_size = clustering_memory.get_memory_size()
+        current_lr = (
+            lr_scheduler.get_lr() if USE_LEARNING_RATE_SCHEDULER else LEARNING_RATE
+        )
 
-    # Update visualizer with epoch metrics
-    memory_size = clustering_memory.get_memory_size()
-    current_lr = (
-        lr_scheduler.get_lr() if USE_LEARNING_RATE_SCHEDULER else LEARNING_RATE
+        visualizer.update_metrics(
+            task_id=task_id,
+            overall_accuracy=avg_accuracy,
+            individual_accuracies=individual_accuracies,
+            epoch_losses=[avg_epoch_loss],
+            memory_size=memory_size,
+            training_time=None,
+            learning_rate=current_lr,
+        )
+
+        # Print epoch summary
+        if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
+            print(
+                f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
+            )
+    # Step 2: Update the clustered memory with some samples from this task's dataloader
+    # This is where the core clustering for TA-A-GEM happens
+    t.start("add samples")
+    # Add one sample per batch from current task
+    for sample_data, sample_labels in train_dataloader:
+        clustering_memory.add_sample(
+            sample_data[0].cpu(), sample_labels[0].cpu(), task_id
+        )
+    t.end("add samples")
+
+    # Calculate training time for this task
+    task_time = time.time() - task_start_time
+
+    # Final task summary
+    pool_sizes = clustering_memory.get_pool_sizes()
+    num_active_pools = clustering_memory.get_num_active_pools()
+    final_memory_size = clustering_memory.get_memory_size()
+
+    # Get final accuracy from last epoch evaluation
+    final_avg_accuracy = (
+        visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
     )
 
-    visualizer.update_metrics(
-        task_id=task_id,
-        overall_accuracy=avg_accuracy,
-        individual_accuracies=individual_accuracies,
-        epoch_losses=[avg_epoch_loss],
-        memory_size=memory_size,
-        training_time=None,
-        learning_rate=current_lr,
+    print(f"After Task {task_id + 1}, Final Average Accuracy: {final_avg_accuracy:.4f}")
+    print(
+        f"Memory Size: {final_memory_size} samples across {num_active_pools} active pools"
     )
-
-    # Calculate training time for this epoch
-    epoch_time = time.time() - epoch_start_time
-    task_times[task_id] += epoch_time
-
-    # Print epoch summary
-    if QUICK_TEST_MODE:
-        print(
-            f"  Epoch {epoch}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
-        )
-    else:
-        print(f"Epoch accuracy: {avg_accuracy:.4f}, Epoch loss: {avg_epoch_loss:4f}")
-
-    # Every 10 epochs, print a summary of memory and accuracy.
-    if (epoch + 1) % 10 == 0:
-        pool_sizes = clustering_memory.get_pool_sizes()
-        num_active_pools = clustering_memory.get_num_active_pools()
-        final_memory_size = clustering_memory.get_memory_size()
-
-        print("Hey baddie, it's been 10 epochs. Let's see what's going on:")
-        print(
-            f"Memory Size: {final_memory_size} samples across {num_active_pools} active pools"
-        )
-        print(f"Pool sizes: {pool_sizes}")
-
-        if check_tasks_seen and (len(tasks_seen) < config['num_tasks']):
-            print(f"Tasks seen: {sorted(tasks_seen)}")
-        else:
-            if check_tasks_seen:
-                print("hey girl, we've seen all the tasks by now. Just fyi.")
-                print(f"It took {epoch + 1} epochs to get here. Funny how time flies, right?\n")
-            check_tasks_seen = False
-
-    if epochs_visited[task_id] == config['num_epochs'][task_id]:
-        # The task is finished! Let's print a summary:
-        print(f"Task {task_id + 1} completed! We spent {task_times[task_id]:.2f}s training this task.")
-        final_avg_accuracy = (visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0)
-        print(f"After Task {task_id + 1}, Final Average Accuracy: {final_avg_accuracy:.4f}")
+    print(f"Pool sizes: {pool_sizes}")
+    print(f"Task Training Time: {task_time:.2f}s")
 
 t.end("training")
 print("\nTraining complete.")
@@ -211,8 +208,11 @@ task_type_abbrev = {
 }.get(config["task_type"], config["task_type"][:3])
 
 quick_mode = "q-" if QUICK_TEST_MODE else ""
+random_em = "rem-" if config["random_em"] else ""
 dataset_name = config["dataset_name"].lower()
-filename = f"results-{quick_mode}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+filename = (
+    f"results-{quick_mode}{random_em}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+)
 
 visualizer.save_metrics(
     os.path.join(params["output_dir"], filename),
@@ -228,3 +228,6 @@ visualizer.generate_simple_report(
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
 print(t)
+
+# End MLFlow run
+visualizer.end_run()

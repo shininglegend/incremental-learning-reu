@@ -16,7 +16,8 @@
       "type": "debugpy",
       "request": "launch",
       "program": "main.py",
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "args": "--experiment_name debug-perm-mnist"
     },
     {
       "name": "Python Debugger: Quick Test Mode with Permutations",
@@ -24,7 +25,7 @@
       "request": "launch",
       "program": "main.py",
       "console": "integratedTerminal",
-      "args": "--lite"
+      "args": "--lite --experiment_name quick-debug-perm-mnist"
     },
     {
       "name": "Python Debugger: Normal Mode with Class Split",
@@ -32,7 +33,7 @@
       "request": "launch",
       "program": "main.py",
       "console": "integratedTerminal",
-      "args": "--task_type class_split"
+      "args": ["--task_type class_split", "--experiment_name debug-clssplt-mnist"]
     },
     {
       "name": "Python Debugger: Normal Mode with Rotations",
@@ -40,7 +41,7 @@
       "request": "launch",
       "program": "main.py",
       "console": "integratedTerminal",
-      "args": "--task_type rotation"
-    },
+      "args": ["--task_type rotation", "--experiment_name debug-rot-mnist"]
+    }
   ]
 }
