@@ -65,6 +65,9 @@ class Cluster:
         dprint(f'Consider newest: {self.consider_newest}')
 
 
+    def __len__(self):
+        return len(self.samples)
+
     def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
@@ -367,8 +370,10 @@ class ClusterPool:
         self.Q = Q  # Max number of clusters
         self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
-
         self.cluster_params = cluster_params
+
+    def __len__(self):
+        return sum([len(cluster) for cluster in self.clusters])
 
     def add(self, z: torch.Tensor, label=None, task_id=None):
         """
