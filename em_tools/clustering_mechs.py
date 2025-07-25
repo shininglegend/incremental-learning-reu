@@ -6,6 +6,7 @@ from collections import deque
 
 DEBUG = False
 DISTANCE_MULTI = 2
+MAX_CLUSTER = 1 # P * this is max cluster size 
 
 triggered = set()
 dsave = lambda s: triggered.add(s) if DEBUG else None
@@ -381,6 +382,9 @@ class ClusteringMechanism:
         densest_cluster = None
         total_dist = math.inf
         for i in range(len(self.clusters)):
+            # Try not to merge into the same cluster too many times
+            if len(self.clusters[i]) > self.P * MAX_CLUSTER:
+                continue
             density = DensityHelper(i)
             for j in range(len(self.clusters)):
                 if i == j:
