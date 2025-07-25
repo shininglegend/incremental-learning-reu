@@ -171,8 +171,7 @@ class ClusteringMemory:
         """
         total_samples = 0
         for pool in self.pools.values():
-            samples, _ = pool.get_clusters_with_labels()
-            total_samples += len(samples)
+            total_samples += len(pool)
         return total_samples
 
     def get_pool_sizes(self):
@@ -183,8 +182,7 @@ class ClusteringMemory:
         """
         pool_sizes = {}
         for label, pool in self.pools.items():
-            samples, _ = pool.get_clusters_with_labels()
-            pool_sizes[label] = len(samples)
+            pool_sizes[label] = len(pool)
         return pool_sizes
 
     def get_clustering_mechanism(self):
