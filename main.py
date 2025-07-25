@@ -29,6 +29,7 @@ VERBOSE = config["verbose"]
 NUM_EPOCHS = config["num_epochs"]
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
+BATCH_SIZE = config["batch_size"]
 t.start("training")
 
 # --- 2. Training Loop ---
@@ -36,6 +37,7 @@ print("Starting training...")
 print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
+Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
 Total tasks: {len(train_dataloaders)}"""
 )
 
@@ -45,6 +47,15 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     task_start_time = time.time()
     task_epoch_losses = []
 
+    # Query clustering_memory for the current reference samples, if any
+    t.start("get samples")
+    if config["random_em"]:
+        # Use random episodic memory instead of clustering memory
+        _samples = clustering_memory.get_random_samples(BATCH_SIZE)
+    else:
+        _samples = clustering_memory.get_memory_samples()
+    t.end("get samples")
+
     for epoch in range(NUM_EPOCHS):
         model.train()
         epoch_loss = 0.0
@@ -53,17 +64,8 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         for batch_idx, (data, labels) in enumerate(train_dataloader):
             # Move data to device
             data, labels = data.to(device), labels.to(device)
-
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
-            # It queries clustering_memory for the current reference samples
-            t.start("get samples")
-            if config["random_em"]:
-                # Use random episodic memory instead of clustering memory
-                _samples = clustering_memory.get_random_samples(len(data))
-            else:
-                _samples = clustering_memory.get_memory_samples()
-            t.end("get samples")
             t.start("optimize")
             batch_loss = agem_handler.optimize(data, labels, _samples)
             t.end("optimize")
@@ -72,18 +74,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             if batch_loss is not None:
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
-
-            # Step 2: Update the clustered memory with current batch samples
-            # This is where the core clustering for TA-A-GEM happens
-            t.start("add samples")
-            # Add only first sample from batch
-            # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
-            sample_data = data[0].cpu()  # Move to CPU for memory storage
-            sample_label = labels[0].cpu()  # Move to CPU for memory storage
-            clustering_memory.add_sample(
-                sample_data, sample_label, task_id
-            )  # Add sample to clusters
-            t.end("add samples")
 
             num_batches += 1
 
@@ -149,6 +139,15 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             print(
                 f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
+    # Step 2: Update the clustered memory with some samples from this task's dataloader
+    # This is where the core clustering for TA-A-GEM happens
+    t.start("add samples")
+    # Add one sample per batch from current task
+    for sample_data, sample_labels in train_dataloader:
+        clustering_memory.add_sample(
+            sample_data[0].cpu(), sample_labels[0].cpu(), task_id
+        )
+    t.end("add samples")
 
     # Calculate training time for this task
     task_time = time.time() - task_start_time
