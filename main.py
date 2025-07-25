@@ -208,3 +208,6 @@ visualizer.generate_simple_report(
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
 print(t)
+
+# End MLFlow run
+visualizer.end_run()
