@@ -417,6 +417,76 @@ class YourCustomModel(nn.Module):
 
 Implement new data loading using abstract classes in `load_dataset.py`
 
+## MLflow Integration
+
+This project includes MLflow integration for experiment tracking and visualization.
+
+### Prerequisites
+
+Install MLflow:
+```bash
+pip install mlflow
+# If you encounter protobuf errors:
+pip install "protobuf<4.0.0"
+```
+
+### Usage
+
+**New Experiments (Automatic):**
+The system automatically logs to MLflow when running experiments:
+
+```bash
+# Single experiment
+python main.py --task_type permutation --experiment_name my-test
+
+# Batch experiments
+./run_experiments.sh mnist my-experiment-batch
+```
+
+**Importing Existing Results:**
+Import old pickle files into MLflow:
+
+```bash
+# Import last 5 results from a folder
+python utils/import_to_mlflow.py --input_dir test_results/my-old-experiment --last 5
+
+# Import all results from a folder
+python utils/import_to_mlflow.py --input_dir test_results/my-old-experiment --all
+
+# Dry run to see what would be imported
+python utils/import_to_mlflow.py --input_dir test_results/my-old-experiment --last 10 --dry_run
+```
+
+**Viewing Results:**
+```bash
+mlflow ui
+# Open http://localhost:5000 in your browser
+```
+
+### MLflow Features
+
+**Experiment Organization:**
+- Experiments named after your folder structure
+- Runs automatically named with task type and timestamp
+- Tags for easy filtering (task_type, dataset, quick_test)
+
+**Metrics Tracked:**
+- Per-epoch: overall_accuracy, epoch_loss, memory_size, learning_rate
+- Per-task: individual task accuracies (task_0_accuracy, task_1_accuracy, etc.)
+- Batch-level: batch_loss (sampled every 10 batches)
+- Summary: final_accuracy, average_accuracy, total_epochs
+
+**Artifacts Stored:**
+- Original pickle files
+- HTML visualization graphs
+- Model checkpoints (if enabled)
+
+**Comparison Features:**
+- Compare runs side by side
+- Filter by parameters or performance
+- Download artifacts and visualizations
+- Export data for further analysis
+
 ## Acknowledgments
 
 This work is based on the original A-GEM[1] and TA-A-GEM[2] paper, which can be found here:

@@ -36,6 +36,12 @@ def parse_args():
         help="Type of task transformation",
     )
     parser.add_argument(
+        "--experiment_name",
+        type=str,
+        default=None,
+        help="Name for the experiment (used for MLflow experiment naming)",
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default=None,
@@ -116,6 +122,8 @@ def initialize_system():
         config["verbose"] = not args.no_verbose  # Note: Inverted.
     if args.data_dir is not None:
         config["data_dir"] = args.data_dir
+    if args.experiment_name is not None:
+        config["experiment_name"] = args.experiment_name
 
     # Apply lite mode overrides
     if config["lite"]:
@@ -132,6 +140,7 @@ def initialize_system():
     params = {
         "batch_size": config["batch_size"],
         "dataset_name": config["dataset_name"],
+        "experiment_name": config["experiment_name"],
         "hidden_dim": config["hidden_dim"],
         "input_dim": config["input_dim"],
         "learning_rate": config["learning_rate"],
@@ -200,8 +209,21 @@ def initialize_system():
         quick_test=config["lite"],
     )
 
-    # Initialize visualizer
-    visualizer = TAGemVisualizer()
+    # Initialize visualizer with experiment name
+    experiment_name = config.get("experiment_name", "TA-A-GEM")
+    visualizer = TAGemVisualizer(experiment_name=experiment_name)
+
+    # Create run name with timestamp
+    import time
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    run_name = f"{config['task_type']}_{timestamp}"
+
+    # Start ml_flow run
+    visualizer.start_run(
+        run_name=run_name,
+        params=config  # Log all configuration as parameters
+    )
+
 
     timer.end("init")
 
