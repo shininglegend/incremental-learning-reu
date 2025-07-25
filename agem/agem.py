@@ -35,7 +35,7 @@ class AGEMHandler:
             self.loss_history.append(loss_value)
             
             # Keep only last N losses for normalization bounds
-            window_size = 1000  # Adjust as needed (50-250, ...)
+            window_size = 200  # Adjust as needed (50-250, ...)
             if len(self.loss_history) > window_size:
                 self.loss_history = self.loss_history[-window_size:]
         
