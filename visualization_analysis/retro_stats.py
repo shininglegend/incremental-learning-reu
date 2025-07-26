@@ -242,7 +242,12 @@ def main():
     print("=" * 80)
     for stat in statistics:
         print(f"\n{stat['Task Type']} ({stat['Number of Runs']} runs):")
-        print(f"  Raw accuracies: {[f'{acc:.4f}' for acc in stat['Raw Accuracies']]}")
+        print(
+            f"  Raw accuracies: [{', '.join(f'{acc:.4f}' for acc in stat['Raw Accuracies'])}]"
+        )
+        print(
+            f"To copy: {','.join(f'{acc:.4f}' for acc in stat['Raw Accuracies'])}"
+        )
         print(f"  Mean: {stat['Mean Accuracy']:.4f} ± {stat['Std Deviation']:.4f}")
         print(f"  99% CI: [{stat['99% CI Lower']:.4f}, {stat['99% CI Upper']:.4f}]")
 
