@@ -1,5 +1,6 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
 import time, os
+import numpy as np
 from utils import accuracy_test
 from init import initialize_system
 
@@ -47,29 +48,37 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     task_start_time = time.time()
     task_epoch_losses = []
 
-    # Query clustering_memory for the current reference samples, if any
-    if not config["random_em"]:
-        t.start("get samples")
-        _samples = clustering_memory.get_memory_samples()
-        t.end("get samples")
+    # Query clustering_memory for all samples once per task
+    t.start("get samples")
+    all_samples = clustering_memory.get_memory_samples()
+    t.end("get samples")
 
     for epoch in range(NUM_EPOCHS):
         model.train()
         epoch_loss = 0.0
         num_batches = 0
-        # Use random episodic memory per batch instead of all samples
-        if config["random_em"]:
-            t.start("get samples")
-            _samples = clustering_memory.get_random_samples(BATCH_SIZE)
-            t.end("get samples")
 
         for batch_idx, (data, labels) in enumerate(train_dataloader):
             # Move data to device
             data, labels = data.to(device), labels.to(device)
+            # Select memory samples for this batch
+            if config["random_em"] and len(all_samples) > 0:
+                # Apply random mask to select BATCH_SIZE samples
+                t.start("choose random samples")
+                num_samples = len(all_samples)
+                if num_samples <= BATCH_SIZE:
+                    batch_samples = all_samples
+                else:
+                    mem_sample_mask = np.random.choice(num_samples, BATCH_SIZE, replace=False)
+                    batch_samples = [all_samples[i] for i in mem_sample_mask]
+                t.end("choose random samples")
+            else:
+                batch_samples = all_samples
+
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             t.start("optimize")
-            batch_loss = agem_handler.optimize(data, labels, _samples)
+            batch_loss = agem_handler.optimize(data, labels, batch_samples)
             t.end("optimize")
 
             # Track batch loss
