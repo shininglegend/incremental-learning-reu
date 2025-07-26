@@ -38,7 +38,7 @@ print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
 Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
-Total tasks: {len(train_dataloaders)}"""
+Use LR: {USE_LEARNING_RATE_SCHEDULER} | Total tasks: {len(train_dataloaders)}"""
 )
 
 for task_id, train_dataloader in enumerate(train_dataloaders):
@@ -119,7 +119,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             )
             individual_accuracies.append(task_acc)
         t.end("eval")
-
+        t.start("visualizer")
         # Update visualizer with epoch metrics
         memory_size = clustering_memory.get_memory_size()
         current_lr = (
@@ -135,6 +135,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             training_time=None,
             learning_rate=current_lr,
         )
+        t.end("visualizer")
 
         # Print epoch summary
         if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
@@ -144,11 +145,15 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     # Step 2: Update the clustered memory with some samples from this task's dataloader
     # This is where the core clustering for TA-A-GEM happens
     t.start("add samples")
+    samples_added = 0
     # Add one sample per batch from current task
     for sample_data, sample_labels in train_dataloader:
+        samples_added += 1
         clustering_memory.add_sample(
             sample_data[0].cpu(), sample_labels[0].cpu(), task_id
         )
+    print(f"Added {samples_added} samples this round.")
+    print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
     t.end("add samples")
 
     # Calculate training time for this task
