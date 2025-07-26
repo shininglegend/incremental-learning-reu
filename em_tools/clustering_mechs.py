@@ -36,10 +36,6 @@ class Cluster:
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
-        # Sanity checks
-        assert self.Q > 0
-        assert self.P > 0
-
     def __len__(self):
         return len(self.samples)
 
@@ -176,6 +172,9 @@ class ClusteringMechanism:
         self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
         self.sample_throughput = 0
+
+        assert self.P > 0
+        assert self.Q > 0
 
     def __len__(self):
         return sum([len(cluster) for cluster in self.clusters])
