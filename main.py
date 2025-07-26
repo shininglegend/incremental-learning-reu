@@ -62,15 +62,15 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Move data to device
             data, labels = data.to(device), labels.to(device)
             # Select memory samples for this batch
-            if config["random_em"] and all_samples and len(all_samples) > 0:
+            if config["random_em"] and len(all_samples) > 0:
                 # Apply random mask to select BATCH_SIZE samples
                 t.start("choose random samples")
                 num_samples = len(all_samples)
                 if num_samples <= BATCH_SIZE:
-                    mem_sample_mask = np.arange(num_samples)
+                    batch_samples = all_samples
                 else:
                     mem_sample_mask = np.random.choice(num_samples, BATCH_SIZE, replace=False)
-                batch_samples = [all_samples[i] for i in mem_sample_mask]
+                    batch_samples = [all_samples[i] for i in mem_sample_mask]
                 t.end("choose random samples")
             else:
                 batch_samples = all_samples
