@@ -187,6 +187,12 @@ class ClusteringMemory:
             pool_sizes[label] = len(pool)
         return pool_sizes
 
+    def get_sample_throughputs(self):
+        pool_throughput = {}
+        for label, pool in self.pools.items():
+            pool_throughput[label] = pool.sample_throughput
+        return pool_throughput
+
     def get_clustering_mechanism(self):
         """Get access to all clustering mechanisms for visualization.
 
