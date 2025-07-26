@@ -1,4 +1,5 @@
 import argparse
+import os
 import yaml
 import torch
 import torch.nn as nn
@@ -24,7 +25,7 @@ def parse_args():
     parser.add_argument(
         "--config",
         type=str,
-        default="config/default.yaml",
+        default="utils/default.yaml",
         help="Path to configuration file",
     )
     parser.add_argument(
@@ -33,6 +34,12 @@ def parse_args():
         default=None,
         choices=["permutation", "rotation", "class_split"],
         help="Type of task transformation",
+    )
+    parser.add_argument(
+        "--experiment_name",
+        type=str,
+        default=None,
+        help="Name for the experiment (used for MLflow experiment naming)",
     )
     parser.add_argument(
         "--dataset",
@@ -97,10 +104,10 @@ def initialize_system():
 
     # Load configuration
     config = load_config(args.config)
-    
+
     # Set some default values that aren't in the config file
-    config['verbose'] = True
-    config['data_dir'] = None
+    config["verbose"] = True
+    config["data_dir"] = None
 
     # Override config with command line arguments
     if args.task_type is not None:
@@ -115,21 +122,25 @@ def initialize_system():
         config["verbose"] = not args.no_verbose  # Note: Inverted.
     if args.data_dir is not None:
         config["data_dir"] = args.data_dir
+    if args.experiment_name is not None:
+        config["experiment_name"] = args.experiment_name
 
     # Apply lite mode overrides
     if config["lite"]:
         config["num_tasks"] = 2
         config["batch_size"] = 50
 
-    # Determine pool configuration based on task type
-    pool_config = config["pools"][config["task_type"]]
-    config["num_pools"] = pool_config["num_pools"]
-    config["clusters_per_pool"] = pool_config["clusters_per_pool"]
+    # Determine configuration based on task type
+    task_specific_config = config["task_specific"][config["task_type"]]
+    config["num_pools"] = task_specific_config["num_pools"]
+    config["clusters_per_pool"] = task_specific_config["clusters_per_pool"]
+    config["num_tasks"] = task_specific_config["num_tasks"]
 
     # Create params dictionary for compatibility
     params = {
         "batch_size": config["batch_size"],
         "dataset_name": config["dataset_name"],
+        "experiment_name": config["experiment_name"],
         "hidden_dim": config["hidden_dim"],
         "input_dim": config["input_dim"],
         "learning_rate": config["learning_rate"],
@@ -141,6 +152,7 @@ def initialize_system():
         "num_tasks": config["num_tasks"],
         "output_dir": config["output_dir"],
         "quick_test_mode": config["lite"],
+        "random_em": config["random_em"],
         "task_type": config["task_type"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
         "verbose": config["verbose"],
@@ -149,6 +161,11 @@ def initialize_system():
     # Set up timer
     timer = Timer()
     timer.start("init")
+
+    # Ensure output dir exists
+    if not os.path.exists(config["output_dir"]) and os.path.isabs(config["output_dir"]):
+        raise FileNotFoundError("path is an absolute path and doesn't exist.")
+    os.makedirs(config["output_dir"], exist_ok=True)
 
     # Device configuration
     device = config["device"]
@@ -193,8 +210,21 @@ def initialize_system():
         quick_test=config["lite"],
     )
 
-    # Initialize visualizer
-    visualizer = TAGemVisualizer()
+    # Initialize visualizer with experiment name
+    experiment_name = config.get("experiment_name", "TA-A-GEM")
+    visualizer = TAGemVisualizer(experiment_name=experiment_name)
+
+    # Create run name with timestamp
+    import time
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    run_name = f"{config['task_type']}_{timestamp}"
+
+    # Start ml_flow run
+    visualizer.start_run(
+        run_name=run_name,
+        params=config  # Log all configuration as parameters
+    )
+
 
     timer.end("init")
 

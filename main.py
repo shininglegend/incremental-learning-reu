@@ -1,6 +1,7 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
 import time, os
-from agem import agem
+import numpy as np
+from utils import accuracy_test
 from init import initialize_system
 
 # --- 1. Configuration and Initialization ---
@@ -29,14 +30,16 @@ VERBOSE = config["verbose"]
 NUM_EPOCHS = config["num_epochs"]
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
+BATCH_SIZE = config["batch_size"]
 t.start("training")
 
 # --- 2. Training Loop ---
-print("Starting TA-A-GEM training...")
+print("Starting training...")
 print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
-Total tasks: {len(train_dataloaders)}"""
+Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
+Use LR: {USE_LEARNING_RATE_SCHEDULER} | Total tasks: {len(train_dataloaders)}"""
 )
 
 for task_id, train_dataloader in enumerate(train_dataloaders):
@@ -44,6 +47,11 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
     task_start_time = time.time()
     task_epoch_losses = []
+
+    # Query clustering_memory for all samples once per task
+    t.start("get samples")
+    all_samples = clustering_memory.get_memory_samples()
+    t.end("get samples")
 
     for epoch in range(NUM_EPOCHS):
         model.train()
@@ -53,33 +61,30 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         for batch_idx, (data, labels) in enumerate(train_dataloader):
             # Move data to device
             data, labels = data.to(device), labels.to(device)
+            # Select memory samples for this batch
+            if config["random_em"] and len(all_samples) > 0:
+                # Apply random mask to select BATCH_SIZE samples
+                t.start("choose random samples")
+                num_samples = len(all_samples)
+                if num_samples <= BATCH_SIZE:
+                    batch_samples = all_samples
+                else:
+                    mem_sample_mask = np.random.choice(num_samples, BATCH_SIZE, replace=False)
+                    batch_samples = [all_samples[i] for i in mem_sample_mask]
+                t.end("choose random samples")
+            else:
+                batch_samples = all_samples
 
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
-            # It queries clustering_memory for the current reference samples
-            t.start("get samples")
-            _samples = clustering_memory.get_memory_samples()
-            t.end("get samples")
             t.start("optimize")
-            batch_loss = agem_handler.optimize(data, labels, _samples)
+            batch_loss = agem_handler.optimize(data, labels, batch_samples)
             t.end("optimize")
 
             # Track batch loss
             if batch_loss is not None:
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
-
-            # Step 2: Update the clustered memory with current batch samples
-            # This is where the core clustering for TA-A-GEM happens
-            t.start("add samples")
-            # Add only first sample from batch
-            # This duplicates the activity of the paper and helps not overwrite previous tasks too fast
-            sample_data = data[0].cpu()  # Move to CPU for memory storage
-            sample_label = labels[0].cpu()  # Move to CPU for memory storage
-            clustering_memory.add_sample(
-                sample_data, sample_label, task_id
-            )  # Add sample to clusters
-            t.end("add samples")
 
             num_batches += 1
 
@@ -94,7 +99,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 filled_length = int(bar_length * progress)
                 bar = "█" * filled_length + "-" * (bar_length - filled_length)
                 print(
-                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} ({batch_idx + 1}/{len(train_dataloader)})",
+                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} (Batch {batch_idx + 1}/{len(train_dataloader)})",
                     end="",
                     flush=True,
                 )
@@ -110,7 +115,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         # Evaluate performance after each epoch
         t.start("eval")
         model.eval()
-        avg_accuracy = agem.evaluate_tasks_up_to(
+        avg_accuracy = accuracy_test.evaluate_tasks_up_to(
             model, criterion, test_dataloaders, task_id, device=device
         )
 
@@ -118,12 +123,12 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         individual_accuracies = []
         for eval_task_id in range(task_id + 1):
             eval_dataloader = test_dataloaders[eval_task_id]
-            task_acc = agem.evaluate_single_task(
+            task_acc = accuracy_test.evaluate_single_task(
                 model, criterion, eval_dataloader, device=device
             )
             individual_accuracies.append(task_acc)
         t.end("eval")
-
+        t.start("visualizer")
         # Update visualizer with epoch metrics
         memory_size = clustering_memory.get_memory_size()
         current_lr = (
@@ -139,12 +144,26 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             training_time=None,
             learning_rate=current_lr,
         )
+        t.end("visualizer")
 
         # Print epoch summary
         if QUICK_TEST_MODE and (epoch % 5 == 0 or epoch == NUM_EPOCHS - 1):
             print(
                 f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
+    # Step 2: Update the clustered memory with some samples from this task's dataloader
+    # This is where the core clustering for TA-A-GEM happens
+    t.start("add samples")
+    samples_added = 0
+    # Add one sample per batch from current task
+    for sample_data, sample_labels in train_dataloader:
+        samples_added += 1
+        clustering_memory.add_sample(
+            sample_data[0].cpu(), sample_labels[0].cpu(), task_id
+        )
+    print(f"Added {samples_added} samples this round.")
+    print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
+    t.end("add samples")
 
     # Calculate training time for this task
     task_time = time.time() - task_start_time
@@ -167,15 +186,39 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     print(f"Task Training Time: {task_time:.2f}s")
 
 t.end("training")
-print("\nTA-A-GEM training complete.")
+print("\nTraining complete.")
+
+# Calculate and display final average accuracy over all epochs and tasks
+if visualizer.epoch_data:
+    total_accuracy = sum(ep["overall_accuracy"] for ep in visualizer.epoch_data)
+    total_epochs = len(visualizer.epoch_data)
+    final_average_accuracy = total_accuracy / total_epochs
+    print(
+        f"\nFinal Average Accuracy (all epochs, all tasks): {final_average_accuracy:.4f}"
+    )
 
 # --- 3. Comprehensive Visualization and Analysis ---
 print("\nGenerating comprehensive analysis...")
 
 # Save metrics for future analysis
 timestamp = time.strftime("%Y%m%d_%H%M%S")
+
+# Build filename with task type, quick test mode, and dataset
+task_type_abbrev = {
+    "class_incremental": "cla",
+    "rotation": "rot",
+    "permutation": "perm",
+}.get(config["task_type"], config["task_type"][:3])
+
+quick_mode = "q-" if QUICK_TEST_MODE else ""
+random_em = "rem-" if config["random_em"] else ""
+dataset_name = config["dataset_name"].lower()
+filename = (
+    f"results-{quick_mode}{random_em}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+)
+
 visualizer.save_metrics(
-    os.path.join(params["output_dir"], f"ta_agem_metrics_{timestamp}.pkl"),
+    os.path.join(params["output_dir"], filename),
     params=params,
 )
 
@@ -187,3 +230,6 @@ visualizer.generate_simple_report(
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
 print(t)
+
+# End MLFlow run
+visualizer.end_run()
