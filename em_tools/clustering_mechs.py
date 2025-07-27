@@ -213,8 +213,8 @@ class ClusteringMechanism:
         if len(self.clusters[nearest_cluster_idx_to_new]) > 1:
             return self._add_to_cluster(nearest_cluster_idx_to_new, z, label, task_id)
 
-        # Otherwise, grab that sample, check it's nearest distance.
-        # If that sample is closer to another cluster than this sample is to it, move it to that cluster
+        # Otherwise, grab that cluster, check it's nearest distance.
+        # If that cluster is closer to another cluster than this sample is to it, move it to that cluster
         # and remove the old cluster, replacing it with a new sample centered on this new sample
         (nearest_old_sample, nearest_old_label) = self.clusters[
             nearest_cluster_idx_to_new
