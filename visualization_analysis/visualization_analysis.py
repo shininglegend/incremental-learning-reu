@@ -186,14 +186,6 @@ class TAGemVisualizer:
             {"task": task_id, "epoch": epoch, "batch": batch_idx, "loss": loss}
         )
 
-        # Log batch loss to MLflow (sampled to avoid overwhelming)
-        if self.use_mlflow and self.current_run and batch_idx % 10 == 0:
-            try:
-                mlflow.log_metric("batch_loss", loss, step=self.global_step)
-                mlflow.log_metric("batch_task", task_id, step=self.global_step)
-            except Exception as e:
-                print(f"Failed to log batch loss to MLflow: {e}")
-
     def save_metrics(self, filepath, params=None):
         """Save all metrics and params to file for later analysis"""
         metrics = {
