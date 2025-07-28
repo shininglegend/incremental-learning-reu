@@ -257,7 +257,7 @@ class ClusteringMechanism:
         if timer:
             timer.start("sanity")
         assert len(self) <= self.max_size, "Max pool size exceeded"
-        assert len(self.clusters) <= self.Q, "Max number of clusters exceeded"
+        assert len(self.clusters) <= self.max_clusters, "Max number of clusters exceeded"
         if timer:
             timer.end("sanity")
 
@@ -338,7 +338,7 @@ class ClusteringMechanism:
 
     def add_allow_larger_clusters(self, z, label, task_id):
         # If there's space for another cluster, just add it
-        if len(self.clusters) < self.Q:
+        if len(self.clusters) < self.max_clusters:
             dcount("Added")
             self.clusters.append(Cluster(z, label, task_id))
             return
@@ -540,7 +540,7 @@ class ClusteringMechanism:
         total_dist = math.inf
         for i in range(len(self.clusters)):
             # Try not to merge into the same cluster too many times
-            if len(self.clusters[i]) > self.P * MAX_CLUSTER:
+            if len(self.clusters[i]) > self.max_cluster_size * MAX_CLUSTER:
                 continue
             density = DensityHelper(i)
             for j in range(len(self.clusters)):
