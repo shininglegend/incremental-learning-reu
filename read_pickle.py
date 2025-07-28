@@ -20,7 +20,7 @@ INDIVIDUAL_PLOTS_TO_DISPLAY = {
 }
 
 # If you want to save the plots, change this path. Helpful for linux. Will save all files.
-SAVE_DIR = "test_results/pickle_runs"
+SAVE_DIR = "test_results/visualizations"
 if SAVE_DIR and not os.path.exists(SAVE_DIR):
     os.makedirs(SAVE_DIR)
 
