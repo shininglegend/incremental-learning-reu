@@ -1,6 +1,7 @@
 /test_results/*
 /sbatch_results/*
 TRAINING_LOG.md
+/mlruns/*
 
 # Ignore the data file itself
 *.csv

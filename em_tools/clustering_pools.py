@@ -81,6 +81,8 @@ class ClusteringMemory:
         return all_memory_samples
 
     def get_random_samples(self, amount):
+        if self.num_pools == 0:
+            return []
         if sum([len(pool) for _, pool in self.pools.items()]) <= amount:
             return self.get_memory_samples()
         random_samples = []
@@ -115,21 +117,21 @@ class ClusteringMemory:
         label = pool_labels[pool_idx]
         pool = self.pools[label]
 
-        # Use efficient count method (excludes buffers)
-        available_count = pool.get_total_sample_count()
-        if available_count == 0:
+        # Get all samples from this pool
+        samples, labels = pool.get_clusters_with_labels()
+        if len(samples) == 0:
             return []
 
         # Generate random indices for sampling
+        available_count = len(samples)
         sample_count = min(amount, available_count)
         random_indices = random.sample(range(available_count), sample_count)
 
-        # Extract samples at random indices using direct access
+        # Extract samples at random indices
         result = []
         for idx in random_indices:
-            sample, sample_label = pool.get_sample_at_global_index(idx)
-            sample_tensor = sample.to(self.device)
-            label_tensor = torch.tensor(sample_label if sample_label is not None else label).to(self.device)
+            sample_tensor = samples[idx].to(self.device)
+            label_tensor = torch.tensor(labels[idx] if labels[idx] is not None else label).to(self.device)
             result.append((sample_tensor, label_tensor))
 
         return result
@@ -171,8 +173,7 @@ class ClusteringMemory:
         """
         total_samples = 0
         for pool in self.pools.values():
-            samples, _ = pool.get_clusters_with_labels()
-            total_samples += len(samples)
+            total_samples += len(pool)
         return total_samples
 
     def get_pool_sizes(self):
@@ -183,6 +184,12 @@ class ClusteringMemory:
         """
         pool_sizes = {label: len(pool) for label, pool in self.pools.items()}
         return pool_sizes
+
+    def get_sample_throughputs(self):
+        pool_throughput = {}
+        for label, pool in self.pools.items():
+            pool_throughput[label] = pool.sample_throughput
+        return pool_throughput
 
     def get_clustering_mechanism(self):
         """Get access to all clustering mechanisms for visualization.
