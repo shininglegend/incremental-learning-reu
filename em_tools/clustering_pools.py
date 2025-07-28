@@ -81,6 +81,8 @@ class ClusteringMemory:
         return all_memory_samples
 
     def get_random_samples(self, amount):
+        if self.num_pools == 0:
+            return []
         if sum([len(pool) for _, pool in self.pools.items()]) <= amount:
             return self.get_memory_samples()
         random_samples = []
@@ -171,8 +173,7 @@ class ClusteringMemory:
         """
         total_samples = 0
         for pool in self.pools.values():
-            samples, _ = pool.get_clusters_with_labels()
-            total_samples += len(samples)
+            total_samples += len(pool)
         return total_samples
 
     def get_pool_sizes(self):
@@ -183,9 +184,14 @@ class ClusteringMemory:
         """
         pool_sizes = {}
         for label, pool in self.pools.items():
-            samples, _ = pool.get_clusters_with_labels()
-            pool_sizes[label] = len(samples)
+            pool_sizes[label] = len(pool)
         return pool_sizes
+
+    def get_sample_throughputs(self):
+        pool_throughput = {}
+        for label, pool in self.pools.items():
+            pool_throughput[label] = pool.sample_throughput
+        return pool_throughput
 
     def get_clustering_mechanism(self):
         """Get access to all clustering mechanisms for visualization.

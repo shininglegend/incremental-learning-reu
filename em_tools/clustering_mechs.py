@@ -34,6 +34,9 @@ class Cluster:
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
 
+    def __len__(self):
+        return len(self.samples)
+
     def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dprint("cl add_sample triggered")
@@ -145,6 +148,10 @@ class ClusteringMechanism:
         self.Q = Q  # Max number of clusters
         self.P = P  # Max cluster size
         self.dimensionality_reducer = dimensionality_reducer
+        self.sample_throughput = 0
+
+    def __len__(self):
+        return sum([len(cluster) for cluster in self.clusters])
 
     def add(self, z: torch.Tensor, label=None, task_id=None):
         """
@@ -156,6 +163,7 @@ class ClusteringMechanism:
             task_id: Optional task ID to track which task this sample came from.
         """
         dprint("clm add triggered")
+        self.sample_throughput += 1
 
         assert len(z.shape) == 1, "Sample should only have one axis."
 

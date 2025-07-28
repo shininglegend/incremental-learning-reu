@@ -128,7 +128,7 @@ class TAGemVisualizer:
         task_id,
         overall_accuracy,
         individual_accuracies,
-        epoch_losses,
+        epoch_loss,
         memory_size,
         training_time=None,
         learning_rate=None,
@@ -139,7 +139,7 @@ class TAGemVisualizer:
             'task_id': task_id,
             'overall_accuracy': overall_accuracy,
             'individual_accuracies': individual_accuracies.copy(),
-            'epoch_loss': epoch_losses[0] if epoch_losses else 0.0,
+            'epoch_loss': epoch_loss,
             'memory_size': memory_size,
             'learning_rate': learning_rate,
             'training_time': training_time

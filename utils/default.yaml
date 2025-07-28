@@ -16,6 +16,7 @@ input_dim: 784 # For MNIST (28*28)
 # Model Configuration
 hidden_dim: 200 # Hidden layer dimension as per paper
 device: "cpu" # Override to use cuda, we found it was slower on average
+random_em: true # Fetch randomly from episodic memory instead of getting all samples
 
 # Memory Configuration
 # memory_size_q: 10 # Overridden below
@@ -28,7 +29,7 @@ num_epochs: 20 # Number of epochs per task
 # num_tasks: 5 # Number of tasks (overridden to 2 in lite mode)
 
 # Learning Rate Scheduler
-use_learning_rate_scheduler: true # Use adaptive learning rate scheduler
+use_learning_rate_scheduler: false # Use adaptive learning rate scheduler
 
 # Task Configuration
 task_specific:
