@@ -21,6 +21,7 @@ random_em: true # Fetch randomly from episodic memory instead of getting all sam
 # Memory Configuration
 # memory_size_q: 10 # Overridden below
 memory_size_p: 3 # Max samples per cluster (P) - as per paper
+sampling_rate: 1 # Number of samples per batch to add to memory (0.001 to BATCH_SIZE)
 
 # Training Configuration
 batch_size: 10 # Batch size for training (overridden to 50 in lite mode)

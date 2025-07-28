@@ -153,6 +153,7 @@ def initialize_system():
         "output_dir": config["output_dir"],
         "quick_test_mode": config["lite"],
         "random_em": config["random_em"],
+        "sampling_rate": config["sampling_rate"],
         "task_type": config["task_type"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
         "verbose": config["verbose"],
