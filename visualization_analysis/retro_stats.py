@@ -8,12 +8,12 @@ import argparse
 from datetime import datetime
 
 
-def load_pickle_files(directory="test_results", num_files=15):
+def load_pickle_files(directory, num_files=15):
     """Load pickle files from the test_results directory
 
     NOTE: Used by compare_experiments.py - do not modify signature
     """
-    pickle_files = glob.glob(os.path.join(directory, "ta_agem_metrics_*.pkl"))
+    pickle_files = glob.glob(os.path.join(directory, "*.pkl"))
 
     # Sort files by modification time (newest first) and take only the specified number
     pickle_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
@@ -34,20 +34,21 @@ def load_pickle_files(directory="test_results", num_files=15):
             final_accuracy = None
             if "epoch_data" in data and data["epoch_data"]:
                 # New format: average accuracy across all epochs and tasks
-                all_accuracies = []
+                all_accuracies_by_overall = []
                 for epoch in data["epoch_data"]:
-                    if epoch["individual_accuracies"]:
-                        all_accuracies.extend(epoch["individual_accuracies"])
-                if all_accuracies:
-                    final_accuracy = sum(all_accuracies) / len(all_accuracies)
+                    if epoch["overall_accuracy"]:
+                        all_accuracies_by_overall.append(epoch["overall_accuracy"])
+                if all_accuracies_by_overall:
+                    final_accuracy = sum(all_accuracies_by_overall) / len(all_accuracies_by_overall)
             elif "per_task_accuracies" in data and data["per_task_accuracies"]:
+                print("Warning: Old format detected.")
                 # Legacy format: average accuracy across all evaluations and tasks
-                all_accuracies = []
+                all_accuracies_by_overall = []
                 for task_eval in data["per_task_accuracies"]:
                     if task_eval:
-                        all_accuracies.extend(task_eval)
-                if all_accuracies:
-                    final_accuracy = sum(all_accuracies) / len(all_accuracies)
+                        all_accuracies_by_overall.extend(task_eval)
+                if all_accuracies_by_overall:
+                    final_accuracy = sum(all_accuracies_by_overall) / len(all_accuracies_by_overall)
 
             # Extract timestamp
             timestamp = data.get("timestamp", "unknown")
@@ -173,7 +174,7 @@ def main():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="test_results",
+        default=None,
         help="Directory to save the analysis results (default: test_results)",
     )
     args = parser.parse_args()
@@ -193,19 +194,18 @@ def main():
     )
 
     # Show time range of analyzed files
-    if results:
-        mtimes = [result["file_mtime"] for result in results]
-        earliest_time = min(mtimes)
-        latest_time = max(mtimes)
+    mtimes = [result["file_mtime"] for result in results]
+    earliest_time = min(mtimes)
+    latest_time = max(mtimes)
 
-        earliest_str = datetime.fromtimestamp(earliest_time).strftime(
-            "%B %d, %Y, at %I:%M:%S %p"
-        )
-        latest_str = datetime.fromtimestamp(latest_time).strftime(
-            "%B %d, %Y, at %I:%M:%S %p"
-        )
+    earliest_str = datetime.fromtimestamp(earliest_time).strftime(
+        "%B %d, %Y, at %I:%M:%S %p"
+    )
+    latest_str = datetime.fromtimestamp(latest_time).strftime(
+        "%B %d, %Y, at %I:%M:%S %p"
+    )
 
-        print(f"Test results are from {earliest_str} to {latest_str}")
+    print(f"Test results are from {earliest_str} to {latest_str}")
 
     # Show breakdown by task type
     task_counts = {}
@@ -242,38 +242,44 @@ def main():
     print("=" * 80)
     for stat in statistics:
         print(f"\n{stat['Task Type']} ({stat['Number of Runs']} runs):")
-        print(f"  Raw accuracies: {[f'{acc:.4f}' for acc in stat['Raw Accuracies']]}")
+        print(
+            f"  Raw accuracies: [{', '.join(f'{acc:.4f}' for acc in stat['Raw Accuracies'])}]"
+        )
+        print(
+            f"To copy: {','.join(f'{acc:.4f}' for acc in stat['Raw Accuracies'])}"
+        )
         print(f"  Mean: {stat['Mean Accuracy']:.4f} ± {stat['Std Deviation']:.4f}")
         print(f"  99% CI: [{stat['99% CI Lower']:.4f}, {stat['99% CI Upper']:.4f}]")
 
     # Save results to CSV
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if args.output_dir is not None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Save summary table
-    summary_filename = os.path.join(
-        args.output_dir, f"experiment_analysis_{timestamp}.csv"
-    )
-    display_df.to_csv(summary_filename, index=False)
-    print(f"\nSummary results saved to: {summary_filename}")
+        # Save summary table
+        summary_filename = os.path.join(
+            args.output_dir, f"experiment_analysis_{timestamp}.csv"
+        )
+        display_df.to_csv(summary_filename, index=False)
+        print(f"\nSummary results saved to: {summary_filename}")
 
-    # Save detailed results
-    detailed_results = []
-    for stat in statistics:
-        for i, accuracy in enumerate(stat["Raw Accuracies"]):
-            detailed_results.append(
-                {
-                    "Task Type": stat["Task Type"],
-                    "Run Number": i + 1,
-                    "Final Accuracy": accuracy,
-                }
-            )
+        # Save detailed results
+        detailed_results = []
+        for stat in statistics:
+            for i, accuracy in enumerate(stat["Raw Accuracies"]):
+                detailed_results.append(
+                    {
+                        "Task Type": stat["Task Type"],
+                        "Run Number": i + 1,
+                        "Final Accuracy": accuracy,
+                    }
+                )
 
-    detailed_df = pd.DataFrame(detailed_results)
-    detailed_filename = os.path.join(
-        args.output_dir, f"detailed_results_{timestamp}.csv"
-    )
-    detailed_df.to_csv(detailed_filename, index=False)
-    print(f"Detailed results saved to: {detailed_filename}")
+        detailed_df = pd.DataFrame(detailed_results)
+        detailed_filename = os.path.join(
+            args.output_dir, f"detailed_results_{timestamp}.csv"
+        )
+        detailed_df.to_csv(detailed_filename, index=False)
+        print(f"Detailed results saved to: {detailed_filename}")
 
     print("\nAnalysis complete!")
 

@@ -6,18 +6,36 @@ import os
 from datetime import datetime
 import time
 
+# MLflow integration
+try:
+    import mlflow
+    import mlflow.pytorch
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+    print("MLflow not available. Install with: conda install mlflow")
+
 # NOTE: Many functions in this class are unused but kept for reference
 # Only create_per_task_accuracy_graph, create_cluster_visualization,
 # create_overall_accuracy_graph, and generate_simple_report are actively used
 
 
 class TAGemVisualizer:
-    def __init__(self):
+    def __init__(self, use_mlflow=True, experiment_name="Unnamed"):
         self.epoch_data = []  # List of dicts with epoch-level metrics
         self.task_boundaries = []  # Track where each task ends
         self.batch_losses = []
         self.training_times = []
         self.current_epoch = 0
+
+        # MLflow configuration
+        self.use_mlflow = use_mlflow and MLFLOW_AVAILABLE
+        self.experiment_name = experiment_name
+        self.current_run = None
+        self.global_step = 0
+
+        if self.use_mlflow:
+            self._setup_mlflow()
 
     @property
     def task_accuracies(self):
@@ -50,12 +68,67 @@ class TAGemVisualizer:
         return [ep['overall_accuracy'] / ep['memory_size'] if ep['memory_size'] > 0 else 0.0
                 for ep in self.epoch_data]
 
+    def _setup_mlflow(self):
+        """Initialize MLflow experiment"""
+        if not self.use_mlflow:
+            return
+
+        try:
+            mlflow.set_experiment(self.experiment_name)
+            print(f"MLflow experiment set to: {self.experiment_name}")
+        except Exception as e:
+            print(f"Failed to setup MLflow: {e}")
+            self.use_mlflow = False
+
+    def start_run(self, run_name=None, params=None):
+        """Start a new MLflow run"""
+        if not self.use_mlflow:
+            return
+
+        try:
+            self.current_run = mlflow.start_run(run_name=run_name)
+
+            # Log parameters if provided
+            if params:
+                mlflow.log_params(params)
+
+            print(f"Started MLflow run: {self.current_run.info.run_id}")
+        except Exception as e:
+            print(f"Failed to start MLflow run: {e}")
+
+    def end_run(self):
+        """End the current MLflow run"""
+        if not self.use_mlflow or not self.current_run:
+            return
+
+        try:
+            mlflow.end_run()
+            print(f"Ended MLflow run: {self.current_run.info.run_id}")
+            self.current_run = None
+        except Exception as e:
+            print(f"Failed to end MLflow run: {e}")
+
+    def log_model(self, model, task_id, epoch=None):
+        """Log model to MLflow"""
+        if not self.use_mlflow or not self.current_run:
+            return
+
+        try:
+            artifact_path = f"model_task_{task_id}"
+            if epoch is not None:
+                artifact_path += f"_epoch_{epoch}"
+
+            mlflow.pytorch.log_model(model, artifact_path)
+            print(f"Model logged to MLflow: {artifact_path}")
+        except Exception as e:
+            print(f"Failed to log model to MLflow: {e}")
+
     def update_metrics(
         self,
         task_id,
         overall_accuracy,
         individual_accuracies,
-        epoch_losses,
+        epoch_loss,
         memory_size,
         training_time=None,
         learning_rate=None,
@@ -66,13 +139,39 @@ class TAGemVisualizer:
             'task_id': task_id,
             'overall_accuracy': overall_accuracy,
             'individual_accuracies': individual_accuracies.copy(),
-            'epoch_loss': epoch_losses[0] if epoch_losses else 0.0,
+            'epoch_loss': epoch_loss,
             'memory_size': memory_size,
             'learning_rate': learning_rate,
             'training_time': training_time
         }
 
         self.epoch_data.append(epoch_data)
+
+        # Log to MLflow
+        if self.use_mlflow and self.current_run:
+            try:
+                metrics = {
+                    'overall_accuracy': overall_accuracy,
+                    'epoch_loss': epoch_data['epoch_loss'],
+                    'memory_size': memory_size,
+                    'current_task': task_id,
+                }
+
+                if learning_rate is not None:
+                    metrics['learning_rate'] = learning_rate
+                if training_time is not None:
+                    metrics['training_time'] = training_time
+
+                # Log individual task accuracies
+                for i, acc in enumerate(individual_accuracies):
+                    metrics[f'task_{i}_accuracy'] = acc
+
+                mlflow.log_metrics(metrics, step=self.global_step)
+                self.global_step += 1
+
+            except Exception as e:
+                print(f"Failed to log metrics to MLflow: {e}")
+
         self.current_epoch += 1
 
         # Track task boundaries for visualization
@@ -112,6 +211,14 @@ class TAGemVisualizer:
         with open(filepath, "wb") as f:
             pickle.dump(metrics, f)
         print(f"Metrics saved to {filepath}")
+
+        # Log as MLflow artifact
+        if self.use_mlflow and self.current_run:
+            try:
+                mlflow.log_artifact(filepath, "metrics")
+                print(f"Metrics also logged to MLflow as artifact")
+            except Exception as e:
+                print(f"Failed to log metrics to MLflow: {e}")
 
     def load_metrics(self, filepath):
         """Load metrics from file"""
@@ -215,10 +322,17 @@ class TAGemVisualizer:
                 if show_images:
                     per_task_fig.show()
                 if save_path is not None:
-                    per_task_fig.write_html(f"{save_path}_per_task_accuracy.html")
-                    print(
-                        f"Per-task accuracy graph saved to {save_path}_per_task_accuracy.html"
-                    )
+                    html_path = f"{save_path}_per_task_accuracy.html"
+                    per_task_fig.write_html(html_path)
+                    print(f"Per-task accuracy graph saved to {html_path}")
+
+                    # Log to MLflow
+                    if self.use_mlflow and self.current_run:
+                        try:
+                            mlflow.log_artifact(html_path, "visualizations")
+                        except Exception as e:
+                            print(f"Failed to log visualization to MLflow: {e}")
+
         except Exception as e:
             print(f"Error creating per-task accuracy graph: {e}")
 
@@ -237,12 +351,40 @@ class TAGemVisualizer:
                 if show_images:
                     overall_fig.show()
                 if save_path is not None:
-                    overall_fig.write_html(f"{save_path}_overall_accuracy.html")
-                    print(
-                        f"Overall accuracy graph saved to {save_path}_overall_accuracy.html"
-                    )
+                    html_path = f"{save_path}_overall_accuracy.html"
+                    overall_fig.write_html(html_path)
+                    print(f"Overall accuracy graph saved to {html_path}")
+
+                    # Log to MLflow
+                    if self.use_mlflow and self.current_run:
+                        try:
+                            mlflow.log_artifact(html_path, "visualizations")
+                        except Exception as e:
+                            print(f"Failed to log visualization to MLflow: {e}")
+
         except Exception as e:
             print(f"Error creating overall accuracy graph: {e}")
+
+        # Log final summary metrics to MLflow
+        if self.use_mlflow and self.current_run and self.epoch_data:
+            try:
+                final_accuracy = self.epoch_data[-1]['overall_accuracy']
+                final_memory_size = self.epoch_data[-1]['memory_size']
+                avg_accuracy = sum(ep['overall_accuracy'] for ep in self.epoch_data) / len(self.epoch_data)
+
+                summary_metrics = {
+                    'final_overall_accuracy': final_accuracy,
+                    'final_memory_size': final_memory_size,
+                    'average_accuracy_all_epochs': avg_accuracy,
+                    'total_epochs': len(self.epoch_data),
+                    'total_tasks': max(ep['task_id'] for ep in self.epoch_data) + 1,
+                }
+
+                mlflow.log_metrics(summary_metrics)
+                print("Summary metrics logged to MLflow")
+
+            except Exception as e:
+                print(f"Failed to log summary metrics to MLflow: {e}")
 
 
 class _Time:
