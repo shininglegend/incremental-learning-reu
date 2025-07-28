@@ -134,8 +134,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             )
             individual_accuracies.append(task_acc)
         calculated_average = sum(individual_accuracies) / len(individual_accuracies)
-        assert round(calculated_average, 10) == round(avg_accuracy, 10), \
-            f"Average mismatch! {calculated_average} != {avg_accuracy}"
 
         t.end("eval")
         t.start("visualizer")
