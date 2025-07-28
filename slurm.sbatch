@@ -4,15 +4,23 @@
 #SBATCH --error="./sbatch_results/slurm-%A_%a.err"  # Error log file
 #SBATCH --nodes=1 # Nodes per instance. 1 node = 24 CPUs. Baseline 1
 #SBATCH --ntasks=1 # Each array task runs one main script. Baseline 1
-#SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
+#SBATCH --cpus-per-task=16 # How many CPU cores per instance. Changed from 24 to 16
 #SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
 #SBATCH --time="00:20:00" # 00:12:41 baseline. Request a little extra.
 #SBATCH --array=0-4 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
 #SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1,hpcl4-1,hpcl4-2,hpcl4-3 # these guys are bad
-# #SBATCH --partition="$PARTITION_NAME"
+
+# GPU-related SBATCH directives
+#SBATCH --gres=gpu:1 # Request 1 GPU per task (adjust as needed)
+#SBATCH --partition=gpu # Specify GPU partition (adjust to your cluster's GPU partition name)
+
+# Alternative GPU options (uncomment and modify as needed for your cluster):
+# #SBATCH --gres=gpu:tesla:1 # Request specific GPU type
+# #SBATCH --gres=gpu:2 # Request 2 GPUs
+# #SBATCH --constraint=gpu # Only run on GPU-enabled nodes
 
 
-# A Slurm batch script for running the program many times in parallel across CPUs
+# A Slurm batch script for running the program many times in parallel across CPUs and GPUs
 
 # ------- GLOBAL CONFIG (CUSTOMIZE WITH YOUR FILE LOCATIONS) -------
 HOME_DIR="/home/NAS/$USER/incremental-learning-reu"
@@ -39,7 +47,7 @@ fi
 
 # Resource Requests per Program Instance (i.e., per Array Task)
 NODES_PER_INSTANCE=1             # Number of nodes each program instance needs. baseline 1
-CORES_PER_INSTANCE=24            # Number of CPU cores each program instance needs. 24 for a full node
+CORES_PER_INSTANCE=16            # Number of CPU cores each program instance needs. Changed from 24 to 16
 MEM_PER_INSTANCE_GB=2            # Memory in GB each program instance needs. 2G baseline
 
 # --- EXECUTION ---
@@ -72,6 +80,21 @@ export XDG_CACHE_HOME="$JOB_SCRATCH_DIR/cache"
 export TMPDIR="$JOB_SCRATCH_DIR/tmp"
 mkdir -p "$KAGGLE_CONFIG_DIR" "$XDG_CACHE_HOME" "$TMPDIR" || { echo "Error: Failed to create necessary sub-directories for caches."; exit 1; }
 
+# GPU Environment Setup
+if [ -n "$SLURM_GPUS_ON_NODE" ]; then
+    echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
+    # Set CUDA device visibility (optional, SLURM usually handles this)
+    export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
+    # Alternatively, you might want to use: export CUDA_VISIBLE_DEVICES=$SLURM_PROCID
+fi
+
+# Check GPU availability
+if command -v nvidia-smi &> /dev/null; then
+    echo "GPU Status:"
+    nvidia-smi --list-gpus
+else
+    echo "nvidia-smi not available - GPU status unknown"
+fi
 
 # Define Python executable path relative to the script's directory
 SCRIPT_DIR=$(dirname "$0")
@@ -93,6 +116,7 @@ echo "Current directory: $(pwd)"
 echo "Python executable: $PYTHON_EXEC"
 echo "Target Python script: $PYTHON_SCRIPT"
 echo "This task requested $CORES_PER_INSTANCE CPU cores."
+echo "GPUs requested: ${SLURM_GPUS_ON_NODE:-0}"
 echo "------------------------------------------------------------"
 
 
@@ -101,6 +125,9 @@ echo "--- SLURM Variable Debugging ---"
 echo "SLURM_JOB_ID: $SLURM_JOB_ID"
 echo "SLURM_ARRAY_JOB_ID: $SLURM_ARRAY_JOB_ID" # This is the ID of the parent array job
 echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
+echo "SLURM_GPUS_ON_NODE: $SLURM_GPUS_ON_NODE"
+echo "SLURM_LOCALID: $SLURM_LOCALID"
+echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 echo "TOTAL_RUNS (from sbatch): $TOTAL_RUNS"
 echo "--- End SLURM Variable Debugging ---"
 
