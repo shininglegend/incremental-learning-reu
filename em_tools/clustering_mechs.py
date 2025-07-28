@@ -336,27 +336,6 @@ class ClusteringMechanism:
             # self.visualize("After keeping")
             debug(print, f"Kept! {dist_to_new} <= {dist_to_old}")
 
-    def _find_closest_cluster(self, z, ignore=None):
-        """This finds the closest cluster for a particular sample. Does not add it
-
-        Args:
-            z (Tensor): Sample to find the closest cluster for
-            ignore (index): index of cluster to ignore if given
-
-        Returns:
-            (index, distance): Returns the index and distance to the closest node
-        """
-        # If the number of clusters has reached Q, find the closest cluster
-        # based on Euclidean distance to its mean.
-        min_distance = float("inf")
-        closest_cluster_idx = -1
-            # If the number of clusters has reached Q, find the closest cluster
-            # based on Euclidean distance to its mean.
-            (closest_cluster_idx, _) = self._find_closest_cluster(z)
-
-            # Add z to the identified closest cluster
-            self.clusters[closest_cluster_idx].add_sample(z)
-
     def add_allow_larger_clusters(self, z, label, task_id):
         # If there's space for another cluster, just add it
         if len(self.clusters) < self.Q:
@@ -438,9 +417,9 @@ class ClusteringMechanism:
         # Optional: Call it recursively in case multiple samples were added
         # self._manage_by_pool_size(new_idx, timer)
 
-    def _find_closest_cluster(self, z):
+    def _find_closest_cluster(self, z, ignore=None):
         """Given a sample, finds the closest cluster based on mean in O(k) time
-        where k is the number of clusters in the pool
+        where k is the number of clusters in the pool, ignoring cluster "ignore"
 
         Returns:
             (int, tensor_float): index of closest cluster, dist to closest cluster
