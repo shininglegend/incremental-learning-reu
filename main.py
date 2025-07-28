@@ -69,7 +69,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 if num_samples <= BATCH_SIZE:
                     batch_samples = all_samples
                 else:
-                    mem_sample_mask = np.random.choice(num_samples, BATCH_SIZE, replace=False)
+                    mem_sample_mask = np.random.choice(
+                        num_samples, BATCH_SIZE, replace=False
+                    )
                     batch_samples = [all_samples[i] for i in mem_sample_mask]
                 t.end("choose random samples")
             else:
@@ -127,6 +129,14 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 model, criterion, eval_dataloader, device=device
             )
             individual_accuracies.append(task_acc)
+        calculated_average = sum(individual_accuracies) / len(individual_accuracies)
+        print(
+            f"""Individual accuracy, average: {calculated_average}
+Reported overall average: {avg_accuracy}"""
+        )
+        assert round(calculated_average, 10) == round(avg_accuracy, 10), \
+            f"{calculated_average} != {avg_accuracy}"
+
         t.end("eval")
         t.start("visualizer")
         # Update visualizer with epoch metrics
@@ -139,7 +149,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             task_id=task_id,
             overall_accuracy=avg_accuracy,
             individual_accuracies=individual_accuracies,
-            epoch_losses=[avg_epoch_loss],
+            epoch_loss=avg_epoch_loss,
             memory_size=memory_size,
             training_time=None,
             learning_rate=current_lr,
@@ -178,12 +188,12 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
     )
 
-    print(f"After Task {task_id + 1}, Final Average Accuracy: {final_avg_accuracy:.4f}")
+    print(f"For task {task_id + 1}, final average accuracy landed at: {final_avg_accuracy:.4f}")
     print(
-        f"Memory Size: {final_memory_size} samples across {num_active_pools} active pools"
+        f"Memory size: {final_memory_size} samples across {num_active_pools} active pools"
     )
     print(f"Pool sizes: {pool_sizes}")
-    print(f"Task Training Time: {task_time:.2f}s")
+    print(f"Task training time: {task_time:.2f}s")
 
 t.end("training")
 print("\nTraining complete.")

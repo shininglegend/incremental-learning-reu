@@ -1,7 +1,7 @@
 import torch
 
 
-def evaluate_all_tasks(model, criterion, task_dataloaders, device):
+def evaluate_all_tasks(model, _, task_dataloaders, device):
     """Evaluate model on all tasks using test data and return average accuracy"""
     model.eval()
     total_correct = 0
@@ -19,7 +19,7 @@ def evaluate_all_tasks(model, criterion, task_dataloaders, device):
     return total_correct / total_samples if total_samples > 0 else 0.0
 
 
-def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id, device):
+def evaluate_tasks_up_to(model, _, task_dataloaders, current_task_id, device):
     """Evaluate model only on tasks seen so far using test data"""
     model.eval()
     total_correct = 0
@@ -38,7 +38,7 @@ def evaluate_tasks_up_to(model, criterion, task_dataloaders, current_task_id, de
     return total_correct / total_samples if total_samples > 0 else 0.0
 
 
-def evaluate_single_task(model, criterion, task_dataloader, device):
+def evaluate_single_task(model, _, task_dataloader, device):
     """Evaluate model on a single task using test data and return accuracy"""
     model.eval()
     total_correct = 0
