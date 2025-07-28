@@ -1,9 +1,10 @@
 import argparse
 import os
-import yaml
+import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import yaml
 
 from agem import agem
 from agem.learning_rate import TALearningRateScheduler
@@ -125,6 +126,10 @@ def initialize_system():
     if args.experiment_name is not None:
         config["experiment_name"] = args.experiment_name
 
+    # Sanity checks
+    if config["sampling_rate"] > config["batch_size"]:
+        raise Exception("Samping rate exceeds batch size.")
+
     # Apply lite mode overrides
     if config["lite"]:
         config["num_tasks"] = 2
@@ -138,6 +143,7 @@ def initialize_system():
 
     # Create params dictionary for compatibility
     params = {
+        "add_remove_randomly": config["add_remove_randomly"],
         "batch_size": config["batch_size"],
         "dataset_name": config["dataset_name"],
         "experiment_name": config["experiment_name"],
@@ -153,6 +159,7 @@ def initialize_system():
         "output_dir": config["output_dir"],
         "quick_test_mode": config["lite"],
         "random_em": config["random_em"],
+        "sampling_rate": config["sampling_rate"],
         "task_type": config["task_type"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
         "verbose": config["verbose"],
@@ -194,6 +201,7 @@ def initialize_system():
         input_type="samples",
         device=device,
         num_pools=config["num_pools"],
+        add_remove_randomly=config["add_remove_randomly"],
     )
 
     agem_handler = agem.AGEMHandler(
@@ -211,20 +219,24 @@ def initialize_system():
     )
 
     # Initialize visualizer with experiment name
-    experiment_name = config.get("experiment_name", "TA-A-GEM")
-    visualizer = TAGemVisualizer(experiment_name=experiment_name)
+    experiment_name = config.get("experiment_name", "Unnamed")
+    visualizer = TAGemVisualizer(
+        experiment_name=experiment_name,
+        total_samples=sum(
+            [(len(dl) * config["batch_size"]) for dl in train_dataloaders]
+        ),
+        batch_size=config["batch_size"],
+        sampling_rate=config["sampling_rate"],
+    )
 
     # Create run name with timestamp
-    import time
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     run_name = f"{config['task_type']}_{timestamp}"
 
     # Start ml_flow run
     visualizer.start_run(
-        run_name=run_name,
-        params=config  # Log all configuration as parameters
+        run_name=run_name, params=config  # Log all configuration as parameters
     )
-
 
     timer.end("init")
 

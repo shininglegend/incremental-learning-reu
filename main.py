@@ -31,6 +31,7 @@ NUM_EPOCHS = config["num_epochs"]
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
 BATCH_SIZE = config["batch_size"]
+SAMPLING_RATE = config["sampling_rate"]
 t.start("training")
 
 # --- 2. Training Loop ---
@@ -39,7 +40,8 @@ print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
 Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
-Use LR: {USE_LEARNING_RATE_SCHEDULER} | Total tasks: {len(train_dataloaders)}"""
+Use LR: {USE_LEARNING_RATE_SCHEDULER} | Sampling Rate: {SAMPLING_RATE}
+Total tasks: {len(train_dataloaders)}"""
 )
 
 for task_id, train_dataloader in enumerate(train_dataloaders):
@@ -133,7 +135,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 model, criterion, eval_dataloader, device=device
             )
             individual_accuracies.append(task_acc)
-        calculated_average = sum(individual_accuracies) / len(individual_accuracies)
 
         t.end("eval")
         t.start("visualizer")
@@ -163,13 +164,32 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     # This is where the core clustering for TA-A-GEM happens
     t.start("add samples")
     samples_added = 0
-    # Add one sample per batch from current task
+    batch_counter = 0
+    # Add samples per batch based on sampling_rate
     for sample_data, sample_labels in train_dataloader:
-        samples_added += 1
-        clustering_memory.add_sample(
-            sample_data[0].cpu(), sample_labels[0].cpu(), task_id
-        )
-    print(f"Added {samples_added} samples this round.")
+        if SAMPLING_RATE < 1:
+            # Fractional sampling - add every 1/SAMPLING_RATE batches
+            if batch_counter % int(1 / SAMPLING_RATE) == 0:
+                samples_added += 1
+                clustering_memory.add_sample(
+                    sample_data[0].cpu(), sample_labels[0].cpu(), task_id
+                )
+                # Track oldest task IDs after adding sample
+                visualizer.track_oldest_task_ids(clustering_memory, task_id)
+        else:
+            # Sample multiple items per batch (up to batch size and sampling rate)
+            num_to_sample = min(int(SAMPLING_RATE), len(sample_data))
+            for i in range(num_to_sample):
+                samples_added += 1
+                clustering_memory.add_sample(
+                    sample_data[i].cpu(), sample_labels[i].cpu(), task_id
+                )
+                # Track oldest task IDs after adding sample
+                visualizer.track_oldest_task_ids(clustering_memory, task_id)
+        batch_counter += 1
+    print(
+        f"Added {samples_added} out of {len(train_dataloader) * BATCH_SIZE} samples this round."
+    )
     print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
     t.end("add samples")
 
@@ -186,7 +206,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
     )
 
-    print(f"For task {task_id + 1}, final average accuracy landed at: {final_avg_accuracy:.4f}")
+    print(
+        f"For task {task_id + 1}, final average accuracy landed at: {final_avg_accuracy:.4f}"
+    )
     print(
         f"Memory size: {final_memory_size} samples across {num_active_pools} active pools"
     )
@@ -221,9 +243,7 @@ task_type_abbrev = {
 quick_mode = "q-" if QUICK_TEST_MODE else ""
 random_em = "rem-" if config["random_em"] else ""
 dataset_name = config["dataset_name"].lower()
-filename = (
-    f"results-{quick_mode}{random_em}{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
-)
+filename = f"results-{quick_mode}{random_em}{SAMPLING_RATE}-{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
 
 visualizer.save_metrics(
     os.path.join(params["output_dir"], filename),
