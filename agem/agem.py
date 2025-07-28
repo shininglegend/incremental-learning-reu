@@ -10,7 +10,7 @@ class AGEMHandler:
         device,
         batch_size=256,
         lr_scheduler=None,
-        epsilon=0.00001,  # Now meaningful for normalized losses (0-1 range)
+        epsilon=0.00001,  # Threshold for meaningful normalized losses (0-1 range)
     ):
         self.model = model
         self.criterion = criterion
