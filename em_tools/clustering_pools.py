@@ -10,7 +10,9 @@ import random
 
 
 class ClusteringMemory:
-    def __init__(self, Q, P, input_type, device, num_pools=10):
+    def __init__(
+        self, Q, P, input_type, device, num_pools=10, add_remove_randomly=False
+    ):
         """
         Initialize multi-pool clustering memory wrapper.
 
@@ -20,6 +22,7 @@ class ClusteringMemory:
             input_type (str): Type of input ('samples' for TA-A-GEM)
             num_pools (int): Number of separate pools (10 for permutation/rotation, 2 for class split)
             device: PyTorch device to use for tensor creation
+            add_remove_random: Whether pools should use clusters or just be random
         """
         self.device = device
         self.Q = Q
@@ -30,6 +33,10 @@ class ClusteringMemory:
         # Create separate clustering mechanisms for each pool (class label)
         self.pools = {}
         self.pool_labels = set()  # Track which labels we've seen
+
+        self.add_remove_randomly = add_remove_randomly  # Switch this to test random cluster assignment (class labels are still respected.)
+        if self.add_remove_randomly:
+            print("ALERT: Adding and removing randomly from clusters is enabled.")
 
     def _get_or_create_pool(self, label) -> ClusteringMechanism:
         """Get clustering mechanism for a label, creating if needed.
@@ -43,7 +50,10 @@ class ClusteringMemory:
         if label not in self.pools:
             # Create new pool for this label
             self.pools[label] = ClusteringMechanism(
-                Q=self.Q, P=self.P, dimensionality_reducer=None
+                Q=self.Q,
+                P=self.P,
+                add_remove_randomly=self.add_remove_randomly,
+                dimensionality_reducer=None,
             )
             self.pool_labels.add(label)
 
@@ -101,7 +111,7 @@ class ClusteringMemory:
                     min(
                         (get_from_each * i) - len(random_samples),
                         amount - len(random_samples),
-                    )
+                    ),
                 )
             )
         assert amount >= len(random_samples), "Wrong number of samples"
@@ -131,7 +141,9 @@ class ClusteringMemory:
         result = []
         for idx in random_indices:
             sample_tensor = samples[idx].to(self.device)
-            label_tensor = torch.tensor(labels[idx] if labels[idx] is not None else label).to(self.device)
+            label_tensor = torch.tensor(
+                labels[idx] if labels[idx] is not None else label
+            ).to(self.device)
             result.append((sample_tensor, label_tensor))
 
         return result
@@ -208,3 +220,28 @@ class ClusteringMemory:
             int: Number of active pools
         """
         return len(self.pools)
+
+    def get_oldest_task_ids_matrix(self):
+        """Get matrix of oldest task IDs for all pools and clusters.
+
+        Returns:
+            list: Matrix where each row represents a pool and each column represents a cluster.
+                  Values are oldest task IDs, with None for unused slots.
+        """
+        matrix = []
+
+        # Create sorted list of pool labels for consistent ordering
+        pool_labels = sorted(self.pools.keys()) if self.pools else []
+
+        # Add rows for existing pools
+        for label in pool_labels:
+            pool = self.pools[label]
+            oldest_task_ids = pool.get_oldest_task_ids()
+            matrix.append(oldest_task_ids)
+
+        # Add rows filled with None for unused pool slots up to num_pools
+        while len(matrix) < self.num_pools:
+            none_row = [None] * self.Q
+            matrix.append(none_row)
+
+        return matrix
