@@ -33,7 +33,11 @@
       "request": "launch",
       "program": "main.py",
       "console": "integratedTerminal",
+<<<<<<< HEAD
       "args": ["--task_type class_split", "--experiment_name debug-clssplt-mnist"]
+=======
+      "args": "--task_type class_split --experiment_name debug-clssplt-mnist"
+>>>>>>> origin/main
     },
     {
       "name": "Python Debugger: Normal Mode with Rotations",
@@ -41,7 +45,11 @@
       "request": "launch",
       "program": "main.py",
       "console": "integratedTerminal",
+<<<<<<< HEAD
       "args": ["--task_type rotation", "--experiment_name debug-rot-mnist"]
+=======
+      "args": "--task_type rotation --experiment_name debug-rot-mnist"
+>>>>>>> origin/main
     }
   ]
 }
