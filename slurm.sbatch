@@ -12,13 +12,6 @@
 
 # GPU-related SBATCH directives
 #SBATCH --gres=gpu:1 # Request 1 GPU per task (adjust as needed)
-#SBATCH --partition=gpu # Specify GPU partition (adjust to your cluster's GPU partition name)
-
-# Alternative GPU options (uncomment and modify as needed for your cluster):
-# #SBATCH --gres=gpu:tesla:1 # Request specific GPU type
-# #SBATCH --gres=gpu:2 # Request 2 GPUs
-# #SBATCH --constraint=gpu # Only run on GPU-enabled nodes
-
 
 # A Slurm batch script for running the program many times in parallel across CPUs and GPUs
 
