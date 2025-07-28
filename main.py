@@ -50,6 +50,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     task_start_time = time.time()
     task_epoch_losses = []
 
+    # Track high loss samples for this task
+    sample_loss_tracker = {}  # {batch_idx: {sample_idx: total_loss}}
+
     # Query clustering_memory for all samples once per task
     t.start("get samples")
     all_samples = clustering_memory.get_memory_samples()
@@ -82,13 +85,21 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             t.start("optimize")
-            batch_loss = agem_handler.optimize(data, labels, batch_samples)
+            batch_loss, highest_loss_indices = agem_handler.optimize(data, labels, batch_samples)
             t.end("optimize")
 
-            # Track batch loss
+            # Track batch loss and high loss samples
             if batch_loss is not None:
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
+
+                # Track individual sample losses
+                if batch_idx not in sample_loss_tracker:
+                    sample_loss_tracker[batch_idx] = {}
+                for sample_idx in highest_loss_indices:
+                    if sample_idx not in sample_loss_tracker[batch_idx]:
+                        sample_loss_tracker[batch_idx][sample_idx] = 0
+                    sample_loss_tracker[batch_idx][sample_idx] += batch_loss / len(highest_loss_indices)
 
             num_batches += 1
 
@@ -156,33 +167,64 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             print(
                 f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
-    # Step 2: Update the clustered memory with some samples from this task's dataloader
-    # This is where the core clustering for TA-A-GEM happens
+    # Step 2: Update the clustered memory with highest loss samples from this task
     t.start("add samples")
+
+    # Convert loss tracker to sorted list of (batch_idx, sample_idx, total_loss)
+    high_loss_samples = []
+    for batch_idx, sample_dict in sample_loss_tracker.items():
+        for sample_idx, total_loss in sample_dict.items():
+            high_loss_samples.append((batch_idx, sample_idx, total_loss))
+
+    # Sort by total loss (highest first)
+    high_loss_samples.sort(key=lambda x: x[2], reverse=True)
+
     samples_added = 0
     batch_counter = 0
-    # Add samples per batch based on sampling_rate
+
+    # Add highest loss samples first
     for sample_data, sample_labels in train_dataloader:
         if SAMPLING_RATE < 1:
             # Fractional sampling - add every 1/SAMPLING_RATE batches
             if batch_counter % int(1 / SAMPLING_RATE) == 0:
+                # Find if this batch has high loss samples
+                batch_high_loss = [s for s in high_loss_samples if s[0] == batch_counter]
+                if batch_high_loss:
+                    # Add highest loss sample from this batch
+                    _, sample_idx, _ = batch_high_loss[0]
+                    sample_idx = min(sample_idx, len(sample_data) - 1)
+                    clustering_memory.add_sample(
+                        sample_data[sample_idx].cpu(), sample_labels[sample_idx].cpu(), task_id
+                    )
+                else:
+                    # Default to first sample if no loss data
+                    clustering_memory.add_sample(
+                        sample_data[0].cpu(), sample_labels[0].cpu(), task_id
+                    )
                 samples_added += 1
-                clustering_memory.add_sample(
-                    sample_data[0].cpu(), sample_labels[0].cpu(), task_id
-                )
-                # Track oldest task IDs after adding sample
                 visualizer.track_oldest_task_ids(clustering_memory, task_id)
         else:
-            # Sample multiple items per batch (up to batch size and sampling rate)
+            # Sample multiple items per batch, prioritizing high loss samples
             num_to_sample = min(int(SAMPLING_RATE), len(sample_data))
+            batch_high_loss = [s for s in high_loss_samples if s[0] == batch_counter]
+
             for i in range(num_to_sample):
+                if i < len(batch_high_loss):
+                    # Use high loss sample
+                    _, sample_idx, _ = batch_high_loss[i]
+                    sample_idx = min(sample_idx, len(sample_data) - 1)
+                    clustering_memory.add_sample(
+                        sample_data[sample_idx].cpu(), sample_labels[sample_idx].cpu(), task_id
+                    )
+                else:
+                    # Fall back to sequential sampling
+                    clustering_memory.add_sample(
+                        sample_data[i].cpu(), sample_labels[i].cpu(), task_id
+                    )
                 samples_added += 1
-                clustering_memory.add_sample(
-                    sample_data[i].cpu(), sample_labels[i].cpu(), task_id
-                )
-                # Track oldest task IDs after adding sample
                 visualizer.track_oldest_task_ids(clustering_memory, task_id)
         batch_counter += 1
+
     print(
         f"Added {samples_added} out of {len(train_dataloader) * BATCH_SIZE} samples this round."
     )

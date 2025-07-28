@@ -87,9 +87,15 @@ class AGEMHandler:
 
     def optimize(self, data, labels, memory_samples=None):
         """A-GEM optimization with gradient projection"""
-        # Compute loss for tracking
+        # Compute per-sample losses
         self.model.zero_grad()
         outputs = self.model(data)
+
+        # Compute per-sample losses without reduction
+        per_sample_losses = torch.nn.functional.cross_entropy(outputs, labels, reduction='none')
+        _, highest_loss_indices = torch.sort(per_sample_losses, descending=True)
+
+        # Compute total loss for backprop
         loss = self.criterion(outputs, labels)
         current_loss = loss.item()
 
@@ -153,4 +159,4 @@ class AGEMHandler:
             # No memory samples, just do regular update
             self.optimizer.step()
 
-        return current_loss
+        return current_loss, highest_loss_indices.cpu().numpy()
