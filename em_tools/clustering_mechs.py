@@ -262,7 +262,7 @@ class ClusteringMechanism:
             timer.end("sanity")
 
     def add_normal(self, z, label, task_id):
-        if len(self.clusters) < self.Q:
+        if len(self.clusters) < self.max_clusters:
             # If the number of clusters is less than Q, create a new cluster
             # and add z to it.
             new_cluster = Cluster(z, label, task_id)
@@ -379,7 +379,7 @@ class ClusteringMechanism:
 
     def _manage_by_cluster_size(self, new_idx):
         # If the cluster size exceeds P, remove the oldest sample
-        if len(self.clusters[new_idx].samples) > self.P:
+        if len(self.clusters[new_idx].samples) > self.max_cluster_size:
             self.clusters[new_idx].remove_one()
 
     def _manage_by_pool_size(self, timer=None):
@@ -399,7 +399,7 @@ class ClusteringMechanism:
             range(len(self.clusters)), key=lambda i: len(self.clusters[i])
         )
         # print("\n", largest_idx, [len(cluster) for cluster in self.clusters])
-        assert len(self.clusters[largest_idx]) > self.P
+        assert len(self.clusters[largest_idx]) > self.max_cluster_size
         if timer:
             timer.end("B")
         # dprint(f"Before: {self.clusters[largest_idx]}")
