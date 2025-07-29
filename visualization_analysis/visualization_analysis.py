@@ -310,6 +310,7 @@ class TAGemVisualizer:
             metrics["memory_efficiency"] = self.memory_efficiency
 
         if params:
+            params["tracking_interval"] = self.tracking_interval
             metrics["params"] = params
 
         with open(filepath, "wb") as f:
