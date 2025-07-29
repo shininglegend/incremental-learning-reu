@@ -11,7 +11,11 @@ import random
 
 
 class ClusteringMemory:
-    def __init__(self, Q, P, input_type, device, config, num_pools=10):
+
+    def __init__(
+        self, Q, P, input_type, device, config, num_pools=10, add_remove_randomly=False
+    ):
+
         """
         Initialize multi-pool clustering memory wrapper.
 
@@ -21,6 +25,7 @@ class ClusteringMemory:
             input_type (str): Type of input ('samples' for TA-A-GEM)
             num_pools (int): Number of separate pools (10 for permutation/rotation, 2 for class split)
             device: PyTorch device to use for tensor creation
+            add_remove_random: Whether pools should use clusters or just be random
         """
         self.device = device
         self.Q = Q
@@ -37,14 +42,19 @@ class ClusteringMemory:
         self.pools = {}
         self.pool_labels = set()  # Track which labels we've seen
 
+
         # For initializing clusters
         self.cluster_params = {
             'removal': config['removal'],
             'consider_newest': config['consider_newest'],
             'max_size_per_cluster': self.P
         }
+        self.add_remove_randomly = add_remove_randomly  # Switch this to test random cluster assignment (class labels are still respected.)
+        if self.add_remove_randomly:
+            print("ALERT: Adding and removing randomly from clusters is enabled.")
 
     def _get_or_create_pool(self, label) -> ClusterPool:
+
         """Get clustering mechanism for a label, creating if needed.
 
         Args:
@@ -56,8 +66,13 @@ class ClusteringMemory:
         if label not in self.pools:
             # Create new pool for this label
             self.pools[label] = ClusterPool(
-                cluster_params=self.cluster_params, Q=self.Q, P=self.P, dimensionality_reducer=None
+                cluster_params = self.cluster_params,
+                Q=self.Q,
+                P=self.P,
+                add_remove_randomly=self.add_remove_randomly,
+                dimensionality_reducer=None,
             )
+
             self.pool_labels.add(label)
 
         return self.pools[label]
@@ -126,7 +141,7 @@ class ClusteringMemory:
                     min(
                         (get_from_each * i) - len(random_samples),
                         amount - len(random_samples),
-                    )
+                    ),
                 )
             )
         assert amount >= len(random_samples), "Wrong number of samples"
@@ -156,7 +171,9 @@ class ClusteringMemory:
         result = []
         for idx in random_indices:
             sample_tensor = samples[idx].to(self.device)
-            label_tensor = torch.tensor(labels[idx] if labels[idx] is not None else label).to(self.device)
+            label_tensor = torch.tensor(
+                labels[idx] if labels[idx] is not None else label
+            ).to(self.device)
             result.append((sample_tensor, label_tensor))
 
         return result
@@ -214,6 +231,12 @@ class ClusteringMemory:
             pool_sizes[label] = len(pool)
         return pool_sizes
 
+    def get_sample_throughputs(self):
+        pool_throughput = {}
+        for label, pool in self.pools.items():
+            pool_throughput[label] = pool.sample_throughput
+        return pool_throughput
+
     def get_clustering_mechanism(self):
         """Get access to all clustering mechanisms for visualization.
 
@@ -229,6 +252,7 @@ class ClusteringMemory:
             int: Number of active pools
         """
         return len(self.pools)
+
 
     def update_memory(self, sample_data, sample_label, task_id=None):
         self.num_batches += 1
@@ -254,11 +278,6 @@ class ClusteringMemory:
 
 
 
-
-
-
-
-
         # if self.num_batches >= 60000: return False
         # else: return True
 
@@ -275,3 +294,29 @@ class ClusteringMemory:
         # mem_update = batch_idx % (task_id + 1) == 0  # fast staggered
         # if self.num_batches % math.ceil(self.interval / 2) == 0: # slow staggered
         # mem_update = True # unstaggered
+
+    def get_oldest_task_ids_matrix(self):
+        """Get matrix of oldest task IDs for all pools and clusters.
+
+        Returns:
+            list: Matrix where each row represents a pool and each column represents a cluster.
+                  Values are oldest task IDs, with None for unused slots.
+        """
+        matrix = []
+
+        # Create sorted list of pool labels for consistent ordering
+        pool_labels = sorted(self.pools.keys()) if self.pools else []
+
+        # Add rows for existing pools
+        for label in pool_labels:
+            pool = self.pools[label]
+            oldest_task_ids = pool.get_oldest_task_ids()
+            matrix.append(oldest_task_ids)
+
+        # Add rows filled with None for unused pool slots up to num_pools
+        while len(matrix) < self.num_pools:
+            none_row = [None] * self.Q
+            matrix.append(none_row)
+
+        return matrix
+

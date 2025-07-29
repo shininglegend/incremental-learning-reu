@@ -1,4 +1,7 @@
-import pickle, os
+#!./env/bin/python
+import numpy as np
+import pickle
+import os
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -17,6 +20,7 @@ INDIVIDUAL_PLOTS_TO_DISPLAY = {
     # Other
     "training_times": False,
     "memory_efficiency": False,
+    "oldest_task_ids_tracking": False,  # Bar chart of oldest task IDs over time
 }
 
 # If you want to save the plots, change this path. Helpful for linux. Will save all files.
@@ -391,6 +395,130 @@ if (
     fig_combined.update_yaxes(title_text="Forgetting", row=2, col=2)
 
     show_or_open(fig_combined, "dashboard")
+
+# 8. Oldest Task IDs Tracking Over Time
+if "oldest_task_ids_tracking" in data and data["oldest_task_ids_tracking"]:
+    # We use matplot lib here cause it works better
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import ListedColormap
+
+    tracking_data = data["oldest_task_ids_tracking"]
+
+    # Extract matrices and task boundaries
+    matrices = []
+    task_boundaries = []
+    current_task = None
+
+    for i, item in enumerate(tracking_data):
+        if isinstance(item, tuple):
+            matrix, task_id = item
+            matrices.append(matrix)
+            if current_task is None:
+                current_task = task_id
+            elif current_task != task_id:
+                task_boundaries.append(i)
+                current_task = task_id
+        else:
+            # Handle old format without task_id
+            matrices.append(item)
+
+    # Convert to matrix format for heatmap
+    time_steps = len(matrices)
+    max_clusters = (
+        max(
+            len([task for pool_row in matrix for task in pool_row])
+            for matrix in matrices
+        )
+        if matrices
+        else 0
+    )
+
+    # Create matrix: rows = clusters, columns = time_steps
+    heatmap_matrix = np.full((max_clusters, time_steps), np.nan)
+
+    for time_step, matrix in enumerate(matrices):
+        cluster_idx = 0
+        for pool_row in matrix:
+            for task_id in pool_row:
+                if cluster_idx < max_clusters:
+                    heatmap_matrix[cluster_idx, time_step] = (
+                        task_id if task_id is not None else -1
+                    )
+                cluster_idx += 1
+
+    # Create matplotlib figure
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Create custom colormap
+    unique_tasks = np.unique(heatmap_matrix[~np.isnan(heatmap_matrix)])
+    max_task = (
+        int(max(unique_tasks[unique_tasks >= 0]))
+        if len(unique_tasks[unique_tasks >= 0]) > 0
+        else 0
+    )
+
+    # Create custom colormap with white for -1/None
+    tab10 = plt.cm.get_cmap("tab10")
+    colors = ["white"] + [tab10(i) for i in range(max_task + 1)]
+    cmap = ListedColormap(colors)
+
+    # Handle NaN and -1 values
+    masked_matrix = np.ma.masked_where(np.isnan(heatmap_matrix), heatmap_matrix)
+
+    im = ax.imshow(masked_matrix, cmap=cmap, aspect="auto", vmin=-1, vmax=max_task)
+
+    ax.set_title("Oldest Task IDs in Clusters Over Time")
+    ax.set_ylabel("Cluster Index")
+
+    ax.set_xlabel("Time")
+    # Convert x-axis from frame indices to batch numbers if tracking_interval available
+    if "tracking_interval" in data["params"]:
+        ax.set_xlabel("Batches")
+        tracking_interval = data["params"]["tracking_interval"]
+        num_ticks = min(10, time_steps)
+        tick_positions = [i * time_steps // num_ticks for i in range(num_ticks)]
+        tick_labels = [i * tracking_interval for i in tick_positions]
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
+
+    # Add task boundary lines
+    for boundary in task_boundaries:
+        ax.axvline(
+            x=boundary - 0.5, color="black", linestyle="-", linewidth=2, alpha=0.8
+        )
+
+    # Create horizontal legend below the plot
+    from matplotlib.lines import Line2D
+
+    legend_elements = []
+
+    # Add task entries
+    for task_id in range(max_task + 1):
+        color = colors[task_id + 1]  # +1 because white is at index 0
+        legend_elements.append(
+            Line2D([0], [0], color=color, linewidth=4, label=f"Task {task_id}")
+        )
+
+    ax.legend(
+        handles=legend_elements,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.1),
+        ncol=min(len(legend_elements), 8),
+        frameon=False,
+    )
+
+    plt.tight_layout()
+
+    if INDIVIDUAL_PLOTS_TO_DISPLAY["oldest_task_ids_tracking"]:
+        plt.show()
+    if SAVE_DIR:
+        plt.savefig(
+            os.path.join(SAVE_DIR, "oldest_task_ids_tracking.png"),
+            dpi=150,
+            bbox_inches="tight",
+        )
+        print("Saved oldest_task_ids_tracking.png")
+    plt.close()
 
 print("\nVisualization complete! All plots have been displayed.")
 

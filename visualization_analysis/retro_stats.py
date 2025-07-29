@@ -8,11 +8,15 @@ import argparse
 from datetime import datetime
 
 
+
 def debug_directory(directory):
     """Debug function to check directory and files"""
     print(f"DEBUG: Checking directory: {directory}")
     print(f"DEBUG: Directory exists: {os.path.exists(directory)}")
     print(f"DEBUG: Directory is directory: {os.path.isdir(directory)}")
+
+def load_pickle_files(directory, num_files=15):
+    """Load pickle files from the test_results directory"""
 
     if os.path.exists(directory):
         print(f"DEBUG: Directory contents:")
@@ -85,20 +89,21 @@ def load_pickle_files(directory="test_results", num_files=15):
             final_accuracy = None
             if "epoch_data" in data and data["epoch_data"]:
                 # New format: average accuracy across all epochs and tasks
-                all_accuracies = []
+                all_accuracies_by_overall = []
                 for epoch in data["epoch_data"]:
-                    if epoch["individual_accuracies"]:
-                        all_accuracies.extend(epoch["individual_accuracies"])
-                if all_accuracies:
-                    final_accuracy = sum(all_accuracies) / len(all_accuracies)
+                    if epoch["overall_accuracy"]:
+                        all_accuracies_by_overall.append(epoch["overall_accuracy"])
+                if all_accuracies_by_overall:
+                    final_accuracy = sum(all_accuracies_by_overall) / len(all_accuracies_by_overall)
             elif "per_task_accuracies" in data and data["per_task_accuracies"]:
+                print("Warning: Old format detected.")
                 # Legacy format: average accuracy across all evaluations and tasks
-                all_accuracies = []
+                all_accuracies_by_overall = []
                 for task_eval in data["per_task_accuracies"]:
                     if task_eval:
-                        all_accuracies.extend(task_eval)
-                if all_accuracies:
-                    final_accuracy = sum(all_accuracies) / len(all_accuracies)
+                        all_accuracies_by_overall.extend(task_eval)
+                if all_accuracies_by_overall:
+                    final_accuracy = sum(all_accuracies_by_overall) / len(all_accuracies_by_overall)
 
             # Extract timestamp
             timestamp = data.get("timestamp", "unknown")
@@ -235,6 +240,7 @@ def main():
         default=None,
         help="Directory to save the analysis results (default: test_results)",
     )
+
     args = parser.parse_args()
 
     print("TA-A-GEM Experiment Analysis")
@@ -253,19 +259,18 @@ def main():
     )
 
     # Show time range of analyzed files
-    if results:
-        mtimes = [result["file_mtime"] for result in results]
-        earliest_time = min(mtimes)
-        latest_time = max(mtimes)
+    mtimes = [result["file_mtime"] for result in results]
+    earliest_time = min(mtimes)
+    latest_time = max(mtimes)
 
-        earliest_str = datetime.fromtimestamp(earliest_time).strftime(
-            "%B %d, %Y, at %I:%M:%S %p"
-        )
-        latest_str = datetime.fromtimestamp(latest_time).strftime(
-            "%B %d, %Y, at %I:%M:%S %p"
-        )
+    earliest_str = datetime.fromtimestamp(earliest_time).strftime(
+        "%B %d, %Y, at %I:%M:%S %p"
+    )
+    latest_str = datetime.fromtimestamp(latest_time).strftime(
+        "%B %d, %Y, at %I:%M:%S %p"
+    )
 
-        print(f"Test results are from {earliest_str} to {latest_str}")
+    print(f"Test results are from {earliest_str} to {latest_str}")
 
     # Show breakdown by task type, dataset name, and removal
     task_counts = {}
@@ -317,8 +322,13 @@ def main():
     print("DETAILED RESULTS")
     print("=" * 100)
     for stat in statistics:
-        print(f"\n{stat['Task Type']} | {stat['Dataset Name']} | {stat['Removal']} ({stat['Number of Runs']} runs):")
-        print(f"  Raw accuracies: {[f'{acc:.4f}' for acc in stat['Raw Accuracies']]}")
+        print(f"\n{stat['Task Type']} ({stat['Number of Runs']} runs):")
+        print(
+            f"  Raw accuracies: [{', '.join(f'{acc:.4f}' for acc in stat['Raw Accuracies'])}]"
+        )
+        print(
+            f"To copy: {','.join(f'{acc:.4f}' for acc in stat['Raw Accuracies'])}"
+
         print(f"  Mean: {stat['Mean Accuracy']:.4f} ± {stat['Std Deviation']:.4f}")
         print(f"  99% CI: [{stat['99% CI Lower']:.4f}, {stat['99% CI Upper']:.4f}]")
 

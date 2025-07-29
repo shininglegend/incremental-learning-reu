@@ -1,4 +1,4 @@
-name: ta-env
+name: conda-env
 channels:
   - pytorch
   - conda-forge
@@ -296,6 +296,11 @@ dependencies:
   - zstandard=0.23.0=py312h66e93f0_2
   - zstd=1.5.7=hb8e6e7a_2
   - pip:
+      - choreographer==1.0.9
       - fsspec==2025.5.1
+      - kaleido==1.0.0
+      - logistro==1.1.0
+      - orjson==3.11.1
+      - simplejson==3.20.1
       - sympy==1.13.1
-prefix: /home/reutmurphy/miniforge3/envs/ta-env
+prefix: ./env

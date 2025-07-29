@@ -18,10 +18,11 @@ hidden_dim: 200 # Hidden layer dimension as per paper
 device: "cuda" # Device to use. "cuda" for GPU, "cpu" for CPU.
 random_em: false # Fetch randomly from episodic memory instead of getting all samples
 
-
 # Memory Configuration
 memory_size_q: 10 # Number of clusters per pool (Q), overridden below
 memory_size_p: 3 # Max samples per cluster (P) - as per paper
+sampling_rate: 1 # Number of samples per batch to add to memory (0.001 to BATCH_SIZE)
+add_remove_randomly: False # Turn on for random cluster assignment and removal
 
 # Training Configuration
 batch_size: 10 # Batch size for training (overridden to 50 in lite mode)
@@ -30,7 +31,7 @@ num_epochs: 20 # Number of epochs per task
 # num_tasks: 5 # Number of tasks (overridden to 2 in lite mode)
 
 # Learning Rate Scheduler
-use_learning_rate_scheduler: true # Use adaptive learning rate scheduler
+use_learning_rate_scheduler: false # Use adaptive learning rate scheduler
 
 # Task Configuration
 task_specific:

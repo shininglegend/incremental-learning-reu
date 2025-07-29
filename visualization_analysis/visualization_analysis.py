@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -10,6 +11,7 @@ import time
 try:
     import mlflow
     import mlflow.pytorch
+
     MLFLOW_AVAILABLE = True
 except ImportError:
     MLFLOW_AVAILABLE = False
@@ -21,12 +23,20 @@ except ImportError:
 
 
 class TAGemVisualizer:
-    def __init__(self, use_mlflow=True, experiment_name="Unnamed"):
+    def __init__(
+        self,
+        use_mlflow=True,
+        experiment_name="Unnamed",
+        total_samples=0,
+        batch_size=10,
+        sampling_rate=1,
+    ):
         self.epoch_data = []  # List of dicts with epoch-level metrics
         self.task_boundaries = []  # Track where each task ends
         self.batch_losses = []
         self.training_times = []
         self.current_epoch = 0
+        self._oldest_task_ids_tracking = []  # Track oldest task IDs matrix over time
 
         # MLflow configuration
         self.use_mlflow = use_mlflow and MLFLOW_AVAILABLE
@@ -37,36 +47,55 @@ class TAGemVisualizer:
         if self.use_mlflow:
             self._setup_mlflow()
 
+        # Settings for generating the line graph of when a task is "forgotten"
+        frames_wanted = 500  # Number of x-axis frames desired
+        self.tracking_interval = math.ceil(
+            ((total_samples / batch_size) * sampling_rate) / frames_wanted
+        )
+        self.tracking_frames_seen = 0
+
     @property
     def task_accuracies(self):
         """Backward compatibility: return overall accuracies"""
-        return [ep['overall_accuracy'] for ep in self.epoch_data]
+        return [ep["overall_accuracy"] for ep in self.epoch_data]
 
     @property
     def per_task_accuracies(self):
         """Backward compatibility: return individual accuracies"""
-        return [ep['individual_accuracies'] for ep in self.epoch_data]
+        return [ep["individual_accuracies"] for ep in self.epoch_data]
 
     @property
     def memory_sizes(self):
         """Backward compatibility: return memory sizes"""
-        return [ep['memory_size'] for ep in self.epoch_data]
+        return [ep["memory_size"] for ep in self.epoch_data]
 
     @property
     def epoch_losses(self):
         """Backward compatibility: return epoch losses"""
-        return [[ep['epoch_loss']] for ep in self.epoch_data]
+        return [[ep["epoch_loss"]] for ep in self.epoch_data]
 
     @property
     def learning_rates(self):
         """Backward compatibility: return learning rates"""
-        return [ep['learning_rate'] for ep in self.epoch_data if ep['learning_rate']]
+        return [ep["learning_rate"] for ep in self.epoch_data if ep["learning_rate"]]
 
     @property
     def memory_efficiency(self):
         """Backward compatibility: return memory efficiency"""
-        return [ep['overall_accuracy'] / ep['memory_size'] if ep['memory_size'] > 0 else 0.0
-                for ep in self.epoch_data]
+        return [
+            ep["overall_accuracy"] / ep["memory_size"] if ep["memory_size"] > 0 else 0.0
+            for ep in self.epoch_data
+        ]
+
+    @property
+    def oldest_task_ids_tracking(self):
+        """Return the oldest task IDs tracking data"""
+        return self._oldest_task_ids_tracking
+
+    @oldest_task_ids_tracking.setter
+    def oldest_task_ids_tracking(self, value):
+        """Set the oldest task IDs tracking data"""
+        self._oldest_task_ids_tracking = value
 
     def _setup_mlflow(self):
         """Initialize MLflow experiment"""
@@ -128,21 +157,21 @@ class TAGemVisualizer:
         task_id,
         overall_accuracy,
         individual_accuracies,
-        epoch_losses,
+        epoch_loss,
         memory_size,
         training_time=None,
         learning_rate=None,
     ):
         """Update metrics for a completed epoch"""
         epoch_data = {
-            'epoch': self.current_epoch,
-            'task_id': task_id,
-            'overall_accuracy': overall_accuracy,
-            'individual_accuracies': individual_accuracies.copy(),
-            'epoch_loss': epoch_losses[0] if epoch_losses else 0.0,
-            'memory_size': memory_size,
-            'learning_rate': learning_rate,
-            'training_time': training_time
+            "epoch": self.current_epoch,
+            "task_id": task_id,
+            "overall_accuracy": overall_accuracy,
+            "individual_accuracies": individual_accuracies.copy(),
+            "epoch_loss": epoch_loss,
+            "memory_size": memory_size,
+            "learning_rate": learning_rate,
+            "training_time": training_time,
         }
 
         self.epoch_data.append(epoch_data)
@@ -151,20 +180,20 @@ class TAGemVisualizer:
         if self.use_mlflow and self.current_run:
             try:
                 metrics = {
-                    'overall_accuracy': overall_accuracy,
-                    'epoch_loss': epoch_data['epoch_loss'],
-                    'memory_size': memory_size,
-                    'current_task': task_id,
+                    "overall_accuracy": overall_accuracy,
+                    "epoch_loss": epoch_data["epoch_loss"],
+                    "memory_size": memory_size,
+                    "current_task": task_id,
                 }
 
                 if learning_rate is not None:
-                    metrics['learning_rate'] = learning_rate
+                    metrics["learning_rate"] = learning_rate
                 if training_time is not None:
-                    metrics['training_time'] = training_time
+                    metrics["training_time"] = training_time
 
                 # Log individual task accuracies
                 for i, acc in enumerate(individual_accuracies):
-                    metrics[f'task_{i}_accuracy'] = acc
+                    metrics[f"task_{i}_accuracy"] = acc
 
                 mlflow.log_metrics(metrics, step=self.global_step)
                 self.global_step += 1
@@ -186,13 +215,12 @@ class TAGemVisualizer:
             {"task": task_id, "epoch": epoch, "batch": batch_idx, "loss": loss}
         )
 
-        # Log batch loss to MLflow (sampled to avoid overwhelming)
-        if self.use_mlflow and self.current_run and batch_idx % 10 == 0:
-            try:
-                mlflow.log_metric("batch_loss", loss, step=self.global_step)
-                mlflow.log_metric("batch_task", task_id, step=self.global_step)
-            except Exception as e:
-                print(f"Failed to log batch loss to MLflow: {e}")
+    def track_oldest_task_ids(self, clustering_memory, task_id):
+        """Track the oldest task IDs matrix from clustering memory at reduced rate"""
+        self.tracking_frames_seen += 1
+        if self.tracking_frames_seen % self.tracking_interval == 0:
+            matrix = clustering_memory.get_oldest_task_ids_matrix()
+            self._oldest_task_ids_tracking.append((matrix, task_id))
 
     def save_metrics(self, filepath, params=None):
         """Save all metrics and params to file for later analysis"""
@@ -201,8 +229,12 @@ class TAGemVisualizer:
             "task_boundaries": self.task_boundaries,
             "batch_losses": self.batch_losses,
             "training_times": self.training_times,
+            "oldest_task_ids_tracking": self._oldest_task_ids_tracking,
             "timestamp": datetime.now().isoformat(),
         }
+        print(
+            f"Saved {len(self._oldest_task_ids_tracking)} frames, saw {self.tracking_frames_seen}."
+        )
 
         # Add legacy format for backward compatibility
         if self.epoch_data:
@@ -214,6 +246,7 @@ class TAGemVisualizer:
             metrics["memory_efficiency"] = self.memory_efficiency
 
         if params:
+            params["tracking_interval"] = self.tracking_interval
             metrics["params"] = params
             metrics["dataset_name"] = params.get("dataset_name", "unknown")
             metrics["removal"] = params.get("removal", "unknown")
@@ -241,6 +274,7 @@ class TAGemVisualizer:
             self.task_boundaries = metrics.get("task_boundaries", [])
             self.batch_losses = metrics.get("batch_losses", [])
             self.training_times = metrics.get("training_times", [])
+            self._oldest_task_ids_tracking = metrics.get("oldest_task_ids_tracking", [])
             self.current_epoch = len(self.epoch_data)
 
             print(f"Metrics loaded from {filepath}")
@@ -255,13 +289,13 @@ class TAGemVisualizer:
 
         plot_data = []
         for epoch_idx, epoch_info in enumerate(self.epoch_data):
-            for task_id, accuracy in enumerate(epoch_info['individual_accuracies']):
+            for task_id, accuracy in enumerate(epoch_info["individual_accuracies"]):
                 plot_data.append(
                     {
                         "Epoch": epoch_idx,
                         "Task_Evaluated": task_id,
                         "Accuracy": accuracy,
-                        "Current_Task": epoch_info['task_id'],
+                        "Current_Task": epoch_info["task_id"],
                     }
                 )
 
@@ -304,8 +338,8 @@ class TAGemVisualizer:
             print("No epoch data available")
             return None
 
-        epochs = [ep['epoch'] for ep in self.epoch_data]
-        accuracies = [ep['overall_accuracy'] for ep in self.epoch_data]
+        epochs = [ep["epoch"] for ep in self.epoch_data]
+        accuracies = [ep["overall_accuracy"] for ep in self.epoch_data]
 
         fig = px.line(
             x=epochs,
@@ -379,16 +413,18 @@ class TAGemVisualizer:
         # Log final summary metrics to MLflow
         if self.use_mlflow and self.current_run and self.epoch_data:
             try:
-                final_accuracy = self.epoch_data[-1]['overall_accuracy']
-                final_memory_size = self.epoch_data[-1]['memory_size']
-                avg_accuracy = sum(ep['overall_accuracy'] for ep in self.epoch_data) / len(self.epoch_data)
+                final_accuracy = self.epoch_data[-1]["overall_accuracy"]
+                final_memory_size = self.epoch_data[-1]["memory_size"]
+                avg_accuracy = sum(
+                    ep["overall_accuracy"] for ep in self.epoch_data
+                ) / len(self.epoch_data)
 
                 summary_metrics = {
-                    'final_overall_accuracy': final_accuracy,
-                    'final_memory_size': final_memory_size,
-                    'average_accuracy_all_epochs': avg_accuracy,
-                    'total_epochs': len(self.epoch_data),
-                    'total_tasks': max(ep['task_id'] for ep in self.epoch_data) + 1,
+                    "final_overall_accuracy": final_accuracy,
+                    "final_memory_size": final_memory_size,
+                    "average_accuracy_all_epochs": avg_accuracy,
+                    "total_epochs": len(self.epoch_data),
+                    "total_tasks": max(ep["task_id"] for ep in self.epoch_data) + 1,
                 }
 
                 mlflow.log_metrics(summary_metrics)
