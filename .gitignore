@@ -3,6 +3,10 @@
 TRAINING_LOG.md
 /mlruns/*
 
+# Push new runs with the 4-r prefix.
+!/test_results/4-r*
+
+
 # Ignore the data file itself
 *.csv
 *.zip
