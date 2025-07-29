@@ -468,8 +468,18 @@ if "oldest_task_ids_tracking" in data and data["oldest_task_ids_tracking"]:
     im = ax.imshow(masked_matrix, cmap=cmap, aspect="auto", vmin=-1, vmax=max_task)
 
     ax.set_title("Oldest Task IDs in Clusters Over Time")
-    ax.set_xlabel("Time Step")
     ax.set_ylabel("Cluster Index")
+
+    ax.set_xlabel("Time")
+    # Convert x-axis from frame indices to batch numbers if tracking_interval available
+    if "tracking_interval" in data["params"]:
+        ax.set_xlabel("Batches")
+        tracking_interval = data["params"]["tracking_interval"]
+        num_ticks = min(10, time_steps)
+        tick_positions = [i * time_steps // num_ticks for i in range(num_ticks)]
+        tick_labels = [i * tracking_interval for i in tick_positions]
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
 
     # Add task boundary lines
     for boundary in task_boundaries:
