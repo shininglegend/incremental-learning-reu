@@ -115,7 +115,6 @@ def initialize_system():
     # Set some default values that aren't in the config file
     config["verbose"] = True
     config["data_dir"] = None
-    config["random_em"] = False
 
     # Override config with command line arguments
     if args.task_type is not None:
