@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!./env/bin/python
 """
 Compare TA-A-GEM experiments across multiple directories.
 
@@ -26,6 +26,17 @@ import plotly.express as px
 
 # Import functions from retro_stats.py - mark as used elsewhere
 from retro_stats import load_pickle_files
+
+# Static image export controls
+EXPORT_FORMATS = {
+    "accuracy_plots": True,  # Accuracy vs epochs plots
+    "html": False,  # Save HTML format
+    "show_html": False,  # Show HTML image
+    "png": True,  # Save PNG format
+    "svg": False,  # Save SVG format
+    "pdf": False,  # Save PDF format
+    "csv": False,  # Save a csv of the data
+}
 
 
 def load_multiple_directories(directories):
@@ -282,6 +293,42 @@ def create_task_plot(task_dirs, task_type, colors):
     return fig
 
 
+def save_or_show_figure(
+    figure: go.Figure, plot_type: str, task_type: str, output_dir: str | None = None
+):
+    """Save figure to static images and/or show based on configuration"""
+    if output_dir and EXPORT_FORMATS["accuracy_plots"]:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"{plot_type}_{task_type}_{timestamp}"
+
+        # Save in requested formats
+        if EXPORT_FORMATS["png"]:
+            png_filename = os.path.join(output_dir, f"{base_filename}.png")
+            figure.write_image(png_filename)
+            print(f"PNG saved to: {png_filename}")
+
+        if EXPORT_FORMATS["svg"]:
+            svg_filename = os.path.join(output_dir, f"{base_filename}.svg")
+            figure.write_image(svg_filename)
+            print(f"SVG saved to: {svg_filename}")
+
+        if EXPORT_FORMATS["pdf"]:
+            pdf_filename = os.path.join(output_dir, f"{base_filename}.pdf")
+            figure.write_image(pdf_filename)
+            print(f"PDF saved to: {pdf_filename}")
+
+    # Save HTML version
+    if output_dir and EXPORT_FORMATS["html"]:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        html_filename = os.path.join(
+            output_dir, f"{plot_type}_{task_type}_{timestamp}.html"
+        )
+        figure.write_html(html_filename)
+        print(f"HTML plot saved to: {html_filename}")
+    if EXPORT_FORMATS["show_html"]:
+        figure.show()
+
+
 def create_epoch_plot(all_results, task_filter=None):
     """Create plotly graph showing accuracy vs epochs with std deviation bands"""
     colors = px.colors.qualitative.Set1
@@ -388,7 +435,8 @@ Examples:
         help="Directory to save comparison results (default: None)",
     )
     parser.add_argument(
-        "--task_type", "-t",
+        "--task_type",
+        "-t",
         type=str,
         choices=["permutation", "rotation", "class_split"],
         help="Filter results to specific task type only",
@@ -419,33 +467,18 @@ Examples:
     # Create and save plot(s)
     figures = create_epoch_plot(all_results, args.task_type)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
     if args.task_type:
         # Single plot for specific task type
-        if args.output_dir is not None:
-            plot_filename = os.path.join(
-                args.output_dir,
-                f"accuracy_comparison_{args.task_type}_{timestamp}.html",
-            )
-            figures[0].write_html(plot_filename)
-            print(f"\nAccuracy plot saved to: {plot_filename}")
-        else:
-            figures[0].show()
+        save_or_show_figure(
+            figures[0], "accuracy_comparison", args.task_type, args.output_dir
+        )
     else:
         # Multiple plots - one for each task type
         for task_type, fig in figures:
-            if args.output_dir:
-                plot_filename = os.path.join(
-                    args.output_dir, f"accuracy_comparison_{task_type}_{timestamp}.html"
-                )
-                fig.write_html(plot_filename)
-                print(f"Accuracy plot for {task_type} saved to: {plot_filename}")
-            else:
-                fig.show()
+            save_or_show_figure(fig, "accuracy_comparison", task_type, args.output_dir)
 
     # Save statistical results to CSV
-    if args.output_dir:
+    if args.output_dir and EXPORT_FORMATS["csv"]:
         summary_data = []
         for task_type, results in comparison_results.items():
             for directory in results["directories"]:
@@ -461,6 +494,7 @@ Examples:
                 )
 
         summary_df = pd.DataFrame(summary_data)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         summary_filename = os.path.join(
             args.output_dir, f"comparison_summary_{timestamp}.csv"
         )
