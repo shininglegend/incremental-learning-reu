@@ -24,7 +24,7 @@ from datetime import datetime
 import plotly.graph_objects as go
 import plotly.express as px
 
-# Import functions from retro_stats.py - mark as used elsewhere
+# Import functions from retro_stats.py
 from retro_stats import load_pickle_files
 
 # Static image export controls
@@ -37,6 +37,10 @@ EXPORT_FORMATS = {
     "pdf": False,  # Save PDF format
     "csv": False,  # Save a csv of the data
 }
+
+# This import is not needed for this script, but it is needed to export images
+if any([EXPORT_FORMATS["png"], EXPORT_FORMATS["pdf"], EXPORT_FORMATS["svg"]]):
+    import kaleido
 
 
 def load_multiple_directories(directories):
@@ -300,7 +304,6 @@ def save_or_show_figure(
     if output_dir and EXPORT_FORMATS["accuracy_plots"]:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_filename = f"{plot_type}_{task_type}_{timestamp}"
-
         # Save in requested formats
         if EXPORT_FORMATS["png"]:
             png_filename = os.path.join(output_dir, f"{base_filename}.png")
