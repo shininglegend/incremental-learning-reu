@@ -349,9 +349,9 @@ if __name__ == "__main__":
 
     # Helper function to show a list of images with their relating titles
     def show_images(images, title_texts, figure_title=""):
-        cols = 5
-        rows = int(len(images) / cols) + 1
-        plt.figure(figsize=(15, 10))
+        cols = 4
+        rows = 4
+        plt.figure(figsize=(12, 12))
         if figure_title:
             plt.suptitle(figure_title, fontsize=16)
         index = 1
@@ -379,7 +379,7 @@ if __name__ == "__main__":
     print("\n1. Original MNIST samples:")
     images_2_show = []
     titles_2_show = []
-    for i in range(10):
+    for i in range(16):
         r = random.randint(0, len(x_train) - 1)
         images_2_show.append(x_train[r].numpy())
         titles_2_show.append(f"Label: {y_train[r].item()}")
@@ -394,7 +394,7 @@ if __name__ == "__main__":
         titles_2_show = []
         # Get first batch from each task
         batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
+        for i in range(min(16, len(batch_x))):
             images_2_show.append(batch_x[i].numpy())
             titles_2_show.append(f"Label: {batch_y[i].item()}")
         show_images(images_2_show, titles_2_show, f"Permutation Task {task_id + 1}")
@@ -407,7 +407,7 @@ if __name__ == "__main__":
         images_2_show = []
         titles_2_show = []
         batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
+        for i in range(min(16, len(batch_x))):
             images_2_show.append(batch_x[i].numpy())
             titles_2_show.append(f"Label: {batch_y[i].item()}, Rot: {task_id * 20}°")
         show_images(images_2_show, titles_2_show, f"Rotation Task {task_id + 1} ({task_id * 20}° rotation)")
@@ -420,7 +420,7 @@ if __name__ == "__main__":
         images_2_show = []
         titles_2_show = []
         batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
+        for i in range(min(16, len(batch_x))):
             images_2_show.append(batch_x[i].numpy())
             orig_classes = f"{task_id*2},{task_id*2+1}"
             titles_2_show.append(f"Orig: {orig_classes}, New: {batch_y[i].item()}")
