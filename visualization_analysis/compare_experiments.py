@@ -29,10 +29,10 @@ from retro_stats import load_pickle_files
 
 # Static image export controls
 EXPORT_FORMATS = {
-    "accuracy_plots": True,  # Accuracy vs epochs plots
+    "accuracy_plots": False,  # Accuracy vs epochs plots
     "html": False,  # Save HTML format
     "show_html": False,  # Show HTML image
-    "png": True,  # Save PNG format
+    "png": False,  # Save PNG format
     "svg": False,  # Save SVG format
     "pdf": False,  # Save PDF format
     "csv": False,  # Save a csv of the data
@@ -88,7 +88,73 @@ def extract_epoch_accuracies(results):
     return epoch_accuracies
 
 
-def perform_statistical_comparison(all_results, task_filter=None):
+def check_parameter_differences(all_results):
+    """Check for parameter differences between directories, excluding task_type"""
+    directory_params = {}
+
+    # Collect parameters from each directory
+    for directory, results in all_results.items():
+        params_set = set()
+        for result in results:
+            if result["data"] and "params" in result["data"]:
+                params = result["data"]["params"].copy()
+                # Remove task-dependent parameters that are expected to vary
+                # Also remove any params that don't affect the algorithm
+                ignore = [
+                    "experiment_name",
+                    "task_type",
+                    "num_tasks",
+                    "num_pools",
+                    "memory_size_q",
+                    "output_dir",
+                    "verbose",
+                    "tracking_interval"
+                ]
+                for p in ignore:
+                    params.pop(p, None)
+                # Convert to frozenset of items for hashability
+                params_set.add(frozenset(params.items()))
+
+        # Use the first parameter set as representative
+        directory_params[directory] = dict(list(params_set)[0]) if params_set else {}
+
+    # Find differences
+    directories = list(directory_params.keys())
+    if len(directories) < 2:
+        return None
+
+    # Compare each directory against the first one
+    baseline_dir = directories[0]
+    baseline_params = directory_params[baseline_dir]
+    differences = {}
+
+    for other_dir in directories[1:]:
+        other_params = directory_params[other_dir]
+
+        # Find parameters that differ
+        baseline_diff = {}
+        other_diff = {}
+
+        # Check for different values
+        all_keys = set(baseline_params.keys()) | set(other_params.keys())
+        for key in all_keys:
+            baseline_val = baseline_params.get(key)
+            other_val = other_params.get(key)
+
+            if baseline_val != other_val:
+                baseline_diff[key] = baseline_val
+                other_diff[key] = other_val
+
+        if baseline_diff or other_diff:
+            differences[f"{baseline_dir}_vs_{other_dir}"] = {
+                baseline_dir: baseline_diff,
+                other_dir: other_diff
+            }
+
+    return differences if differences else None
+
+
+def perform_statistical_comparison(all_results, task_type_filter=None):
     """Compare results across directories using statistical tests"""
     # Organize data by task type and directory
     task_data = {}
@@ -101,7 +167,7 @@ def perform_statistical_comparison(all_results, task_filter=None):
             task_type = result["task_type"]
 
             # Filter by task type if specified
-            if task_filter and task_type != task_filter:
+            if task_type_filter and task_type != task_type_filter:
                 continue
 
             if task_type not in task_data:
@@ -460,6 +526,19 @@ Examples:
 
     # Load all results
     all_results = load_multiple_directories(args.directories)
+
+    # Check for parameter differences
+    param_differences = check_parameter_differences(all_results)
+    if param_differences:
+        print("\nWARNING: Parameter differences detected between directories:")
+        print("=" * 60)
+        for comparison_key, dirs_diff in param_differences.items():
+            print(f"\nParameter mismatches found:")
+            for directory, params in dirs_diff.items():
+                print(f"{directory}:")
+                for key, value in params.items():
+                    print(f"- {key}: {value}")
+        print("\n" + "=" * 60)
 
     # Perform statistical comparison
     comparison_results = perform_statistical_comparison(all_results, args.task_type)
