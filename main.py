@@ -107,6 +107,11 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                     end="",
                     flush=True,
                 )
+        # stats = agem_handler.get_importance_stats()
+        # print("===============================================================================")
+        # print(f"Importance updates: {stats['updates']}, Mean importance: {stats['mean']:.4f}")
+        # print("===============================================================================")
+
 
         # Print newline after progress bar completion
         if not QUICK_TEST_MODE and VERBOSE:
