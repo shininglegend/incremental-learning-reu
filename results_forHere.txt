@@ -1,0 +1,7 @@
+7/30 - first test...
+
+Final Average Accuracy (all epochs, all tasks): 0.7590
+
+Generating comprehensive analysis...
+Saved 500 frames, saw 6000.
+Metrics saved to test_results/results-rem-1-perm-mnist-20250730_170309.pkl
