@@ -1,0 +1,41 @@
+7/30 - FIRST RUN OF 08- goodgood
+
+Test results are from July 30, 2025, at 03:46:52 PM to July 30, 2025, at 04:55:27 PM
+
+Breakdown by task type:
+  class_split: 5 runs
+  rotation: 5 runs
+  permutation: 5 runs
+
+================================================================================
+EXPERIMENT RESULTS SUMMARY
+================================================================================
+  Task Type  Number of Runs Mean Accuracy Std Deviation 99% CI Lower 99% CI Upper
+class_split               5        0.9387        0.0197       0.8982       0.9793
+permutation               5        0.7619        0.0057       0.7503       0.7735
+   rotation               5        0.6837        0.0223       0.6378       0.7296
+
+================================================================================
+DETAILED RESULTS
+================================================================================
+
+class_split (5 runs):                                                                                                                                                                                                                       
+  Raw accuracies: [0.9453, 0.9391, 0.9524, 0.9049, 0.9520]                                                                                                                                                                                  
+To copy: 0.9453,0.9391,0.9524,0.9049,0.9520                                                                                                                                                                                                 
+  Mean: 0.9387 ± 0.0197                                                                                                                                                                                                                     
+  99% CI: [0.8982, 0.9793]                                                                                                                                                                                                                  
+                                                                                                                                                                                                                                            
+permutation (5 runs):                                                                                                                                                                                                                       
+  Raw accuracies: [0.7697, 0.7651, 0.7614, 0.7571, 0.7561]                                                                                                                                                                                  
+To copy: 0.7697,0.7651,0.7614,0.7571,0.7561                                                                                                                                                                                                 
+  Mean: 0.7619 ± 0.0057                                                                                                                                                                                                                     
+  99% CI: [0.7503, 0.7735]                                                                                                                                                                                                                  
+                                                                                                                                                                                                                                            
+rotation (5 runs):                                                                                                                                                                                                                          
+  Raw accuracies: [0.6919, 0.6895, 0.6993, 0.6934, 0.6443]                                                                                                                                                                                  
+To copy: 0.6919,0.6895,0.6993,0.6934,0.6443                                                                                                                                                                                                 
+  Mean: 0.6837 ± 0.0223                                                                                                                                                                                                                     
+  99% CI: [0.6378, 0.7296]                                                                                                                                                                                                                  
+                                                                                                                                                                                                                                            
+Summary results saved to: test_results/mnist_mas_version01_run01/experiment_analysis_20250730_165528.csv                                                                                                                                    
+Detailed results saved to: test_results/mnist_mas_version01_run01/detailed_results_20250730_165528.csv
