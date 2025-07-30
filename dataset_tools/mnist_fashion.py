@@ -73,7 +73,9 @@ class FashionMnistDatasetLoader(DatasetLoader):
         super().__init__()
         # Set file paths based on Fashion-MNIST datasets
         path = get_dataset_path(
-            "FASHION_MNIST", "zalando-research/fashionmnist", path_override=path_override
+            "FASHION_MNIST",
+            "zalando-research/fashionmnist",
+            path_override=path_override,
         )
         print(f"Fashion-MNIST dataset is at {path}")
         self.training_images_filepath = join(path, "train-images-idx3-ubyte")
@@ -132,6 +134,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
+        only_one_epoch,
     ):
         """Create permutation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
@@ -144,23 +147,24 @@ class FashionMnistDatasetLoader(DatasetLoader):
 
         for task_id in range(num_tasks):
             # Get disjoint data subset for this task
-            train_start = task_id * train_size_per_task
-            train_end = (
-                (task_id + 1) * train_size_per_task
-                if task_id < num_tasks - 1
-                else len(x_train_tensor)
-            )
-            test_start = task_id * test_size_per_task
-            test_end = (
-                (task_id + 1) * test_size_per_task
-                if task_id < num_tasks - 1
-                else len(x_test_tensor)
-            )
-
-            x_train_subset = x_train_tensor[train_start:train_end]
-            y_train_subset = y_train_tensor[train_start:train_end]
-            x_test_subset = x_test_tensor[test_start:test_end]
-            y_test_subset = y_test_tensor[test_start:test_end]
+            if not only_one_epoch:
+                x_train_subset, y_train_subset, x_test_subset, y_test_subset = (
+                    self._get_data_subset(
+                        num_tasks,
+                        train_size_per_task,
+                        test_size_per_task,
+                        task_id,
+                        x_train_tensor,
+                        x_test_tensor,
+                        y_train_tensor,
+                        y_test_tensor,
+                    )
+                )
+            else:
+                x_train_subset = x_train_tensor
+                y_train_subset = y_train_tensor
+                x_test_subset = x_test_tensor
+                y_test_subset = y_test_tensor
 
             # Generate a random permutation for this task
             perm = torch.randperm(num_pixels)
@@ -195,6 +199,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
+        only_one_epoch,
     ):
         """Create rotation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
@@ -206,24 +211,24 @@ class FashionMnistDatasetLoader(DatasetLoader):
         test_size_per_task = len(x_test_tensor) // num_tasks
 
         for task_id in range(num_tasks):
-            # Get disjoint data subset for this task
-            train_start = task_id * train_size_per_task
-            train_end = (
-                (task_id + 1) * train_size_per_task
-                if task_id < num_tasks - 1
-                else len(x_train_tensor)
-            )
-            test_start = task_id * test_size_per_task
-            test_end = (
-                (task_id + 1) * test_size_per_task
-                if task_id < num_tasks - 1
-                else len(x_test_tensor)
-            )
-
-            x_train_subset = x_train_tensor[train_start:train_end]
-            y_train_subset = y_train_tensor[train_start:train_end]
-            x_test_subset = x_test_tensor[test_start:test_end]
-            y_test_subset = y_test_tensor[test_start:test_end]
+            if not only_one_epoch:
+                x_train_subset, y_train_subset, x_test_subset, y_test_subset = (
+                    self._get_data_subset(
+                        num_tasks,
+                        train_size_per_task,
+                        test_size_per_task,
+                        task_id,
+                        x_train_tensor,
+                        x_test_tensor,
+                        y_train_tensor,
+                        y_test_tensor,
+                    )
+                )
+            else:
+                x_train_subset = x_train_tensor
+                y_train_subset = y_train_tensor
+                x_test_subset = x_test_tensor
+                y_test_subset = y_test_tensor
 
             angle = angles[task_id]
 
@@ -364,10 +369,12 @@ if __name__ == "__main__":
             image = x[0]
             title_text = x[1]
             plt.subplot(rows, cols, index)
-            plt.imshow(image.reshape(28, 28) if len(image.shape) == 1 else image, cmap="gray")
+            plt.imshow(
+                image.reshape(28, 28) if len(image.shape) == 1 else image, cmap="gray"
+            )
             if title_text != "":
                 plt.title(title_text, fontsize=10)
-            plt.axis('off')
+            plt.axis("off")
             index += 1
         plt.tight_layout()
         plt.show()
@@ -376,7 +383,9 @@ if __name__ == "__main__":
 
     # Load and preprocess data with quick_test for faster demonstration
     x_train, y_train, x_test, y_test = loader.load_raw_data()
-    x_train, y_train, x_test, y_test = loader.preprocess_data(x_train, y_train, x_test, y_test, quick_test=True)
+    x_train, y_train, x_test, y_test = loader.preprocess_data(
+        x_train, y_train, x_test, y_test, quick_test=True
+    )
 
     print(f"Dataset shapes: train {x_train.shape}, test {x_test.shape}")
 
@@ -393,7 +402,9 @@ if __name__ == "__main__":
 
     # Permutation task samples
     print("2. Permutation task samples:")
-    train_loaders, test_loaders = loader._create_permutation_tasks(x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32)
+    train_loaders, test_loaders = loader._create_permutation_tasks(
+        x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32
+    )
 
     for task_id in range(3):
         images_2_show = []
@@ -408,7 +419,9 @@ if __name__ == "__main__":
 
     # Rotation task samples
     print("3. Rotation task samples:")
-    train_loaders, test_loaders = loader._create_rotation_tasks(x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32)
+    train_loaders, test_loaders = loader._create_rotation_tasks(
+        x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32
+    )
 
     for task_id in range(3):
         images_2_show = []
@@ -418,11 +431,17 @@ if __name__ == "__main__":
             images_2_show.append(batch_x[i].numpy())
             class_name = FASHION_MNIST_CLASSES[batch_y[i].item()]
             titles_2_show.append(f"{class_name}, {task_id * 20}°")
-        show_images(images_2_show, titles_2_show, f"Rotation Task {task_id + 1} ({task_id * 20}° rotation)")
+        show_images(
+            images_2_show,
+            titles_2_show,
+            f"Rotation Task {task_id + 1} ({task_id * 20}° rotation)",
+        )
 
     # Class split task samples
     print("4. Class split task samples:")
-    train_loaders, test_loaders = loader._create_class_split_tasks(x_train, y_train, x_test, y_test, num_tasks=5, batch_size=32)
+    train_loaders, test_loaders = loader._create_class_split_tasks(
+        x_train, y_train, x_test, y_test, num_tasks=5, batch_size=32
+    )
 
     for task_id in range(5):
         images_2_show = []
@@ -430,8 +449,15 @@ if __name__ == "__main__":
         batch_x, batch_y = next(iter(train_loaders[task_id]))
         for i in range(min(5, len(batch_x))):
             images_2_show.append(batch_x[i].numpy())
-            orig_classes = [FASHION_MNIST_CLASSES[task_id*2], FASHION_MNIST_CLASSES[task_id*2+1]]
+            orig_classes = [
+                FASHION_MNIST_CLASSES[task_id * 2],
+                FASHION_MNIST_CLASSES[task_id * 2 + 1],
+            ]
             titles_2_show.append(f"{'/'.join(orig_classes)}, New: {batch_y[i].item()}")
-        show_images(images_2_show, titles_2_show, f"Class Split Task {task_id + 1} (classes {task_id*2}-{task_id*2+1})")
+        show_images(
+            images_2_show,
+            titles_2_show,
+            f"Class Split Task {task_id + 1} (classes {task_id*2}-{task_id*2+1})",
+        )
 
     print("Visualization complete!")

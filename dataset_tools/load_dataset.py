@@ -52,7 +52,12 @@ class DatasetLoader(ABC):
         pass
 
     def prepare_domain_incremental_data(
-        self, task_type: str, num_tasks: int, batch_size: int, quick_test: bool = False
+        self,
+        task_type: str,
+        num_tasks: int,
+        batch_size: int,
+        quick_test: bool = False,
+        only_one_epoch: bool = False,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Prepare data for domain-incremental learning.
 
@@ -61,6 +66,7 @@ class DatasetLoader(ABC):
             num_tasks: Number of tasks to create
             batch_size: Batch size for DataLoaders
             quick_test: If True, use reduced dataset for faster testing
+            only_one_epoch: If True, don't split the data into disjoint subsets.
 
         Returns:
             tuple: (train_dataloaders, test_dataloaders) - Lists of DataLoader objects
@@ -88,6 +94,7 @@ class DatasetLoader(ABC):
             task_type,
             num_tasks,
             batch_size,
+            only_one_epoch,
         )
 
     def _create_task_dataloaders(
@@ -99,6 +106,7 @@ class DatasetLoader(ABC):
         task_type: str,
         num_tasks: int,
         batch_size: int,
+        only_one_epoch: bool,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create task-specific data loaders based on task type."""
         if task_type == "permutation":
@@ -109,6 +117,7 @@ class DatasetLoader(ABC):
                 y_test_tensor,
                 num_tasks,
                 batch_size,
+                only_one_epoch,
             )
         elif task_type == "rotation":
             return self._create_rotation_tasks(
@@ -118,6 +127,7 @@ class DatasetLoader(ABC):
                 y_test_tensor,
                 num_tasks,
                 batch_size,
+                only_one_epoch,
             )
         elif task_type == "class_split":
             return self._create_class_split_tasks(
@@ -127,9 +137,40 @@ class DatasetLoader(ABC):
                 y_test_tensor,
                 num_tasks,
                 batch_size,
+                # This returns the same dataloader regardless of epoch size.
             )
         else:
             raise ValueError(f"Unknown task_type: {task_type}")
+
+    def _get_data_subset(
+        self,
+        num_tasks,
+        train_size_per_task,
+        test_size_per_task,
+        task_id,
+        x_train_tensor,
+        x_test_tensor,
+        y_train_tensor,
+        y_test_tensor,
+    ):
+        train_start = task_id * train_size_per_task
+        train_end = (
+            (task_id + 1) * train_size_per_task
+            if task_id < num_tasks - 1
+            else len(x_train_tensor)
+        )
+        test_start = task_id * test_size_per_task
+        test_end = (
+            (task_id + 1) * test_size_per_task
+            if task_id < num_tasks - 1
+            else len(x_test_tensor)
+        )
+
+        x_train_subset = x_train_tensor[train_start:train_end]
+        y_train_subset = y_train_tensor[train_start:train_end]
+        x_test_subset = x_test_tensor[test_start:test_end]
+        y_test_subset = y_test_tensor[test_start:test_end]
+        return (x_train_subset, y_train_subset, x_test_subset, y_test_subset)
 
     @abstractmethod
     def _create_permutation_tasks(
@@ -140,6 +181,7 @@ class DatasetLoader(ABC):
         y_test_tensor: torch.Tensor,
         num_tasks: int,
         batch_size: int,
+        only_one_epoch: bool,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create permutation-based tasks."""
         pass
@@ -153,6 +195,7 @@ class DatasetLoader(ABC):
         y_test_tensor: torch.Tensor,
         num_tasks: int,
         batch_size: int,
+        only_one_epoch: bool,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create rotation-based tasks."""
         pass

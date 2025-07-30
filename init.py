@@ -146,6 +146,7 @@ def initialize_system():
         "add_remove_randomly": config["add_remove_randomly"],
         "batch_size": config["batch_size"],
         "dataset_name": config["dataset_name"],
+        "only_one_epoch": config["only_one_epoch"],
         "experiment_name": config["experiment_name"],
         "hidden_dim": config["hidden_dim"],
         "input_dim": config["input_dim"],
@@ -153,7 +154,7 @@ def initialize_system():
         "memory_size_p": config["memory_size_p"],
         "memory_size_q": config["clusters_per_pool"],
         "num_classes": config["num_classes"],
-        "num_epochs": config["num_epochs"],
+        # "num_epochs": config["num_epochs"],  # Ignored
         "num_pools": config["num_pools"],
         "num_tasks": config["num_tasks"],
         "output_dir": config["output_dir"],
@@ -161,6 +162,7 @@ def initialize_system():
         "random_em": config["random_em"],
         "sampling_rate": config["sampling_rate"],
         "task_type": config["task_type"],
+        "testing_rate": config["testing_rate"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
         "verbose": config["verbose"],
     }
@@ -216,6 +218,7 @@ def initialize_system():
         num_tasks=config["num_tasks"],
         batch_size=config["batch_size"],
         quick_test=config["lite"],
+        only_one_epoch=config["only_one_epoch"],
     )
 
     # Initialize visualizer with experiment name

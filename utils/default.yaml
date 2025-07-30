@@ -27,7 +27,9 @@ add_remove_randomly: False # Turn on for random cluster assignment and removal
 # Training Configuration
 batch_size: 10 # Batch size for training (overridden to 50 in lite mode)
 learning_rate: 0.001 # Initial learning rate
-num_epochs: 20 # Number of epochs per task
+# num_epochs: 20 # Number of epochs per task, ignored
+only_one_epoch: True # Simulate Continual learning better - each sample is only seen once.
+testing_rate: 300 # How many batches to train on before testing. Approximating 20 epochs
 # num_tasks: 5 # Number of tasks (overridden to 2 in lite mode)
 
 # Learning Rate Scheduler
