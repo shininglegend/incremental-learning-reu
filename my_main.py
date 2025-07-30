@@ -149,7 +149,7 @@ for epoch, task_id in enumerate(epoch_order):
         task_id=task_id,
         overall_accuracy=avg_accuracy,
         individual_accuracies=individual_accuracies,
-        epoch_losses=[avg_epoch_loss],
+        epoch_loss=[avg_epoch_loss],
         memory_size=memory_size,
         training_time=None,
         learning_rate=current_lr,

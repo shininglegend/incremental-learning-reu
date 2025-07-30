@@ -13,7 +13,7 @@ INDIVIDUAL_PLOTS_TO_DISPLAY = {
     "dashboard": False,
     # Accuracy
     "per_task_accuracies": False,  # Matrix of current task to accuracy on previous task
-    "task_accuracies": True,  # Line graph
+    "task_accuracies": False,  # Line graph
     # Loss
     "batch_losses": False,
     "epoch_losses": False,
@@ -24,7 +24,7 @@ INDIVIDUAL_PLOTS_TO_DISPLAY = {
 }
 
 # If you want to save the plots, change this path. Helpful for linux. Will save all files.
-SAVE_DIR = None
+SAVE_DIR = "/home/NAS/reuadodd/99_1-AGEM-optimizations/test_results/graphs"
 if SAVE_DIR and not os.path.exists(SAVE_DIR):
     os.makedirs(SAVE_DIR)
 

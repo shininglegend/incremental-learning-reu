@@ -490,9 +490,9 @@ class ClusterPool:
         dprint("clm add triggered")
         self.sample_throughput += 1
 
-        assert len(z.shape) == 1, "Sample should only have one axis."
-
         removed = False
+
+        assert len(z.shape) == 1, "Sample should only have one axis."
 
         # Apply dimensionality reduction if configured
         if self.dimensionality_reducer is not None:
@@ -544,10 +544,11 @@ class ClusterPool:
         if dist_to_new > dist_to_old:
             debug(self.visualize, "Before")
             # Overwrite it with the new sample
-            self._add_to_cluster(
+            removed = self._add_to_cluster(
                 closest_cluster_to_old, nearest_old_sample, nearest_old_label, task_id
             )
             self.clusters[nearest_cluster_idx_to_new] = Cluster(
+                cluster_params=self.cluster_params,
                 initial_sample=z,
                 random_add_or_remove=self.add_rem_rand,
                 initial_label=label,
@@ -558,7 +559,7 @@ class ClusterPool:
         else:
             if len(self.clusters) < self.max_clusters:
                 # Add a new cluster if possible
-                self._add_new_cluster(
+                removed = self._add_new_cluster(
                     z=z,
                     add_or_remove_randomly=self.add_rem_rand,
                     label=label,
@@ -566,9 +567,11 @@ class ClusterPool:
                 )
             else:
                 # Add to whatever cluster is closest
-                self._add_to_cluster(nearest_cluster_idx_to_new, z, label, task_id)
+                removed = self._add_to_cluster(nearest_cluster_idx_to_new, z, label, task_id)
             # self.visualize("After keeping")
             debug(print, f"Kept! {dist_to_new} <= {dist_to_old}")
+
+        return removed
 
     def _find_closest_cluster(self, z, ignore=None):
         """This finds the closest cluster for a particular sample. Does not add it
@@ -612,6 +615,7 @@ class ClusterPool:
             initial_task_id=task_id,
         )
         self.clusters.append(new_cluster)
+        return False
 
     def _add_to_cluster(self, cluster_index, z, label=None, task_id=None):
         """Adds a sample to a given cluster, removing one from that cluster if needed to make space
@@ -628,6 +632,9 @@ class ClusterPool:
         # If the cluster size exceeds P, remove a sample
         if len(q_star.samples) > self.max_cluster_size:
             q_star.remove_one()
+            return True
+
+        return False
 
 
     def fit_reducer(self, z_list):

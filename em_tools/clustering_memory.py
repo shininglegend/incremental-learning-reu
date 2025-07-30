@@ -78,10 +78,7 @@ class ClusteringMemory:
         return self.pools[label]
 
     def get_memory_samples(self, timer=None):
-        """Returns all samples currently stored across all pools as tuples of (sample, label).
-
-        Optimized version that batches tensor operations.
-
+        """
         Returns:
             tuple: (torch.Tensor of samples, torch.Tensor of labels) or None if no samples
         """
