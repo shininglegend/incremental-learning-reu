@@ -60,6 +60,7 @@ for task_type in "${TASK_TYPES[@]}"; do
             echo "Completed: $task_type run $run at $(date)"
         else
             echo "ERROR: Failed $task_type run $run at $(date)"
+            exit 1
         fi
     done
 done
