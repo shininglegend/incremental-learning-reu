@@ -39,3 +39,5 @@ To copy: 0.6919,0.6895,0.6993,0.6934,0.6443
                                                                                                                                                                                                                                             
 Summary results saved to: test_results/mnist_mas_version01_run01/experiment_analysis_20250730_165528.csv                                                                                                                                    
 Detailed results saved to: test_results/mnist_mas_version01_run01/detailed_results_20250730_165528.csv
+
+NOTE: Performance tends to drop around epoch 8. For class split, it's around the same time (ratio'd)
