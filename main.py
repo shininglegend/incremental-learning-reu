@@ -49,18 +49,55 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
     task_start_time = time.time()
     task_epoch_losses = []
-
-    # Query clustering_memory for all samples once per task
-    t.start("get samples")
-    all_samples = clustering_memory.get_memory_samples()
-    t.end("get samples")
+    all_samples = []
 
     for epoch in range(NUM_EPOCHS):
         model.train()
         epoch_loss = 0.0
         num_batches = 0
 
+        # Needed for adding to memory, used to sample at the sampling rate.
+        samples_added = 0
+        batch_counter = 0
+
         for batch_idx, (data, labels) in enumerate(train_dataloader):
+            # Only add samples the first epoch per task.
+            # This could also be done by checking whether these samples have been
+            # seen before, so this does not break task agnosticism.
+            if epoch == 0:
+                # Step 1: Add new samples from this batch to memory.
+                # Doing it here preserves the online learning scheme.
+                # This is where the core clustering happens.
+                t.start("add samples")
+
+                # Add samples per batch based on sampling_rate
+                if SAMPLING_RATE < 1:
+                    # Fractional sampling - add every 1/SAMPLING_RATE batches
+                    if batch_counter % int(1 / SAMPLING_RATE) == 0:
+                        samples_added += 1
+                        clustering_memory.add_sample(
+                            data[0].cpu(), labels[0].cpu(), task_id
+                        )
+                        # Track oldest task IDs after adding sample
+                        visualizer.track_oldest_task_ids(clustering_memory, task_id)
+                else:
+                    # Sample multiple items per batch (up to batch size and sampling rate)
+                    num_to_sample = min(int(SAMPLING_RATE), len(data))
+                    for i in range(num_to_sample):
+                        samples_added += 1
+                        clustering_memory.add_sample(
+                            data[i].cpu(), labels[i].cpu(), task_id
+                        )
+                        # Track oldest task IDs after adding sample
+                        visualizer.track_oldest_task_ids(clustering_memory, task_id)
+                batch_counter += 1
+                t.end("add samples")
+
+                # Query clustering_memory for all samples since em is updated.
+                t.start("get samples")
+                all_samples = clustering_memory.get_memory_samples()
+                t.end("get samples")
+
             # Move data to device
             data, labels = data.to(device), labels.to(device)
             # Select memory samples for this batch
@@ -156,38 +193,14 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             print(
                 f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
-    # Step 2: Update the clustered memory with some samples from this task's dataloader
-    # This is where the core clustering for TA-A-GEM happens
-    t.start("add samples")
-    samples_added = 0
-    batch_counter = 0
-    # Add samples per batch based on sampling_rate
-    for sample_data, sample_labels in train_dataloader:
-        if SAMPLING_RATE < 1:
-            # Fractional sampling - add every 1/SAMPLING_RATE batches
-            if batch_counter % int(1 / SAMPLING_RATE) == 0:
-                samples_added += 1
-                clustering_memory.add_sample(
-                    sample_data[0].cpu(), sample_labels[0].cpu(), task_id
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, task_id)
-        else:
-            # Sample multiple items per batch (up to batch size and sampling rate)
-            num_to_sample = min(int(SAMPLING_RATE), len(sample_data))
-            for i in range(num_to_sample):
-                samples_added += 1
-                clustering_memory.add_sample(
-                    sample_data[i].cpu(), sample_labels[i].cpu(), task_id
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, task_id)
-        batch_counter += 1
-    print(
-        f"Added {samples_added} out of {len(train_dataloader) * BATCH_SIZE} samples this round."
-    )
-    print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
-    t.end("add samples")
+        if samples_added != 0:
+            print(
+                f"Added {samples_added} out of {len(train_dataloader) * BATCH_SIZE} samples this round."
+            )
+            print(
+                "Sample throughput (cumulative):",
+                clustering_memory.get_sample_throughputs(),
+            )
 
     # Calculate training time for this task
     task_time = time.time() - task_start_time
