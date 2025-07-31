@@ -70,6 +70,27 @@ class Cluster:
             return (self.samples[0], self.labels[0])
         return (list(self.samples), list(self.labels))
 
+    def get_samples_by_indexes(self, indexes):
+        """
+        Returns samples at the specified indexes.
+
+        Args:
+            indexes: List of integers representing indexes to fetch
+
+        Returns:
+            List of tuples (sample, label) at the specified indexes
+        """
+        samples_list = list(self.samples)
+        labels_list = list(self.labels)
+
+        result = [
+            (samples_list[idx], labels_list[idx])
+            for idx in indexes
+            if 0 <= idx < len(samples_list)
+        ]
+
+        return result
+
     def add_sample(self, sample: torch.Tensor, label=None, task_id=None):
         """Adds a new sample to the cluster and updates its mean."""
         dtriggered("cl add_sample triggered")
@@ -240,7 +261,9 @@ class ClusteringMechanism:
             )
 
         # If we're at 0 samples, or at 1 sample and there's space for a second one, add it
-        if len(self.clusters) == 0 or (len(self.clusters) == 1 and self.max_clusters > 1):
+        if len(self.clusters) == 0 or (
+            len(self.clusters) == 1 and self.max_clusters > 1
+        ):
             return self._add_new_cluster(
                 z=z,
                 add_or_remove_randomly=self.add_rem_rand,
@@ -447,6 +470,51 @@ class ClusteringMechanism:
         samples_array = torch.stack(all_samples) if all_samples else torch.tensor([])
         return samples_array, all_labels
 
+    def get_random_samples(self, amount):
+        """Gets random samples from the clustering mechanism without fetching all samples first.
+        Raises an assertion error if you try to get more samples than are stored here.
+
+        Args:
+            amount (int): Number of random samples to return
+
+        Returns:
+            list: List of tuples (sample, label) randomly selected from clusters
+        """
+        assert len(self) >= amount, "Not enough samples present."
+
+        # Select random global indexes and sort them
+        random_indexes = sorted(random.sample(range(len(self)), amount))
+
+        result = []
+        cluster_sizes = [len(cluster) for cluster in self.clusters]
+        current_global_idx = 0
+
+        for cluster_idx, cluster_size in enumerate(cluster_sizes):
+            if not random_indexes:
+                break
+
+            # Find which random indexes fall within this cluster
+            cluster_indexes = []
+            while (
+                random_indexes and random_indexes[0] < current_global_idx + cluster_size
+            ):
+                global_idx = random_indexes.pop(0)
+                local_idx = global_idx - current_global_idx
+                cluster_indexes.append(local_idx)
+
+            # Get samples for this cluster if any indexes match
+            if cluster_indexes:
+                samples = self.clusters[cluster_idx].get_samples_by_indexes(
+                    cluster_indexes
+                )
+                result.extend(samples)
+
+            current_global_idx += cluster_size
+
+        assert len(result) == amount, "Did not fetch the required number of samples."
+
+        return result
+
     def get_oldest_task_ids(self):
         """Gets the oldest task ID from each cluster.
 
@@ -454,7 +522,8 @@ class ClusteringMechanism:
             list: List of oldest task IDs for each cluster, padded with None for unused cluster slots
         """
         oldest_task_ids = [
-            cluster.get_oldest_task_id() if cluster else None for cluster in self.clusters
+            cluster.get_oldest_task_id() if cluster else None
+            for cluster in self.clusters
         ]
 
         # Pad with None for unused cluster slots up to max_clusters

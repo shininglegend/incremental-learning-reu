@@ -53,6 +53,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     # Loss accumulation for averaging between testing intervals
     accumulated_loss = 0.0
     loss_count = 0
+    avg_accuracy = 0.0  # Initialize to avoid undefined reference
 
     # Used for debug only
     batches_per_task = len(train_dataloader)
@@ -85,24 +86,13 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         t.end("add samples")
 
         t.start("get samples")
-        all_samples = clustering_memory.get_memory_samples()
         # Move data to device
         data, labels = data.to(device), labels.to(device)
         # Select memory samples for this batch
-        if config["random_em"] and len(all_samples) > 0:
-            # Apply random mask to select BATCH_SIZE samples
-            t.start("choose random samples")
-            num_samples = len(all_samples)
-            if num_samples <= BATCH_SIZE:
-                batch_samples = all_samples
-            else:
-                mem_sample_mask = np.random.choice(
-                    num_samples, BATCH_SIZE, replace=False
-                )
-                batch_samples = [all_samples[i] for i in mem_sample_mask]
-            t.end("choose random samples")
+        if config["random_em"]:
+            batch_samples = clustering_memory.get_random_samples(BATCH_SIZE)
         else:
-            batch_samples = all_samples
+            batch_samples = clustering_memory.get_memory_samples(BATCH_SIZE)
         t.end("get samples")
 
         # Step 2: Use A-GEM logic for current batch and current memory
@@ -143,17 +133,24 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 flush=True,
             )
 
-        # Milestone info at 25, 50, 75%
-        if batch_idx + 1 in [milestone_25, milestone_50, milestone_75]:
-            print(
-                f"\n{batch_idx+1} batches done of this task, Accuracy = {avg_accuracy:.4f}"
-            )
-            print(f"  Added {samples_added} out of {samples_seen} samples to memory.")
-            print(
-                f"  Sample throughput (cumulative): {clustering_memory.get_sample_throughputs()})"
-            )
-            samples_added = 0
-            samples_seen = 0
+            # Milestone info at 25, 50, 75%, and end of task
+            if batch_idx + 1 in [milestone_25, milestone_50, milestone_75, batches_per_task]:
+                # Complete the current quarter's progress bar to 100% before milestone
+                if batch_idx + 1 != batches_per_task:  # Don't repeat for final batch
+                    completed_bar = "█" * bar_length
+                    print(f"\r{completed_bar} 100.0% done Q{quarter_num}. Quarter complete!")
+
+                print(
+                    f"\n{batch_idx+1} batches done of this task, Accuracy = {avg_accuracy:.4f}"
+                )
+                print(
+                    f"  Added {samples_added} out of {samples_seen} samples to memory."
+                )
+                print(
+                    f"  Sample throughput (cumulative): {clustering_memory.get_sample_throughputs()})"
+                )
+                samples_added = 0
+                samples_seen = 0
 
         # Evaluate performance after every testing_rate batches
         if batch_idx % TESTING_RATE == 0:
@@ -225,13 +222,13 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 t.end("training")
 print("\nTraining complete.")
 
-# Calculate and display final average accuracy over all epochs and tasks
+# Calculate and display final average accuracy over all batches and tasks
 if visualizer.epoch_data:
     total_accuracy = sum(ep["overall_accuracy"] for ep in visualizer.epoch_data)
-    total_epochs = len(visualizer.epoch_data)
-    final_average_accuracy = total_accuracy / total_epochs
+    total_batches = len(visualizer.epoch_data)
+    final_average_accuracy = total_accuracy / total_batches
     print(
-        f"\nFinal Average Accuracy (all epochs, all tasks): {final_average_accuracy:.4f}"
+        f"\nFinal Average Accuracy (all batches, all tasks): {final_average_accuracy:.4f}"
     )
 
 # --- 3. Comprehensive Visualization and Analysis ---
