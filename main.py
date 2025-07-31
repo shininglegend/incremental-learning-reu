@@ -153,7 +153,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 samples_seen = 0
 
         # Evaluate performance after every testing_rate batches
-        if batch_idx % TESTING_RATE == 0:
+        if (batch_idx + 1) % TESTING_RATE == 0:
             t.start("eval")
             t.start("eval overall")
             model.eval()
