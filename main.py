@@ -108,6 +108,8 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                     flush=True,
                 )
 
+        stats = agem_handler.get_task_statistics()
+
         # Print newline after progress bar completion
         if not QUICK_TEST_MODE and VERBOSE:
             print()

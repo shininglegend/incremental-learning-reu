@@ -205,7 +205,7 @@ def initialize_system():
     )
 
     agem_handler = agem.AGEMHandler(
-        model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
+        model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler, use_bgd=True, bgd_alpha=0.5, bgd_temperature=1.0
     )
 
     # Load dataset
