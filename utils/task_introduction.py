@@ -4,7 +4,6 @@ import math
 import random
 import torch
 from torch.utils.data import DataLoader
-from dataset_tools.load_dataset import DatasetLoader
 
 
 def get_epoch_order(train_dataloaders: list, config: dict):
@@ -18,7 +17,7 @@ def get_epoch_order(train_dataloaders: list, config: dict):
     'random' - num_epochs per task total, but the program will decide the order.
     '''
 
-    if config['task_introduction'] == ('continual' or 'continuous'):
+    if config['task_introduction'] == 'continual' or config['task_introduction'] == 'continuous':
         return continual_change(train_dataloaders, config=config)
 
     task_epochs_dict = _make_num_epochs_into_dict(config)
@@ -117,7 +116,7 @@ def continual_change(train_dataloaders: list[DataLoader], config: dict):
 
     num_transition_epochs = config['num_transition_epochs']
 
-    assert num_transition_epochs is int, "num_transition_epochs must be an integer for continuous change."
+    assert isinstance(num_transition_epochs, int), "num_transition_epochs must be an integer for continuous change."
     assert num_transition_epochs is not None, "num_transition_epochs doesn't exist. Try again."
     if num_transition_epochs <= 0:
         print(f"num_transition_epochs <= 0. That won't work for us, bestie.")
@@ -128,46 +127,44 @@ def continual_change(train_dataloaders: list[DataLoader], config: dict):
         return _get_pure_sequential_order(task_epochs_dict), train_dataloaders
 
     # Now we can assume num_transition_epochs is a positive integer
-    step = 1/num_transition_epochs
-    mixed_dataloaders_dict = _get_continual_change_dataloaders(train_dataloaders, step, config)
+    config['total_epochs'] = config['num_tasks'] * config['num_epochs']
+    mixed_dataloaders_dict = _get_continual_change_dataloaders(train_dataloaders, num_transition_epochs, config)
 
     mixed_epoch_list = []
     epochs_per_task = config['num_epochs']
-    config['num_epochs'] = {}
+    config['num_epochs'] = _make_num_epochs_into_dict(config)
 
     for task_index in range(config['num_tasks']):
         # Here, we assume num_epochs is equal for all tasks.
-        for i in range(epochs_per_task - num_transition_epochs):
+        for i in range(epochs_per_task - num_transition_epochs + 1):
             mixed_epoch_list.append(task_index)
-        for i in range(num_transition_epochs):
-            mixed_epoch_list.append(task_index + i * step)
-        config['num_epochs'][task_index] = epochs_per_task + num_transition_epochs
+        for i in range(num_transition_epochs-1):
+            mixed_epoch_list.append(task_index + (i+1)/num_transition_epochs)
+        # config['num_epochs'][task_index] = epochs_per_task + num_transition_epochs
 
     return mixed_epoch_list, mixed_dataloaders_dict
 
 
-def _get_continual_change_dataloaders(train_dataloaders: list[DataLoader], step, config):
+def _get_continual_change_dataloaders(train_dataloaders: list[DataLoader], num_transition_epochs, config):
     mixed_dataloaders_dict = {}
     for task_id, task_dataloader in enumerate(train_dataloaders):
-        p = 1.0 - step
         mixed_dataloaders_dict[task_id] = task_dataloader
 
         next_task_id = task_id + 1
         if next_task_id >= len(train_dataloaders):
             next_task_id = -1
 
-        current_dataloader = train_dataloaders[task_id]
+        current_dataloader = task_dataloader
         next_dataloader = train_dataloaders[next_task_id]
 
-        while p > 0:
-            mixed_dataloaders_dict[task_id + p] = MixedTaskDataLoader(
+        for i in range(num_transition_epochs):
+            mixed_dataloaders_dict[task_id + (i+1)/num_transition_epochs] = MixedTaskDataLoader(
                 current_dataloader,
                 next_dataloader,
-                proportion_task1=1-p,
+                proportion_task1=1-(i+1)/num_transition_epochs,
                 batch_size=config['batch_size'],
                 config=config
             )
-            p -= step
 
     return mixed_dataloaders_dict
 
@@ -220,7 +217,7 @@ class MixedTaskDataLoader:
         if hasattr(dataloader2, 'drop_last') and not dataloader2.drop_last:
             print("Warning: dataloader2 does not have drop_last=True. Last batch might be incomplete.")
 
-        self._length = self.config['']
+        self._length = len(dataloader1)
 
     def __len__(self):
         return self._length

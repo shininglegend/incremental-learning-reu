@@ -50,7 +50,7 @@ task_specific:
 
 
 # Task Introduction Configuration
-task_introduction: 'half and half'
+task_introduction: 'continuous'
 # Introduction type to use. Supports: 'sequential', 'half and half', 'random', 'continuous'
 
 # For continuous change only

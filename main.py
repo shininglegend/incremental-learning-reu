@@ -71,6 +71,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
     epoch_start_time = time.time()
 
     epoch_dataloader = train_dataloaders_dict[epoch_task_id]
+
     end_of_task = False
     epoch_loss = 0
     num_batches = 0
@@ -85,7 +86,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         if next_task_id >= config['num_tasks']:
             next_task_id = -1
             # the next task should be the first one if we're off the end.
-        epochs_seen_per_task[next_task_id] += 1
 
     if epochs_seen_per_task[current_task_id] == NUM_EPOCHS_PER_TASK[current_task_id]:
         end_of_task = True
@@ -146,7 +146,8 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             bar = "█" * filled_length + "-" * (bar_length - filled_length)
 
             print(
-                f"\rTask {epoch_task_id + 1:1}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{NUM_EPOCHS_PER_TASK[epoch_task_id]}:"
+                f"\rTask {epoch_task_id + 1:1}, Epoch {epochs_seen_per_task[current_task_id]:>2}/"
+                f"{NUM_EPOCHS_PER_TASK[current_task_id]}:"
                 f" |{bar}| {progress:.1%} (Batch {batch_idx + 1}/{len(epoch_dataloader)})",
                 end="",
                 flush=True,
@@ -207,7 +208,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
     if not QUICK_TEST_MODE:
         final_output_str = (
-            f"\rTask {epoch_task_id + 1:1}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{NUM_EPOCHS_PER_TASK[epoch_task_id]}:"
+            f"\rTask {epoch_task_id + 1:1}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{NUM_EPOCHS_PER_TASK[current_task_id]}:"
             f" Accuracy: {avg_accuracy:.2%}"
         )
 
