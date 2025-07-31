@@ -73,7 +73,7 @@ class BGDHandler:
         lr_scheduler=None,
     ):
         """
-        BGD Handler that mimics AGEMHandler structure
+        BGD Handler 
         
         Args:
             model: PyTorch model
@@ -117,7 +117,7 @@ class BGDHandler:
             data: Input data
             labels: Target labels
             batch_samples: Additional samples for training (e.g., memory replay, auxiliary data)
-            **kwargs: Additional arguments (for compatibility with AGEMHandler)
+            **kwargs: Additional arguments (for compatibility )
         
         Returns:
             Average loss over Monte Carlo iterations
