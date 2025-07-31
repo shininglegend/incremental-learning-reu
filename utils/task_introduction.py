@@ -19,25 +19,19 @@ def get_epoch_order(train_dataloaders: list, config: dict):
     '''
 
     if config['task_introduction'] == ('continual' or 'continuous'):
-        print("we don't do all that here. Goodbye.")
-
-        exit(1)
         return continual_change(train_dataloaders, config=config)
 
-
-
     task_epochs_dict = _make_num_epochs_into_dict(config)
-    # should be a dictionary
-    # Key-value pairs should be task_index, number epochs
+    train_dataloaders_dict = {index: value for index, value in enumerate(train_dataloaders)}
 
     task_introduction = config['task_introduction']
 
     if task_introduction == 'sequential':
-        return _get_pure_sequential_order(task_epochs_dict), train_dataloaders
+        return _get_pure_sequential_order(task_epochs_dict), train_dataloaders_dict
     elif task_introduction == 'half and half':
-        return _get_half_and_half_epoch_order(task_epochs_dict), train_dataloaders
+        return _get_half_and_half_epoch_order(task_epochs_dict), train_dataloaders_dict
     elif task_introduction == 'random':
-        return _get_random_epoch_order(task_epochs_dict), train_dataloaders
+        return _get_random_epoch_order(task_epochs_dict), train_dataloaders_dict
     else:
         print(f"config[\'task_introduction\'] has value \"{config['task_introduction']}\", which isn't currently supported.")
         print("Please edit default.yaml or task_introduction.py and try again.")
@@ -131,12 +125,16 @@ def continual_change(train_dataloaders: list[DataLoader], config: dict):
     mixed_dataloaders_dict = _get_continual_change_dataloaders(train_dataloaders, step, config)
 
     mixed_epoch_list = []
+    epochs_per_task = config['num_epochs']
+    config['num_epochs'] = {}
 
     for task_index in range(config['num_tasks']):
-        for i in range(config['num_epochs'] - num_transition_epochs):
+        # Here, we assume num_epochs is equal for all tasks.
+        for i in range(epochs_per_task - num_transition_epochs):
             mixed_epoch_list.append(task_index)
         for i in range(num_transition_epochs):
             mixed_epoch_list.append(task_index + i * step)
+        config['num_epochs'][task_index] = epochs_per_task + num_transition_epochs
 
     return mixed_epoch_list, mixed_dataloaders_dict
 

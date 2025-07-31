@@ -1,4 +1,5 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
+import math
 import time, os
 import numpy as np
 from utils import accuracy_test
@@ -29,21 +30,33 @@ from init import initialize_system
 # Extract commonly used variables from config
 QUICK_TEST_MODE = config["lite"]
 VERBOSE = config["verbose"]
-NUM_EPOCHS = config["num_epochs"]
+NUM_EPOCHS = config["num_epochs"]  # With Abby's per-epoch loop, NUM_EPOCHS is a dictionary.
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
 BATCH_SIZE = config["batch_size"]
 SAMPLING_RATE = config["sampling_rate"]
-t.start("training")
+
+tasks_seen = []  # Used so we're only testing on tasks the model has seen before.
+epochs_seen_per_task = []   # So we can track how many epochs per task we've seen before.
+task_training_times = []  # So we can track task training times even when the epochs are separated.
+task_epoch_losses = []
+
+# Initializations for lists who have indices directly corresponding to task_id
+for i in range(config['num_tasks']):
+    epochs_seen_per_task.append(0)
+    task_training_times.append(0)
+    task_epoch_losses.append(0)
+
 
 # --- 2. Training Loop ---
+t.start("training")
 print("Starting training...")
 print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
 Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
 Use LR: {USE_LEARNING_RATE_SCHEDULER} | Sampling Rate: {SAMPLING_RATE}
-Total tasks: {len(train_dataloaders)}"""
+Total tasks: {len(train_dataloaders)} | Task introduction type: {config['task_introduction']}"""
 )
 
 for task_id, train_dataloader in enumerate(train_dataloaders):
@@ -212,6 +225,119 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     )
     print(f"Pool sizes: {pool_sizes}")
     print(f"Task training time: {task_time:.2f}s")
+
+
+
+"""
+-------------------------------------------
+Main training loop. Per epoch in epoch_list.
+-------------------------------------------
+"""
+
+
+for epoch_number, epoch_id in enumerate(epoch_list):
+    epoch_start_time = time.time()
+
+    epoch_dataloader = train_dataloaders_dict[epoch_id]
+    end_of_task = False
+
+    # Some logic if you're doing continual task introduction.
+    current_task_id = math.floor(epoch_id)
+    next_task_id = math.ceil(epoch_id)
+
+    epochs_seen_per_task[current_task_id] += 1
+
+    if current_task_id != next_task_id:
+        if next_task_id >= config['num_tasks']:
+            next_task_id = -1
+            # the next task should be the first one if we're off the end.
+        epochs_seen_per_task[next_task_id] += 1
+
+    if epochs_seen_per_task[current_task_id] == NUM_EPOCHS[current_task_id]:
+        end_of_task = True
+
+    # Tracks when we've seen all tasks for at least one epoch.
+    # Prints a fun message!
+    if (next_task_id not in tasks_seen) and (next_task_id != -1):
+        tasks_seen.append(next_task_id)
+        if len(tasks_seen) == config['num_tasks']:
+            print("\nWith this epoch, we've seen all tasks at least once!")
+            print(f"It took {epoch_number + 1} epochs to get here. Funny how time flies, right?")
+            print("Anyways, let's get on with the training xoxo.\n")
+
+
+    # Train the model per batch.
+    model.train()
+    for batch_idx, (data, labels) in enumerate(epoch_dataloader):
+        # Move data to device
+        data, labels = data.to(device), labels.to(device)
+        # Select memory samples for this batch
+        if config["random_em"] and len(all_samples) > 0:
+            # Apply random mask to select BATCH_SIZE samples
+            t.start("choose random samples")
+            num_samples = len(all_samples)
+            if num_samples <= BATCH_SIZE:
+                batch_samples = all_samples
+            else:
+                mem_sample_mask = np.random.choice(
+                    num_samples, BATCH_SIZE, replace=False
+                )
+                batch_samples = [all_samples[i] for i in mem_sample_mask]
+            t.end("choose random samples")
+        else:
+            batch_samples = all_samples
+
+        # Step 1: Use A-GEM logic for current batch and current memory
+        # agem_handler.optimize handles model update and gradient projection
+        t.start("optimize")
+        batch_loss = agem_handler.optimize(data, labels, batch_samples)
+        t.end("optimize")
+
+        # Track batch loss
+        if batch_loss is not None:
+            epoch_loss += batch_loss
+            visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
+
+        num_batches += 1
+
+        # Update progress bar every 50 batches or on last batch
+        if (
+                not QUICK_TEST_MODE
+                and VERBOSE
+                and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1)
+        ):
+            progress = (batch_idx + 1) / len(train_dataloader)
+            bar_length = 30
+            filled_length = int(bar_length * progress)
+            bar = "█" * filled_length + "-" * (bar_length - filled_length)
+            print(
+                f"\rTask {task_id + 1:1}, Epoch {epoch + 1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} (Batch {batch_idx + 1}/{len(train_dataloader)})",
+                end="",
+                flush=True,
+            )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    epoch_training_time = time.time() - epoch_start_time
+    task_training_times[current_task_id] += epoch_training_time
+
+    if config['num_epochs'][current_task_id] == 0:
+        print("blah")
+
+
 
 t.end("training")
 print("\nTraining complete.")

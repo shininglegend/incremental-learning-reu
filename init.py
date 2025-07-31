@@ -11,6 +11,7 @@ from agem.learning_rate import TALearningRateScheduler
 from em_tools import clustering_pools
 from dataset_tools.load_dataset import load_dataset
 from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
+from utils import task_introduction
 
 
 def load_config(config_path="config/default.yaml"):
@@ -229,6 +230,13 @@ def initialize_system():
         sampling_rate=config["sampling_rate"],
     )
 
+    # Per-epoch main.py construction
+    # epoch_list is a list of keys for the program to run in sequence
+    # each item in the list corresponds to a key in train_dataloaders_dict
+    # the value in train_dataloaders_dict is a dataloader corresponding to that key
+    # iterate over epoch_list to get the epoch order for training.
+    epoch_list, train_dataloaders_dict = task_introduction.get_epoch_order(train_dataloaders, config)
+
     # Create run name with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     run_name = f"{config['task_type']}_{timestamp}"
@@ -254,4 +262,6 @@ def initialize_system():
         train_dataloaders,
         test_dataloaders,
         visualizer,
+        epoch_list,
+        train_dataloaders_dict,
     )
