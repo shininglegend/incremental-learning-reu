@@ -90,7 +90,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
     if epochs_seen_per_task[current_task_id] == NUM_EPOCHS_PER_TASK[current_task_id]:
         end_of_task = True
 
-    # Tracks when we've seen all tasks for at least one epoch.
+    # Tracks when we've trained on all tasks for at least one epoch.
     # Prints a fun message!
     if (next_task_id not in tasks_seen) and (next_task_id != -1):
         tasks_seen.append(next_task_id)
@@ -99,13 +99,14 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             print(f"It took {epoch_number + 1} epochs to get here. Funny how time flies, right?")
             print("Anyways, let's get on with the training xoxo.\n")
 
-
     # Train the model per batch.
     model.train()
 
-    # Get a fresh copy of memory every 20 epochs.
-    if epoch_number % 20 == 0:
+    t.start("get from memory")
+    # Get a fresh copy of memory every 5 epochs.
+    if epoch_number % 5 == 0:
         memory_snapshot = clustering_memory.get_memory_samples()
+    t.end("get from memory")
 
     '''Per batch training loop'''
     for batch_idx, (data, labels) in enumerate(epoch_dataloader):
@@ -153,10 +154,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
     epoch_training_time = time.time() - epoch_start_time
     task_training_times[current_task_id] += epoch_training_time
-
-    # Print newline after progress bar completion
-    if not QUICK_TEST_MODE and VERBOSE:
-        print()
 
     # Track epoch loss
     avg_epoch_loss = epoch_loss / max(num_batches, 1)
@@ -208,9 +205,17 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             f"  Epoch {epoch_number + 1}/{NUM_EPOCHS_PER_TASK[epoch_task_id]}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
         )
 
+    if not QUICK_TEST_MODE:
+        final_output_str = (
+            f"\rTask {epoch_task_id + 1:1}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{NUM_EPOCHS_PER_TASK[epoch_task_id]}:"
+            f" Accuracy: {avg_accuracy:.2%}"
+        )
 
-    # Add samples to memory every 20 epochs
-    if epoch_number % 20 == 0:
+        # Print the final string, padding with spaces, and then a newline
+        print(f"{final_output_str:<80}")  # Adjust padding width as needed
+
+    # Add samples to memory every 5 epochs
+    if epoch_number % 5 == 0:
         # Step 2: Update the clustered memory with some samples from this task's dataloader
         # This is where the core clustering for TA-A-GEM happens
         t.start("add samples")
@@ -244,7 +249,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
         t.end("add samples")
 
-
     # End of task summary
     if end_of_task:
         # Calculate training time for this task
@@ -269,15 +273,16 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         print(f"Pool sizes: {pool_sizes}")
         print(f"Task training time: {task_time:.2f}s")
 
+t.end("training")
+print("\nTraining complete.")
+
+
 
 '''
 ------------------------------
 Visualization and end-of-program code
 ------------------------------
 '''
-
-t.end("training")
-print("\nTraining complete.")
 
 # Calculate and display final average accuracy over all epochs and tasks
 if visualizer.epoch_data:
