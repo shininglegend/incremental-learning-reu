@@ -29,7 +29,7 @@ from init import initialize_system
 # Extract commonly used variables from config
 QUICK_TEST_MODE = config["lite"]
 VERBOSE = config["verbose"]
-NUM_EPOCHS = config["num_epochs"]
+NUM_EPOCHS = 20
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
 BATCH_SIZE = config["batch_size"]

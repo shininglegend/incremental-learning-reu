@@ -54,4 +54,4 @@ task_introduction: 'sequential'
 # Introduction type to use. Supports: 'sequential', 'half and half', 'random', 'continuous'
 
 # For continuous change only
-num_transition_epochs: 10  # how many epochs it takes to transition between tasks
+num_transition_epochs: 10  # how many epochs it takes to transition between tasks.

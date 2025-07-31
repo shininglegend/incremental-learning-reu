@@ -49,11 +49,10 @@ def _get_half_and_half_epoch_order(task_epochs_dict):
     '''
     Inherently assumes config['num_epochs'] is a dictionary.
     '''
-    epoch_order = []
     first_half = []
     second_half = []
 
-    for task_id, epoch_num in enumerate(task_epochs_dict):
+    for task_id, epoch_num in task_epochs_dict.items():
         for i in range(math.ceil(epoch_num / 2)):
             first_half.append(task_id)
         for i in range(math.floor(epoch_num / 2)):
@@ -71,10 +70,11 @@ def _get_pure_sequential_order(task_epochs_dict):
 
     epoch_order = []
 
-    for task_id, num_epochs in enumerate(task_epochs_dict):
+    for task_id, num_epochs in task_epochs_dict.items():
         for i in range(num_epochs):
             epoch_order.append(task_id)
 
+    epoch_order.sort() # make sure they're in task order.
     return epoch_order
 
 
@@ -87,13 +87,20 @@ def _make_num_epochs_into_dict(config: dict):
     task_nums_and_epochs_dict = {}
 
     if isinstance(num_epochs_per_task, list):
-        task_nums_and_epochs_dict = dict(enumerate(num_epochs_per_task))
+        for task_id, num_epochs in enumerate(num_epochs_per_task):
+            task_nums_and_epochs_dict[task_id] = num_epochs
+            config['total_epochs'] += num_epochs
+
     elif isinstance(num_epochs_per_task, int):
         # Assume every task is the name number of epochs.
         for i in range(config['num_tasks']):
             task_nums_and_epochs_dict[i] = num_epochs_per_task
+        config["total_epochs"] = num_epochs_per_task * config['num_tasks']
+
     elif isinstance(num_epochs_per_task, dict):
         task_nums_and_epochs_dict = num_epochs_per_task
+        for task_id, num_epochs in enumerate(num_epochs_per_task):
+            config['total_epochs'] += num_epochs
 
     config['num_epochs'] = task_nums_and_epochs_dict
     return task_nums_and_epochs_dict

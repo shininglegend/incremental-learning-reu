@@ -259,8 +259,8 @@ def initialize_system():
         lr_scheduler,
         clustering_memory,
         agem_handler,
-        train_dataloaders,
-        test_dataloaders,
+        train_dataloaders,  # dict
+        test_dataloaders,  # list for legacy compatibility
         visualizer,
         epoch_list,
         train_dataloaders_dict,
