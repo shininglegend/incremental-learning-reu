@@ -16,6 +16,8 @@ class BGD(Optimizer):
             # We use the initialization of weights to initialize the mean.
             group["mean_param"] = group["params"][0].data.clone()
             group["std_param"] = torch.zeros_like(group["params"][0].data).add_(self.std_init)
+            # Initialize eps to None - will be set during randomize_weights
+            group["eps"] = None
 
     def randomize_weights(self, force_std=-1):
         """Randomize the weights according to N(mean, std)"""
@@ -34,9 +36,9 @@ class BGD(Optimizer):
         grad_mul_eps_sum = None
         
         for group in self.param_groups:
-            if group["params"][0].grad is None:
+            # Skip if no gradient or eps not initialized
+            if group["params"][0].grad is None or group["eps"] is None:
                 continue
-            assert hasattr(group, "eps") and group["eps"] is not None, "Must randomize weights before getting gradients"
             
             grad = group["params"][0].grad.data.mul(batch_size)
             if grad_sum is None:
@@ -175,6 +177,9 @@ class BGDHandler:
 
         # Monte Carlo iterations
         for mc_iter in range(self.mc_iters):
+            # Clear gradients first
+            self.model.zero_grad()
+            
             # Randomize weights for all BGD optimizers
             for bgd_opt in self.bgd_optimizers:
                 bgd_opt.randomize_weights()
@@ -197,16 +202,14 @@ class BGDHandler:
             for i, bgd_opt in enumerate(self.bgd_optimizers):
                 grad_sum, grad_mul_eps_sum = bgd_opt.get_gradients_for_update(current_batch_size)
                 
-                if grad_sum is not None:
+                # Only accumulate if we got valid gradients
+                if grad_sum is not None and grad_mul_eps_sum is not None:
                     if i not in total_grad_sum:
                         total_grad_sum[i] = grad_sum.clone()
                         total_grad_mul_eps_sum[i] = grad_mul_eps_sum.clone()
                     else:
                         total_grad_sum[i].add_(grad_sum)
                         total_grad_mul_eps_sum[i].add_(grad_mul_eps_sum)
-            
-            # Clear gradients for next MC iteration
-            self.model.zero_grad()
         
         # Update parameters using aggregated gradients
         for i, bgd_opt in enumerate(self.bgd_optimizers):
