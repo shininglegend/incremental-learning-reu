@@ -138,11 +138,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 # Complete the current quarter's progress bar to 100% before milestone
                 if batch_idx + 1 != batches_per_task:  # Don't repeat for final batch
                     completed_bar = "█" * bar_length
-                    print(f"\r{completed_bar} 100.0% done Q{quarter_num}. Quarter complete!", end="\n", flush=True)
+                    print(f"\r{' ' * 85}\r{completed_bar} 100.0% done Q{quarter_num}. Quarter complete!")
 
-                print(
-                    f"{batch_idx+1} batches done of this task, Accuracy = {avg_accuracy:.4f}"
-                )
+                print(f"{batch_idx+1} batches done of this task, Accuracy = {avg_accuracy:.4f}")
                 print(
                     f"  Added {samples_added} out of {samples_seen} samples to memory."
                 )
