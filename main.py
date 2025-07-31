@@ -50,6 +50,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     task_start_time = time.time()
     samples_added = 0
     samples_seen = 0
+    # Loss accumulation for averaging between testing intervals
+    accumulated_loss = 0.0
+    loss_count = 0
 
     # Used for debug only
     batches_per_task = len(train_dataloader)
@@ -110,7 +113,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
         # Track batch loss
         if batch_loss is not None:
-            # epoch_loss += batch_loss
+            # Accumulate loss for averaging
+            accumulated_loss += batch_loss
+            loss_count += 1
             visualizer.add_batch_loss(task_id, None, batch_idx, batch_loss)
 
         # Progress bar and milestone info
@@ -179,15 +184,22 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 lr_scheduler.get_lr() if USE_LEARNING_RATE_SCHEDULER else LEARNING_RATE
             )
 
+            # Calculate average loss since last testing interval
+            avg_loss = accumulated_loss / loss_count if loss_count > 0 else 0.0
+
             visualizer.update_metrics(
                 task_id=task_id,
                 overall_accuracy=avg_accuracy,
                 individual_accuracies=individual_accuracies,
-                epoch_loss=None,
+                # Fake "epoch" loss with testing interval loss.
+                epoch_loss=avg_loss,
                 memory_size=memory_size,
                 training_time=None,
                 learning_rate=current_lr,
             )
+            # Reset loss accumulation
+            accumulated_loss = 0.0
+            loss_count = 0
             t.end("visualizer")
 
     # Calculate training time for this task
@@ -203,9 +215,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
     )
 
-    print(
-        f"\nFor task {task_id + 1}, final accuracy was: {final_avg_accuracy:.4f}"
-    )
+    print(f"\nFor task {task_id + 1}, final accuracy was: {final_avg_accuracy:.4f}")
     print(
         f"Memory size: {final_memory_size} samples across {num_active_pools} active pools"
     )

@@ -72,7 +72,7 @@ class TAGemVisualizer:
     @property
     def epoch_losses(self):
         """Backward compatibility: return epoch losses"""
-        return [[ep["epoch_loss"]] for ep in self.epoch_data if ep.get("epoch_loss", None) is not None]
+        return [[ep["epoch_loss"]] for ep in self.epoch_data]
 
     @property
     def learning_rates(self):
@@ -169,11 +169,10 @@ class TAGemVisualizer:
             "overall_accuracy": overall_accuracy,
             "individual_accuracies": individual_accuracies.copy(),
             "memory_size": memory_size,
+            "epoch_loss": epoch_loss,
             "learning_rate": learning_rate,
             "training_time": training_time,
         }
-        if epoch_loss is not None:
-            epoch_data["epoch_loss"] = epoch_loss
 
         self.epoch_data.append(epoch_data)
 
@@ -184,14 +183,13 @@ class TAGemVisualizer:
                     "overall_accuracy": overall_accuracy,
                     "memory_size": memory_size,
                     "current_task": task_id,
+                    "epoch_loss": epoch_loss,
                 }
 
                 if learning_rate is not None:
                     metrics["learning_rate"] = learning_rate
                 if training_time is not None:
                     metrics["training_time"] = training_time
-                if epoch_loss is not None:
-                    epoch_data["epoch_loss"] = epoch_loss
 
                 # Log individual task accuracies
                 for i, acc in enumerate(individual_accuracies):
