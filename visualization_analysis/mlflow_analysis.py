@@ -8,6 +8,10 @@ comparative visualizations using the plotting functions from compare_experiments
 Usage:
     python visualization_analysis/mlflow.py --experiments exp1 exp2 --metric accuracy
     python visualization_analysis/mlflow.py --experiments exp1 exp2 exp3 --task_type permutation
+
+NOTE: References to epochs in this file (and others) frequently are 
+references to the tests run every TESTING_INTERVAL batches.
+The code is kept as-is to allow it to read legacy runs.
 """
 
 import argparse

@@ -17,9 +17,9 @@ except ImportError:
     MLFLOW_AVAILABLE = False
     print("MLflow not available. Install with: conda install mlflow")
 
-# NOTE: Many functions in this class are unused but kept for reference
-# Only create_per_task_accuracy_graph, create_cluster_visualization,
-# create_overall_accuracy_graph, and generate_simple_report are actively used
+# NOTE: References to epochs in this file (and others) frequently are 
+# references to the tests run every TESTING_INTERVAL batches.
+# The code is kept as-is to allow it to read legacy runs.
 
 
 class TAGemVisualizer:

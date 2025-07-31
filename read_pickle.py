@@ -7,6 +7,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 
+# NOTE: References to epochs in this file (and others) frequently are 
+# references to the tests run every TESTING_INTERVAL batches.
+# The code is kept as-is to allow it to read legacy runs.
+
 # Debug and display controls
 DEBUG_MODE = False
 INDIVIDUAL_PLOTS_TO_DISPLAY = {

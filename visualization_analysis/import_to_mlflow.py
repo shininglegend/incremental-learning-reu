@@ -7,6 +7,10 @@ into MLflow for unified tracking and comparison.
 Usage:
     python utils/import_to_mlflow.py --input_dir test_results/my-experiment --last 5
     python utils/import_to_mlflow.py --input_dir test_results/my-experiment --all
+
+NOTE: References to epochs in this file (and others) frequently are 
+references to the tests run every TESTING_INTERVAL batches.
+The code is kept as-is to allow it to read legacy runs.
 """
 
 import argparse

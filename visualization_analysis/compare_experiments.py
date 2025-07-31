@@ -13,6 +13,11 @@ This script will:
 2. Perform statistical comparisons (99% confidence)
 3. Generate accuracy vs epoch plots with std deviation bands
 4. Save results to CSV and HTML plot
+
+
+NOTE: References to epochs in this file (and others) frequently are 
+references to the tests run every TESTING_INTERVAL batches.
+The code is kept as-is to allow it to read legacy runs.
 """
 
 import pandas as pd
