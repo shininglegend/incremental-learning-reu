@@ -6,8 +6,8 @@ except ImportError:
 
 import torch
 import math
-import random
 
+DEBUG = False
 
 class ClusteringMemory:
     def __init__(
@@ -116,7 +116,8 @@ class ClusteringMemory:
             )
         assert amount >= len(random_samples), "Wrong number of samples"
         if amount > len(random_samples):
-            print("\nNot enough samples stored to return.")
+            if DEBUG:
+                print("\nNot enough samples stored to return.")
         return random_samples
 
     def _get_random_samples_from_pool(self, pool_idx, amount):
