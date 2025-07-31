@@ -11,6 +11,10 @@ TA-A-GEM addresses catastrophic forgetting in continual learning by:
 - Supporting **multi-pool architecture** for different task types
 - Providing comprehensive **visualization and analysis** tools
 
+### Configuration:
+
+- **`utils/default.yaml`**: Change settings here as you wish.
+
 ## Architecture
 
 The implementation consists of several key components:
@@ -49,6 +53,10 @@ conda env create -f mac_env.yml
 conda activate ta-a-gem
 ```
 
+**For windows systems:**
+
+We have not tested on windows. Try the mac env above, or create your own and install the needed packages. Feel free to open a PR if you have one that works!
+
 ### Dataset Setup
 
 The code automatically downloads the datasets via kagglehub. If you encounter issues:
@@ -63,30 +71,26 @@ The code automatically downloads the datasets via kagglehub. If you encounter is
 **Quick Test Mode (Recommended for initial testing):**
 
 ```bash
-# Edit main.py and set QUICK_TEST_MODE = True
-python3 main.py
+python3 main.py --lite
 ```
 
-- Runs 2 tasks with reduced dataset
-- 20 epochs per task
+- Runs with reduced dataset
 - Detailed loss logging per batch
 - Faster execution for debugging
 
 **Full Experiment Mode:**
 
 ```bash
-# Edit main.py and set QUICK_TEST_MODE = False
 python3 main.py
 ```
 
 - Runs 5 tasks with full dataset
-- 20 epochs per task
 - Progress bar display
 - Complete experimental setup
 
 ### Configuration Parameters
 
-Key parameters can be modified in `config/default.yaml` file.
+Key parameters can be modified in `config/default.yaml` file or passed in via command line args (do `python3 main.py -h` for options.)
 
 #### Task Configuration
 
@@ -108,7 +112,7 @@ HIDDEN_DIM = 200     # Hidden layer size for MLP (as per paper)
 ```python
 MEMORY_SIZE_Q = 10   # Clusters per pool (Q)
 MEMORY_SIZE_P = 3    # Max samples per cluster (P)
-NUM_POOLS = 10       # Number of memory pools (tied to task_type)
+NUM_POOLS = 10 or 5       # Number of memory pools (tied to task_type)
 ```
 
 #### Training Parameters
@@ -116,7 +120,6 @@ NUM_POOLS = 10       # Number of memory pools (tied to task_type)
 ```python
 BATCH_SIZE = 10      # Batch size (as per paper)
 LEARNING_RATE = 1e-3 # Learning rate
-NUM_EPOCHS = 20      # Epochs per task
 USE_LEARNING_RATE_SCHEDULER = True  # Whether to use the learning rate scheduler described in the paper
 ```
 
@@ -214,29 +217,6 @@ The `prepare_domain_incremental_data` function creates task-specific datasets:
 - Filters data by class membership
 - Re-writes all labels to a 1 or 2
 
-## Monitoring and Analysis
-
-### Real-time Progress
-
-**Quick Test Mode:**
-
-```
---- Training on Task 0 ---
-  Epoch 1/20: Loss = 2.1234
-  Epoch 5/20: Loss = 1.8765
-  ...
-After Task 0, Average Accuracy: 0.8567
-Memory Size: 450 samples across 8 active pools
-```
-
-**Full Mode:**
-
-```
-Task 0, Epoch  1/20: |██████████████████████████████| 100.0% (600/600)
-After Task 0, Average Accuracy: 0.8567
-Memory Size: 450 samples across 8 active pools
-Pool sizes: (should be maxed at P)
-```
 
 ### Comprehensive Visualization
 
@@ -246,12 +226,9 @@ The unused visualizations are currently disabled and broken. Enable at your own 
 **Generated Files:**
 
 - `test_results/ta_agem_metrics_YYYYMMDD_HHMMSS.pkl`: Raw metrics data
-- You can use `read_pickle.py` to open these files
-
-**Generated Pages:**
-
-- Per-task and overall accuracy as a function of time
-- Storage visualization in each pool of clusters
+- You can use `read_pickle.py` to open these files one at a time, it will prompt you for the location.
+- You can use `visualization_analysis/retro_stats.py -n 15 --input_dir PATH_TO_PICKLE_FILES_DIRECTORY` for checking the statistics of $n$ runs in a particular folder.
+- You can use `visualization_analysis/compare_experiments.py PATH_TO_DIR1 PATH_TO_DIR2 ... PATH_TO_DIRN` for comparing folders of experiments.
 
 ### Key Metrics Tracked
 
@@ -287,18 +264,16 @@ The unused visualizations are currently disabled and broken. Enable at your own 
 - Increase `MEMORY_SIZE_Q` (more clusters per pool)
 - Increase `MEMORY_SIZE_P` (more samples per cluster)
 - Reduce `LEARNING_RATE` for more stable training
-- Increase `NUM_EPOCHS` for better task learning
 
 **For Faster Training:**
 
 - Reduce `BATCH_SIZE` for more frequent updates
+- Reduce `TESTING_INTERVAL` for less frequent tests
 - Enable `QUICK_TEST_MODE` for development
-- Reduce `NUM_EPOCHS` for quicker iterations
 
 **For Memory Efficiency:**
 
 - Reduce `MEMORY_SIZE_Q` and `MEMORY_SIZE_P`
-- Use `class_split` tasks (fewer pools needed)
 - Monitor pool sizes to avoid imbalanced memory
 
 ## Troubleshooting
@@ -341,17 +316,17 @@ Use VS code debugging. You will need to select the correct python interpreter in
 
 ```python
 # Run with minimal configuration
-QUICK_TEST_MODE = True
+python3 main.py --lite
 ```
 
 ## Algorithm Details
 
-### TA-A-GEM Algorithm Flow
+### Default TA-A-GEM Algorithm Flow
 
 1. **Initialization:**
 
    - Create SimpleMLP model
-   - Initialize AGEMHandler for gradient projection
+   - Initialize A-GEM handler for gradient projection
    - Create ClusteringMemory with multi-pool architecture
 
 2. **For each task:**
@@ -375,7 +350,7 @@ QUICK_TEST_MODE = True
 
 **Clustering Within Pools:**
 
-- Maximum Q clusters per pool (3)
+- Maximum Q clusters per pool
 - Maximum P samples per cluster
 
 **Memory Retrieval:**
@@ -444,7 +419,7 @@ python main.py --task_type permutation --experiment_name my-test
 ```
 
 **Importing Existing Results:**
-Import old pickle files into MLflow:
+Import old pickle files into MLflow. Will simulate the run, so takes as long as the run did.
 
 ```bash
 # Import last 5 results from a folder
@@ -471,10 +446,10 @@ mlflow ui
 - Tags for easy filtering (task_type, dataset, quick_test)
 
 **Metrics Tracked:**
-- Per-epoch: overall_accuracy, epoch_loss, memory_size, learning_rate
+- Per-TESTING_RATE-batches: overall_accuracy, loss, memory_size, learning_rate
 - Per-task: individual task accuracies (task_0_accuracy, task_1_accuracy, etc.)
 - Batch-level: batch_loss (sampled every 10 batches)
-- Summary: final_accuracy, average_accuracy, total_epochs
+- Summary: final_accuracy, average_accuracy
 
 **Artifacts Stored:**
 - Original pickle files
