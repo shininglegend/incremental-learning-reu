@@ -47,15 +47,9 @@ Only One Epoch: {config["only_one_epoch"]} | Total tasks: {len(train_dataloaders
 
 for task_id, train_dataloader in enumerate(train_dataloaders):
     print(f"\n--- Training on Task {task_id + 1} ---")
-
     task_start_time = time.time()
-    # task_epoch_losses = []
-
-    # Query clustering_memory for all samples once per task
-    t.start("get samples")
-    all_samples = clustering_memory.get_memory_samples()
-    t.end("get samples")
     samples_added = 0
+    samples_seen = 0
 
     # Used for debug only
     batches_per_task = len(train_dataloader)
@@ -63,13 +57,12 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     milestone_50 = batches_per_task // 2
     milestone_75 = (3 * batches_per_task) // 4
 
-
     for batch_idx, (data, labels) in enumerate(train_dataloader):
         model.train()
         # Step 1: Update the clustered memory with some samples from this task's dataloader
         # This is where the core clustering for TA-A-GEM happens
         t.start("add samples")
-
+        samples_seen += len(data)
         # Add samples per batch based on sampling_rate
         if SAMPLING_RATE < 1:
             # Fractional sampling - add every 1/SAMPLING_RATE batches
@@ -121,29 +114,54 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             visualizer.add_batch_loss(task_id, None, batch_idx, batch_loss)
 
         # Progress bar and milestone info
-        if (batch_idx + 1) % 10 == 0 or batch_idx + 1 in [milestone_25, milestone_50, milestone_75, batches_per_task]:
-            progress = (batch_idx + 1) / batches_per_task * 100
+        if (batch_idx + 1) % 50 == 0 or batch_idx + 1 in [
+            milestone_25,
+            milestone_50,
+            milestone_75,
+            batches_per_task,
+        ]:
+            quarter_size = batches_per_task // 4
+            quarter_num = min(4, (batch_idx // quarter_size) + 1)
+            quarter_start = (quarter_num - 1) * quarter_size
+            quarter_end = (
+                quarter_num * quarter_size if quarter_num < 4 else batches_per_task
+            )
+            quarter_progress = (
+                ((batch_idx + 1) - quarter_start) / (quarter_end - quarter_start) * 100
+            )
             bar_length = 50
-            filled_length = int(bar_length * (batch_idx + 1) // batches_per_task)
-            bar = "█" * filled_length + '-' * (bar_length - filled_length)
-            print(f"\r{bar} {progress:.1f}% done this task. Batch {batch_idx+1} of {batches_per_task}", end='', flush=True)
+            filled_length = int(bar_length * quarter_progress / 100)
+            bar = "█" * filled_length + "-" * (bar_length - filled_length)
+            print(
+                f"\r{bar} {quarter_progress:.1f}% done Q{quarter_num}. Batch {batch_idx-quarter_start+1} of {quarter_size}",
+                end="",
+                flush=True,
+            )
 
         # Milestone info at 25, 50, 75%
         if batch_idx + 1 in [milestone_25, milestone_50, milestone_75]:
-            print(f"\nMilestone {int(progress)}%: Accuracy = {avg_accuracy:.4f}")
-            print(f"  Added {samples_added} more samples to memory.")
-            print(f"  Sample throughput (cumulative): {clustering_memory.get_sample_throughputs()}")
+            print(
+                f"\n{batch_idx+1} batches done of this task, Accuracy = {avg_accuracy:.4f}"
+            )
+            print(f"  Added {samples_added} out of {samples_seen} samples to memory.")
+            print(
+                f"  Sample throughput (cumulative): {clustering_memory.get_sample_throughputs()})"
+            )
             samples_added = 0
+            samples_seen = 0
 
         # Evaluate performance after every testing_rate batches
         if batch_idx % TESTING_RATE == 0:
             t.start("eval")
+            t.start("eval overall")
             model.eval()
             avg_accuracy = accuracy_test.evaluate_tasks_up_to(
                 model, criterion, test_dataloaders, task_id, device=device
             )
+            t.end("eval overall")
 
             # Evaluate on individual tasks for detailed tracking
+            t.start("eval individual")
             individual_accuracies = []
             for eval_task_id in range(task_id + 1):
                 eval_dataloader = test_dataloaders[eval_task_id]
@@ -151,6 +169,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                     model, criterion, eval_dataloader, device=device
                 )
                 individual_accuracies.append(task_acc)
+            t.end("eval individual")
 
             t.end("eval")
             t.start("visualizer")
@@ -171,11 +190,10 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             )
             t.end("visualizer")
 
-
     # Calculate training time for this task
     task_time = time.time() - task_start_time
 
-    # Final task summary
+    # Final task summary - debug
     pool_sizes = clustering_memory.get_pool_sizes()
     num_active_pools = clustering_memory.get_num_active_pools()
     final_memory_size = clustering_memory.get_memory_size()
@@ -186,7 +204,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     )
 
     print(
-        f"\nFor task {task_id + 1}, final average accuracy landed at: {final_avg_accuracy:.4f}"
+        f"\nFor task {task_id + 1}, final accuracy was: {final_avg_accuracy:.4f}"
     )
     print(
         f"Memory size: {final_memory_size} samples across {num_active_pools} active pools"

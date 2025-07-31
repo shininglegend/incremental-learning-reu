@@ -22,13 +22,13 @@ random_em: true # Fetch randomly from episodic memory instead of getting all sam
 # memory_size_q: 10 # Overridden below
 memory_size_p: 3 # Max samples per cluster (P) - as per paper
 sampling_rate: 1 # Number of samples per batch to add to memory (0.001 to BATCH_SIZE)
-add_remove_randomly: False # Turn on for random cluster assignment and removal
+add_remove_randomly: false # Turn on for random cluster assignment and removal
 
 # Training Configuration
 batch_size: 10 # Batch size for training (overridden to 50 in lite mode)
 learning_rate: 0.001 # Initial learning rate
 # num_epochs: 20 # Number of epochs per task, ignored
-only_one_epoch: True # Simulate Continual learning better - each sample is only seen once.
+only_one_epoch: true # Simulate Continual learning better - each sample is only seen once.
 testing_rate: 300 # How many batches to train on before testing. Approximating 20 epochs
 # num_tasks: 5 # Number of tasks (overridden to 2 in lite mode)
 
