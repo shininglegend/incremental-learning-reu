@@ -163,27 +163,27 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     samples_added = 0
     batch_counter = 0
     # Add samples per batch based on sampling_rate
-    for sample_data, sample_labels in train_dataloader:
-        if SAMPLING_RATE < 1:
-            # Fractional sampling - add every 1/SAMPLING_RATE batches
-            if batch_counter % int(1 / SAMPLING_RATE) == 0:
-                samples_added += 1
-                clustering_memory.add_sample(
-                    sample_data[0].cpu(), sample_labels[0].cpu(), task_id
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, task_id)
-        else:
-            # Sample multiple items per batch (up to batch size and sampling rate)
-            num_to_sample = min(int(SAMPLING_RATE), len(sample_data))
-            for i in range(num_to_sample):
-                samples_added += 1
-                clustering_memory.add_sample(
-                    sample_data[i].cpu(), sample_labels[i].cpu(), task_id
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, task_id)
-        batch_counter += 1
+    # for sample_data, sample_labels in train_dataloader:
+    #     if SAMPLING_RATE < 1:
+    #         # Fractional sampling - add every 1/SAMPLING_RATE batches
+    #         if batch_counter % int(1 / SAMPLING_RATE) == 0:
+    #             samples_added += 1
+    #             clustering_memory.add_sample(
+    #                 sample_data[0].cpu(), sample_labels[0].cpu(), task_id
+    #             )
+    #             # Track oldest task IDs after adding sample
+    #             visualizer.track_oldest_task_ids(clustering_memory, task_id)
+    #     else:
+    #         # Sample multiple items per batch (up to batch size and sampling rate)
+    #         num_to_sample = min(int(SAMPLING_RATE), len(sample_data))
+    #         for i in range(num_to_sample):
+    #             samples_added += 1
+    #             clustering_memory.add_sample(
+    #                 sample_data[i].cpu(), sample_labels[i].cpu(), task_id
+    #             )
+    #             # Track oldest task IDs after adding sample
+    #             visualizer.track_oldest_task_ids(clustering_memory, task_id)
+    #     batch_counter += 1
     print(
         f"Added {samples_added} out of {len(train_dataloader) * BATCH_SIZE} samples this round."
     )
