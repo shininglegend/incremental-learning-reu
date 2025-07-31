@@ -18,7 +18,8 @@ from init import initialize_system
     criterion,
     lr_scheduler,
     clustering_memory,
-    agem_handler,
+    # agem_handler,
+    bgd_handler,
     train_dataloaders,
     test_dataloaders,
     visualizer,
@@ -82,7 +83,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             t.start("optimize")
-            batch_loss = agem_handler.optimize(data, labels, batch_samples)
+            batch_loss = bgd_handler.optimize(data, labels, batch_samples)
             t.end("optimize")
 
             # Track batch loss

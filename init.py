@@ -7,6 +7,7 @@ import torch.optim as optim
 import yaml
 
 from agem import agem
+from agem import bgd
 from agem.learning_rate import TALearningRateScheduler
 from em_tools import clustering_pools
 from dataset_tools.load_dataset import load_dataset
@@ -204,8 +205,9 @@ def initialize_system():
         add_remove_randomly=config["add_remove_randomly"],
     )
 
-    agem_handler = agem.AGEMHandler(
-        model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
+    # formerly agem
+    bgd_handler = bgd.BGDHandler(
+        model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler, optimizer_params={'std_init': 0.1, 'mean_eta': 1.0}, mc_iters=10
     )
 
     # Load dataset
@@ -250,7 +252,8 @@ def initialize_system():
         criterion,
         lr_scheduler,
         clustering_memory,
-        agem_handler,
+        # agem_handler,
+        bgd_handler,
         train_dataloaders,
         test_dataloaders,
         visualizer,
