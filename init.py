@@ -205,9 +205,14 @@ def initialize_system():
         add_remove_randomly=config["add_remove_randomly"],
     )
 
-    # formerly agem
+    # Formerly agem
     bgd_handler = bgd.BGDHandler(
-        model, criterion, optimizer_params={'std_init': 0.1, 'mean_eta': 1.0}, device=device, mc_iters=10, lr_scheduler=lr_scheduler
+        model,
+        criterion,
+        device=device,
+        std_init=config["std_init"],
+        mean_eta=config["mean_eta"],
+        mc_iters=config["mc_iters"],
     )
 
     # Load dataset

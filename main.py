@@ -17,9 +17,8 @@ from init import initialize_system
     optimizer,
     criterion,
     lr_scheduler,
-    clustering_memory,
-    # agem_handler,
-    bgd_handler,
+    _, # Clustering memory is ignored.
+    bgd_handler, # Replaces agem_handler
     train_dataloaders,
     test_dataloaders,
     visualizer,
@@ -51,11 +50,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     task_start_time = time.time()
     task_epoch_losses = []
 
-    # Query clustering_memory for all samples once per task
-    t.start("get samples")
-    all_samples = clustering_memory.get_memory_samples()
-    t.end("get samples")
-
     for epoch in range(NUM_EPOCHS):
         model.train()
         epoch_loss = 0.0
@@ -64,26 +58,11 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         for batch_idx, (data, labels) in enumerate(train_dataloader):
             # Move data to device
             data, labels = data.to(device), labels.to(device)
-            # Select memory samples for this batch
-            if config["random_em"] and len(all_samples) > 0:
-                # Apply random mask to select BATCH_SIZE samples
-                t.start("choose random samples")
-                num_samples = len(all_samples)
-                if num_samples <= BATCH_SIZE:
-                    batch_samples = all_samples
-                else:
-                    mem_sample_mask = np.random.choice(
-                        num_samples, BATCH_SIZE, replace=False
-                    )
-                    batch_samples = [all_samples[i] for i in mem_sample_mask]
-                t.end("choose random samples")
-            else:
-                batch_samples = all_samples
 
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
             t.start("optimize")
-            batch_loss = bgd_handler.optimize(data, labels, batch_samples)
+            batch_loss = bgd_handler.optimize(data, labels)
             t.end("optimize")
 
             # Track batch loss
@@ -136,7 +115,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
         t.end("eval")
         t.start("visualizer")
         # Update visualizer with epoch metrics
-        memory_size = clustering_memory.get_memory_size()
         current_lr = (
             lr_scheduler.get_lr() if USE_LEARNING_RATE_SCHEDULER else LEARNING_RATE
         )
@@ -146,7 +124,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             overall_accuracy=avg_accuracy,
             individual_accuracies=individual_accuracies,
             epoch_loss=avg_epoch_loss,
-            memory_size=memory_size,
+            memory_size=None,
             training_time=None,
             learning_rate=current_lr,
         )
@@ -157,46 +135,9 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             print(
                 f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
-    # Step 2: Update the clustered memory with some samples from this task's dataloader
-    # This is where the core clustering for TA-A-GEM happens
-    t.start("add samples")
-    samples_added = 0
-    batch_counter = 0
-    # Add samples per batch based on sampling_rate
-    # for sample_data, sample_labels in train_dataloader:
-    #     if SAMPLING_RATE < 1:
-    #         # Fractional sampling - add every 1/SAMPLING_RATE batches
-    #         if batch_counter % int(1 / SAMPLING_RATE) == 0:
-    #             samples_added += 1
-    #             clustering_memory.add_sample(
-    #                 sample_data[0].cpu(), sample_labels[0].cpu(), task_id
-    #             )
-    #             # Track oldest task IDs after adding sample
-    #             visualizer.track_oldest_task_ids(clustering_memory, task_id)
-    #     else:
-    #         # Sample multiple items per batch (up to batch size and sampling rate)
-    #         num_to_sample = min(int(SAMPLING_RATE), len(sample_data))
-    #         for i in range(num_to_sample):
-    #             samples_added += 1
-    #             clustering_memory.add_sample(
-    #                 sample_data[i].cpu(), sample_labels[i].cpu(), task_id
-    #             )
-    #             # Track oldest task IDs after adding sample
-    #             visualizer.track_oldest_task_ids(clustering_memory, task_id)
-    #     batch_counter += 1
-    print(
-        f"Added {samples_added} out of {len(train_dataloader) * BATCH_SIZE} samples this round."
-    )
-    print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
-    t.end("add samples")
 
     # Calculate training time for this task
     task_time = time.time() - task_start_time
-
-    # Final task summary
-    pool_sizes = clustering_memory.get_pool_sizes()
-    num_active_pools = clustering_memory.get_num_active_pools()
-    final_memory_size = clustering_memory.get_memory_size()
 
     # Get final accuracy from last epoch evaluation
     final_avg_accuracy = (
@@ -206,10 +147,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     print(
         f"For task {task_id + 1}, final average accuracy landed at: {final_avg_accuracy:.4f}"
     )
-    print(
-        f"Memory size: {final_memory_size} samples across {num_active_pools} active pools"
-    )
-    print(f"Pool sizes: {pool_sizes}")
     print(f"Task training time: {task_time:.2f}s")
 
 t.end("training")
@@ -249,7 +186,7 @@ visualizer.save_metrics(
 
 # Generate simplified report with 3 key visualizations
 visualizer.generate_simple_report(
-    clustering_memory,
+    None,
     show_images=config["show_images"],
 )
 

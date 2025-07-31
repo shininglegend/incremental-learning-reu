@@ -84,7 +84,7 @@ class TAGemVisualizer:
         """Backward compatibility: return memory efficiency"""
         return [
             ep["overall_accuracy"] / ep["memory_size"] if ep["memory_size"] > 0 else 0.0
-            for ep in self.epoch_data
+            for ep in self.epoch_data if ep.get("memory_size", None) is not None
         ]
 
     @property
