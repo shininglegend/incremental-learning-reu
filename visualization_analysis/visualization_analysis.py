@@ -182,7 +182,7 @@ class TAGemVisualizer:
                 metrics = {
                     "overall_accuracy": overall_accuracy,
                     "epoch_loss": epoch_data["epoch_loss"],
-                    "memory_size": memory_size,
+                    # "memory_size": memory_size,
                     "current_task": task_id,
                 }
 
@@ -226,8 +226,8 @@ class TAGemVisualizer:
         """Save all metrics and params to file for later analysis"""
         metrics = {
             "epoch_data": self.epoch_data,
-            "task_boundaries": self.task_boundaries,
-            "batch_losses": self.batch_losses,
+            "task_boundaries": None, # self.task_boundaries,
+            "batch_losses": None, # self.batch_losses,
             "training_times": self.training_times,
             "oldest_task_ids_tracking": self._oldest_task_ids_tracking,
             "timestamp": datetime.now().isoformat(),
