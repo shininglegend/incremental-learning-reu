@@ -229,10 +229,10 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
     # Print epoch summary
     if QUICK_TEST_MODE and (
-        epoch_number % 5 == 0 or epoch_number == num_epochs_per_task[epoch_task_id] - 1
+        epoch_number % 5 == 0 or epoch_number == num_epochs_per_task[current_task_id] - 1
     ):
         print(
-            f"  Epoch {epoch_number + 1}/{num_epochs_per_task[epoch_task_id]}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
+            f"  Epoch {epoch_number + 1}/{num_epochs_per_task[current_task_id]}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
         )
 
     print(
@@ -245,7 +245,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
     if not QUICK_TEST_MODE:
         final_output_str = (
-            f"\rTask {epoch_task_id + 1:1}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{num_epochs_per_task[current_task_id]}:"
+            f"\rTask {current_task_id + 1:1}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{num_epochs_per_task[current_task_id]}:"
             f" Accuracy: {avg_accuracy:.2%}"
         )
 
