@@ -127,10 +127,10 @@ for task_id in range(len(train_dataloaders)):
                 )
                 task_ids_for_samples = task_ids_for_samples[shuffle_idx]
             else:
-                task_ids_for_samples = torch.tensor(
-                    [task_id for _ in range(BATCH_SIZE)]
-                )
                 (data, labels) = next(train_iter_a)
+                task_ids_for_samples = torch.tensor(
+                    [task_id for _ in range(data.size(0))]
+                )
             assert len(data) == len(task_ids_for_samples)
             # Move data to device
             data, labels = data.to(device), labels.to(device)
