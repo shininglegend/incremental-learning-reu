@@ -45,7 +45,7 @@ task_training_times = (
 )  # So we can track task training times even when the epochs are separated.
 task_losses = []
 memory_snapshot = []
-samples_seen, samples_added = 0, 0
+samples_seen = 0
 
 # Initializations for lists who have indices directly corresponding to task_id
 for i in range(config["num_tasks"]):
