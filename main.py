@@ -56,7 +56,7 @@ for task_id in range(len(train_dataloaders)):
     task_start_time = time.time()
     task_epoch_losses = []
 
-    for epoch in range(9, NUM_EPOCHS):
+    for epoch in range(NUM_EPOCHS):
         model.train()
         epoch_loss = 0.0
         batches_seen = 0
