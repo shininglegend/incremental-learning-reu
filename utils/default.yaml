@@ -6,7 +6,9 @@ task_type: "permutation" # Options: permutation, rotation, class_split
 lite: false # Quick test mode with fewer tasks and data
 show_images: false # Whether to show images
 output_dir: "./test_results" # Where to put any output files
-experiment_name: "Unnamed"
+experiment_name: "Unnamed" # MLFlow experiment name
+mixed_tasks: False # Whether to introduce mixed tasks
+
 
 # Dataset Configuration
 dataset_name: "mnist" # Dataset to use: mnist or fashion_mnist

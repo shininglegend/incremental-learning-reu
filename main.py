@@ -1,8 +1,12 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
-import time, os
+import math
+import os
+import time
 import numpy as np
-from utils import accuracy_test
+import torch
+
 from init import initialize_system
+from utils import accuracy_test
 
 # --- 1. Configuration and Initialization ---
 
@@ -32,6 +36,7 @@ USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
 BATCH_SIZE = config["batch_size"]
 SAMPLING_RATE = config["sampling_rate"]
+MIXED_TASKS = config["mixed_tasks"]
 t.start("training")
 
 # --- 2. Training Loop ---
@@ -41,10 +46,11 @@ print(
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
 Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
 Use LR: {USE_LEARNING_RATE_SCHEDULER} | Sampling Rate: {SAMPLING_RATE}
+Continuous Task introduction: {MIXED_TASKS}
 Total tasks: {len(train_dataloaders)}"""
 )
 
-for task_id, train_dataloader in enumerate(train_dataloaders):
+for task_id in range(len(train_dataloaders)):
     print(f"\n--- Training on Task {task_id + 1} ---")
 
     task_start_time = time.time()
@@ -58,9 +64,62 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     for epoch in range(NUM_EPOCHS):
         model.train()
         epoch_loss = 0.0
-        num_batches = 0
+        batches_seen = 0
+        total_batches = len(train_dataloaders[task_id])
 
-        for batch_idx, (data, labels) in enumerate(train_dataloader):
+        # Convert dataloader to iterator for this epoch
+        train_iter_a = iter(train_dataloaders[task_id])
+        if (
+            MIXED_TASKS
+            and epoch >= NUM_EPOCHS / 2
+            and task_id != len(train_dataloaders) - 1
+        ):
+            train_iter_b = iter(train_dataloaders[task_id + 1])
+            task_a_len = total_batches
+            task_b_len = len(train_dataloaders[task_id + 1])
+            # Overwrite the total number of batchs in case they're not even
+            total_batches = min(task_a_len, task_b_len)
+            # Debug info
+            if epoch == NUM_EPOCHS / 2 and task_a_len != task_b_len:
+                print(
+                    f"""Skipped some batches: A={task_a_len}, B={
+                    task_b_len
+                    }. Skipped: {
+                    max(task_a_len, task_b_len) - total_batches}"""
+                )
+
+        for batch_idx in range(total_batches):
+            # Mix if epoch > NUM_EPOCHS / 2. Last task can't do it
+            if (
+                MIXED_TASKS
+                and epoch >= NUM_EPOCHS / 2
+                and task_id != len(train_dataloaders) - 1
+            ):
+                # q should decrease linearly from 1.0 to 0.0
+                q = 1 - ((batch_idx * epoch) / ((NUM_EPOCHS / 2) * total_batches))
+                take_from_a = math.floor(q * BATCH_SIZE)
+                take_from_b = math.ceil((1 - q) * BATCH_SIZE)
+                # Take floor q*z samples from a
+                batch_data_a = next(train_iter_a)
+                samples_a, labels_a = (
+                    batch_data_a[0][:take_from_a],
+                    batch_data_a[1][:take_from_a],
+                )
+                # Take ceil of (1 - q) * z from b
+                batch_data_b = next(train_iter_b)
+                samples_b, labels_b = (
+                    batch_data_b[0][:take_from_b],
+                    batch_data_b[1][:take_from_b],
+                )
+                # Join them, shuffle, and send
+                data = torch.cat((samples_a, samples_b))
+                labels = torch.cat((labels_a, labels_b))
+                # Shuffle while keeping data and labels matched
+                shuffle_idx = torch.randperm(data.size(0))
+                data = data[shuffle_idx]
+                labels = labels[shuffle_idx]
+            else:
+                (data, labels) = next(train_iter_a)
             # Move data to device
             data, labels = data.to(device), labels.to(device)
             # Select memory samples for this batch
@@ -90,20 +149,20 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
-            num_batches += 1
+            batches_seen += 1
 
             # Update progress bar every 50 batches or on last batch
             if (
                 not QUICK_TEST_MODE
                 and VERBOSE
-                and (batch_idx % 50 == 0 or batch_idx == len(train_dataloader) - 1)
+                and (batch_idx % 50 == 0 or batch_idx == total_batches - 1)
             ):
-                progress = (batch_idx + 1) / len(train_dataloader)
+                progress = (batch_idx + 1) / total_batches
                 bar_length = 30
                 filled_length = int(bar_length * progress)
                 bar = "█" * filled_length + "-" * (bar_length - filled_length)
                 print(
-                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} (Batch {batch_idx + 1}/{len(train_dataloader)})",
+                    f"\rTask {task_id + 1:1}, Epoch {epoch+1:>2}/{NUM_EPOCHS}: |{bar}| {progress:.1%} (Batch {batch_idx + 1}/{total_batches})",
                     end="",
                     flush=True,
                 )
@@ -113,7 +172,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             print()
 
         # Track epoch loss
-        avg_epoch_loss = epoch_loss / max(num_batches, 1)
+        avg_epoch_loss = epoch_loss / max(batches_seen, 1)
         task_epoch_losses.append(avg_epoch_loss)
 
         # Evaluate performance after each epoch
@@ -162,7 +221,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     samples_added = 0
     batch_counter = 0
     # Add samples per batch based on sampling_rate
-    for sample_data, sample_labels in train_dataloader:
+    for sample_data, sample_labels in train_dataloaders[task_id]:
         if SAMPLING_RATE < 1:
             # Fractional sampling - add every 1/SAMPLING_RATE batches
             if batch_counter % int(1 / SAMPLING_RATE) == 0:
@@ -184,7 +243,7 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
                 visualizer.track_oldest_task_ids(clustering_memory, task_id)
         batch_counter += 1
     print(
-        f"Added {samples_added} out of {len(train_dataloader) * BATCH_SIZE} samples this round."
+        f"Added {samples_added} out of {len(train_dataloaders[task_id]) * BATCH_SIZE} samples this round."
     )
     print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
     t.end("add samples")

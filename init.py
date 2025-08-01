@@ -30,17 +30,11 @@ def parse_args():
         help="Path to configuration file",
     )
     parser.add_argument(
-        "--task_type",
-        type=str,
+        "--continuous_tasks_intro",
+        "-c",
+        action="store_true",
         default=None,
-        choices=["permutation", "rotation", "class_split"],
-        help="Type of task transformation",
-    )
-    parser.add_argument(
-        "--experiment_name",
-        type=str,
-        default=None,
-        help="Name for the experiment (used for MLflow experiment naming)",
+        help="Whether to use continuous task introduction",
     )
     parser.add_argument(
         "--dataset",
@@ -48,6 +42,18 @@ def parse_args():
         default=None,
         choices=["mnist", "fashion_mnist"],
         help="Which dataset to use",
+    )
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default=None,
+        help="Path to dataset (avoids downloading)",
+    )
+    parser.add_argument(
+        "--experiment_name",
+        type=str,
+        default=None,
+        help="Name for the experiment (used for MLflow experiment naming)",
     )
     parser.add_argument(
         "--lite",
@@ -67,7 +73,13 @@ def parse_args():
         default="test_results",
         help="Path to store the output in, should be a folder",
     )
-    parser.add_argument("--data_dir", type=str, default=None, help="Path to dataset")
+    parser.add_argument(
+        "--task_type",
+        type=str,
+        default=None,
+        choices=["permutation", "rotation", "class_split"],
+        help="Type of task transformation",
+    )
     return parser.parse_args()
 
 
@@ -125,6 +137,8 @@ def initialize_system():
         config["data_dir"] = args.data_dir
     if args.experiment_name is not None:
         config["experiment_name"] = args.experiment_name
+    if args.continuous_tasks_intro is not None:
+        config["mixed_tasks"] = args.continuous_tasks_intro
 
     # Sanity checks
     if config["sampling_rate"] > config["batch_size"]:
@@ -152,6 +166,7 @@ def initialize_system():
         "learning_rate": config["learning_rate"],
         "memory_size_p": config["memory_size_p"],
         "memory_size_q": config["clusters_per_pool"],
+        "mixed_tasks": config["mixed_tasks"],
         "num_classes": config["num_classes"],
         "num_epochs": config["num_epochs"],
         "num_pools": config["num_pools"],
