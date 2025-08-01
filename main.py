@@ -133,7 +133,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             if batch_idx % int(1 / SAMPLING_RATE) == 0:
                 samples_added += 1
                 clustering_memory.add_sample(
-                    data[0].cpu(), labels[0].cpu(), task_ids[i]
+                    data[0].cpu(), labels[0].cpu(), task_ids[0]
                 )
                 # Track oldest task IDs after adding sample
                 visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
