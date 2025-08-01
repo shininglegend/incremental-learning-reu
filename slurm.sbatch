@@ -4,8 +4,8 @@
 #SBATCH --error="./sbatch_results/slurm-%A_%a.err"  # Error log file
 #SBATCH --nodes=1 # Nodes per instance. 1 node = 24 CPUs. Baseline 1
 #SBATCH --ntasks=1 # Each array task runs one main script. Baseline 1
-#SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
-#SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
+#SBATCH --cpus-per-task=16 # How many CPU cores per instance. Baseline 24
+#SBATCH --mem=2G  # Request memory in Gigabytes. One main.py job takes about 1.2G RAM. Request a little extra.
 #SBATCH --time="00:20:00" # 00:12:41 baseline. Request a little extra.
 #SBATCH --array=0-4 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
 #SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1,hpcl4-1,hpcl4-2,hpcl4-3 # these guys are bad
@@ -15,7 +15,7 @@
 # A Slurm batch script for running the program many times in parallel across CPUs
 
 # ------- GLOBAL CONFIG (CUSTOMIZE WITH YOUR FILE LOCATIONS) -------
-HOME_DIR="/home/NAS/$USER/incremental-learning-reu"
+HOME_DIR="/home/NAS/$USER/17_1-continual-introduction-hyperparameters"
 PYTHON_SCRIPT="$HOME_DIR/main.py" # Or wherever you put main.py
 
 # Define Python executable path relative to the script's directory

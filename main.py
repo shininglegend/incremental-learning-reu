@@ -36,19 +36,24 @@ USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
 BATCH_SIZE = config["batch_size"]
 SAMPLING_RATE = config["sampling_rate"]
+LOSS_THRESHOLD = config['memory loss commitment threshold']
 
 tasks_seen = []  # Used so we're only testing on tasks the model has seen before.
-epochs_seen_per_task = []   # So we can track how many epochs per task we've seen before.
+epochs_seen_per_task = []  # So we can track how many epochs per task we've seen before.
 task_training_times = []  # So we can track task training times even when the epochs are separated.
 task_losses = []
 memory_snapshot = []
+all_tasks_seen = False
+
+time_to_update = False
+epochs_since_mem_update = 0
+
 
 # Initializations for lists who have indices directly corresponding to task_id
 for i in range(config['num_tasks']):
     epochs_seen_per_task.append(0)
     task_training_times.append(0)
     task_losses.append(0)
-
 
 # --- 2. Training Loop ---
 t.start("training")
@@ -80,6 +85,8 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
     current_task_id = math.floor(epoch_task_id)
     next_task_id = math.ceil(epoch_task_id)
 
+    if current_task_id not in tasks_seen:
+        tasks_seen.append(current_task_id)
     epochs_seen_per_task[current_task_id] += 1
 
     if current_task_id != next_task_id:
@@ -87,24 +94,23 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             next_task_id = -1
             # the next task should be the first one if we're off the end.
 
-    if epochs_seen_per_task[current_task_id] == NUM_EPOCHS_PER_TASK[current_task_id]:
-        end_of_task = True
-
     # Tracks when we've trained on all tasks for at least one epoch.
     # Prints a fun message!
-    if (next_task_id not in tasks_seen) and (next_task_id != -1):
-        tasks_seen.append(next_task_id)
-        if len(tasks_seen) == config['num_tasks']:
-            print("\nWith this epoch, we've seen all tasks at least once!")
-            print(f"It took {epoch_number + 1} epochs to get here. Funny how time flies, right?")
-            print("Anyways, let's get on with the training xoxo.\n")
+    if not all_tasks_seen and len(tasks_seen) == config['num_tasks']:
+        all_tasks_seen = True
+        print("\nWith this epoch, we've seen all tasks at least once!")
+        print(f"It took {epoch_number + 1} epochs to get here. Funny how time flies, right?")
+        print("Anyways, let's get on with the training xoxo.\n")
+
+    if epochs_seen_per_task[current_task_id] == NUM_EPOCHS_PER_TASK[current_task_id]:
+        end_of_task = True
 
     # Train the model per batch.
     model.train()
 
     t.start("get from memory")
-    # Get a fresh copy of memory every 5 epochs.
-    if epoch_number % 5 == 0:
+    # Get a fresh copy of memory every X epochs.
+    if epoch_number % 1 == 0:
         memory_snapshot = clustering_memory.get_memory_samples()
     t.end("get from memory")
 
@@ -215,10 +221,13 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         # Print the final string, padding with spaces, and then a newline
         print(f"{final_output_str:<80}")  # Adjust padding width as needed
 
-    # Add samples to memory every 5 epochs
-    if epoch_number % 5 == 0:
+    # Add samples to memory if loss greater than threshold
+    # if (avg_epoch_loss >= LOSS_THRESHOLD):
+    if True:
         # Step 2: Update the clustered memory with some samples from this task's dataloader
         # This is where the core clustering for TA-A-GEM happens
+        # print(f"Loss = {avg_epoch_loss}. Committing to memory.")
+
         t.start("add samples")
         samples_added = 0
         batch_counter = 0
@@ -245,9 +254,9 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
                     visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
             batch_counter += 1
         print(
-            f"Added {samples_added} out of {len(epoch_dataloader) * BATCH_SIZE} samples this round."
+            f"\tAdded {samples_added} out of {len(epoch_dataloader) * BATCH_SIZE} samples this round."
         )
-        print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
+        print("\tSample throughput (cumulative):", clustering_memory.get_sample_throughputs())
         t.end("add samples")
 
     # End of task summary
@@ -277,8 +286,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 t.end("training")
 print("\nTraining complete.")
 
-
-
 '''
 ------------------------------
 Visualization and end-of-program code
@@ -298,10 +305,6 @@ model.eval()
 accuracy = accuracy_test.evaluate_all_tasks(model, None, test_dataloaders, device)
 
 print(f"Accuracy: {accuracy}")
-
-
-
-
 
 # --- 3. Comprehensive Visualization and Analysis ---
 print("\nGenerating comprehensive analysis...")

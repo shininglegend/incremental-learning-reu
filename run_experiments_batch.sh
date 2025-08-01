@@ -8,8 +8,8 @@
 # You can tell conda to put the env in the same directory as the script by using:
 # conda env create --prefix ./env -f linux_env.yml
 
-#PYTHON_EXEC="incremental-learning-reu/venv/bin/python" # Uncomment for pip venv
-PYTHON_EXEC="env/bin/python" # Uncomment for conda env
+PYTHON_EXEC="../99-starting-anew/venv/bin/python" # Uncomment for pip venv
+# PYTHON_EXEC="env/bin/python" # Uncomment for conda env
 
 # Check if the Python executable exists
 if [ ! -f "$PYTHON_EXEC" ]; then

@@ -266,5 +266,5 @@ class MixedTaskDataLoader:
 
             except StopIteration:
                 # One of the dataloaders has run out of batches
-                print("One of the underlying dataloaders exhausted. Stopping mixed iteration.")
+                # print("One of the underlying dataloaders exhausted. Stopping mixed iteration.")
                 break
