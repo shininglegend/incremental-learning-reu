@@ -33,13 +33,8 @@ def load_pickle_files(directory, num_files=15):
             # Extract final accuracy - handle both new and legacy formats
             final_accuracy = None
             if "epoch_data" in data and data["epoch_data"]:
-                # New format: average accuracy across all epochs and tasks
-                all_accuracies_by_overall = []
-                for epoch in data["epoch_data"]:
-                    if epoch["overall_accuracy"]:
-                        all_accuracies_by_overall.append(epoch["overall_accuracy"])
-                if all_accuracies_by_overall:
-                    final_accuracy = sum(all_accuracies_by_overall) / len(all_accuracies_by_overall)
+                # Replaced this line to make it more accurate without knowing why.
+                final_accuracy = sum(ep["overall_accuracy"] for ep in data["epoch_data"]) / len(data["epoch_data"])
             elif "per_task_accuracies" in data and data["per_task_accuracies"]:
                 print("Warning: Old format detected.")
                 # Legacy format: average accuracy across all evaluations and tasks
