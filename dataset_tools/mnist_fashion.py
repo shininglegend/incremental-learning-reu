@@ -134,6 +134,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
+        use_cuda
     ):
         """Create permutation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
@@ -179,7 +180,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, pin_memory=use_cuda
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -197,6 +198,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
+        use_cuda
     ):
         """Create rotation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
@@ -251,7 +253,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, pin_memory=use_cuda
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -269,6 +271,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
+        use_cuda
     ):
         """Create class-split-based tasks for Fashion-MNIST."""
         train_dataloaders = []
@@ -314,7 +317,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_task)
             test_dataset = TensorDataset(x_test_task, y_test_task)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, pin_memory=use_cuda
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False

@@ -225,6 +225,7 @@ def initialize_system():
         num_tasks=config["num_tasks"],
         batch_size=config["batch_size"],
         quick_test=config["lite"],
+        use_cuda=(device == "cuda"),
     )
 
     # Initialize visualizer with experiment name
@@ -249,10 +250,12 @@ def initialize_system():
         num_epochs=config["num_epochs"],
         batch_size=config["batch_size"],
         num_transition_epochs=config["num_transition_epochs"],
-        task_introduction=config["task_introduction"]
+        task_introduction=config["task_introduction"],
     )
-    
-    num_epochs_per_task = task_introduction.make_num_epochs_into_dict(num_epochs_per_task=config["num_epochs"], num_tasks=config["num_tasks"])
+
+    num_epochs_per_task = task_introduction.make_num_epochs_into_dict(
+        num_epochs_per_task=config["num_epochs"], num_tasks=config["num_tasks"]
+    )
 
     # Create run name with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")

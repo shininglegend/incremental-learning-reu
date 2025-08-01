@@ -45,6 +45,7 @@ task_training_times = (
 )  # So we can track task training times even when the epochs are separated.
 task_losses = []
 memory_snapshot = []
+samples_seen, samples_added = 0, 0
 
 # Initializations for lists who have indices directly corresponding to task_id
 for i in range(config["num_tasks"]):
@@ -89,7 +90,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         # Loops back to the first task.
         # Needs to be disabled in both the dataloader and here if you want it turned off
         next_task_id = -1
-    print(f"Current task: {current_task_id}, next task: {next_task_id}")
 
     if epochs_seen_per_task[current_task_id] == num_epochs_per_task[current_task_id]:
         end_of_task = True
@@ -117,6 +117,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
         # Move data to device
         data, labels = data.to(device), labels.to(device)
+        samples_seen += len(data)
 
         # agem_handler.optimize handles model update and gradient projection
         t.start("optimize")
@@ -168,7 +169,9 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             # Fractional sampling - add every 1/SAMPLING_RATE batches
             if batch_idx % int(1 / SAMPLING_RATE) == 0:
                 samples_added += 1
-                clustering_memory.add_sample(data[0].cpu(), labels[0].cpu(), task_ids[0])
+                clustering_memory.add_sample(
+                    data[0].cpu(), labels[0].cpu(), task_ids[0]
+                )
                 # Track oldest task IDs after adding sample
                 visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
         else:
@@ -176,7 +179,9 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             num_to_sample = min(int(SAMPLING_RATE), len(data))
             for i in range(num_to_sample):
                 samples_added += 1
-                clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
+                clustering_memory.add_sample(
+                    data[i].cpu(), labels[i].cpu(), task_ids[i]
+                )
                 # Track oldest task IDs after adding sample
                 visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
     t.end("add samples")
@@ -232,18 +237,24 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             f"  Epoch {epoch_number + 1}/{num_epochs_per_task[current_task_id]}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
         )
 
-    print(
-        f"\nAdded {samples_added} out of {len(epoch_dataloader) * BATCH_SIZE} samples this round."
-    )
-    print(
-        "Sample throughput (cumulative):",
-        clustering_memory.get_sample_throughputs(),
-    )
+    if epoch_number % 20 == 0:
+        print(f"\r{" " * 80}\rAdded {samples_added} out of {samples_seen} samples.")
+        print(
+            "Sample throughput (cumulative):",
+            clustering_memory.get_sample_throughputs(),
+        )
+        samples_added = 0
+        samples_seen = 0
 
     if not QUICK_TEST_MODE:
+        task_str = (
+            f"Tasks {current_task_id + 1:1} and {next_task_id + 1:1}"
+            if current_task_id != next_task_id
+            else f"Task {current_task_id + 1}"
+        )
         final_output_str = (
-            f"\rTask {current_task_id + 1:1}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{num_epochs_per_task[current_task_id]}:"
-            f" Accuracy: {avg_accuracy:.2%}"
+            f"\r{task_str}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{num_epochs_per_task[current_task_id]}:"
+            f" Accuracy: {avg_accuracy:.2%} Loss {avg_epoch_loss:.4}"
         )
 
         # Print the final string, padding with spaces, and then a newline
