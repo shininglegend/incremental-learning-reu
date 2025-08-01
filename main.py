@@ -61,8 +61,7 @@ print(
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
 Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
 Use LR: {USE_LEARNING_RATE_SCHEDULER} | Sampling Rate: {SAMPLING_RATE}
-Total tasks: {len(train_dataloaders)} | Task introduction type: {config['task_introduction']}
-Epoch list: {epoch_list}"""
+Total tasks: {len(train_dataloaders)} | Task introduction type: {config['task_introduction']}"""
 )
 
 """
@@ -79,7 +78,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
     end_of_task = False
     epoch_loss = 0
     num_batches = 0
-    samples_added = 0
 
     # Some logic if you're doing continual task introduction.
     current_task_id = math.floor(epoch_task_id)
@@ -91,6 +89,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         # Loops back to the first task.
         # Needs to be disabled in both the dataloader and here if you want it turned off
         next_task_id = -1
+    print(f"Current task: {current_task_id}, next task: {next_task_id}")
 
     if epochs_seen_per_task[current_task_id] == num_epochs_per_task[current_task_id]:
         end_of_task = True
@@ -112,7 +111,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             task_ids = [current_task_id for _ in range(data.size(0))]
         assert len(task_ids) == data.size(0)
         t.start("get from memory")
-        # Get a fresh copy of memory every 5 epochs.
+        # Get a fresh batch of samples from memory
         episodic_memory_samples = clustering_memory.get_random_samples(len(data))
         t.end("get from memory")
 
@@ -123,31 +122,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         t.start("optimize")
         batch_loss = agem_handler.optimize(data, labels, episodic_memory_samples)
         t.end("optimize")
-
-        # Step 2: Update the clustered memory with some samples from this epoch
-        # This is where the core clustering for TA-A-GEM happens
-        t.start("add samples")
-        # Add samples per batch based on sampling_rate
-        if SAMPLING_RATE < 1:
-            # Fractional sampling - add every 1/SAMPLING_RATE batches
-            if batch_idx % int(1 / SAMPLING_RATE) == 0:
-                samples_added += 1
-                clustering_memory.add_sample(
-                    data[0].cpu(), labels[0].cpu(), task_ids[0]
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-        else:
-            # Sample multiple items per batch (up to batch size and sampling rate)
-            num_to_sample = min(int(SAMPLING_RATE), len(data))
-            for i in range(num_to_sample):
-                samples_added += 1
-                clustering_memory.add_sample(
-                    data[i].cpu(), labels[i].cpu(), task_ids[i]
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-        t.end("add samples")
 
         # Track batch loss
         if batch_loss is not None:
@@ -183,6 +157,29 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
                 end="",
                 flush=True,
             )
+
+    # Update the clustered memory with some samples from this epoch
+    # This is where the core clustering for TA-A-GEM happens
+    t.start("add samples")
+    samples_added = 0
+    for batch_idx, (data, labels) in enumerate(epoch_dataloader):
+        # Add samples per batch based on sampling_rate
+        if SAMPLING_RATE < 1:
+            # Fractional sampling - add every 1/SAMPLING_RATE batches
+            if batch_idx % int(1 / SAMPLING_RATE) == 0:
+                samples_added += 1
+                clustering_memory.add_sample(data[0].cpu(), labels[0].cpu(), task_ids[0])
+                # Track oldest task IDs after adding sample
+                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+        else:
+            # Sample multiple items per batch (up to batch size and sampling rate)
+            num_to_sample = min(int(SAMPLING_RATE), len(data))
+            for i in range(num_to_sample):
+                samples_added += 1
+                clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
+                # Track oldest task IDs after adding sample
+                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+    t.end("add samples")
 
     epoch_training_time = time.time() - epoch_start_time
     task_training_times[current_task_id] += epoch_training_time
@@ -228,7 +225,8 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
     # Print epoch summary
     if QUICK_TEST_MODE and (
-        epoch_number % 5 == 0 or epoch_number == num_epochs_per_task[current_task_id] - 1
+        epoch_number % 5 == 0
+        or epoch_number == num_epochs_per_task[current_task_id] - 1
     ):
         print(
             f"  Epoch {epoch_number + 1}/{num_epochs_per_task[current_task_id]}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
@@ -318,7 +316,7 @@ task_introduction_abbrev = {
 quick_mode = "q-" if QUICK_TEST_MODE else ""
 random_em = "rem-" if config["random_em"] else ""
 dataset_name = config["dataset_name"].lower()
-filename = f"results-{quick_mode}{task_introduction_abbrev}{random_em}{SAMPLING_RATE}-{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+filename = f"results-{quick_mode}{task_introduction_abbrev}-{random_em}{SAMPLING_RATE}-{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
 
 visualizer.save_metrics(
     os.path.join(params["output_dir"], filename),
