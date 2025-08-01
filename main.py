@@ -118,7 +118,7 @@ for task_id in range(len(train_dataloaders)):
                 data = torch.cat((samples_a, samples_b))
                 labels = torch.cat((labels_a, labels_b))
                 # Shuffle while keeping data and labels matched
-                shuffle_idx = torch.randperm(BATCH_SIZE)
+                shuffle_idx = torch.randperm(data.size(0))
                 data = data[shuffle_idx]
                 labels = labels[shuffle_idx]
                 task_ids_for_samples = torch.tensor(
@@ -131,6 +131,7 @@ for task_id in range(len(train_dataloaders)):
                     [task_id for _ in range(BATCH_SIZE)]
                 )
                 (data, labels) = next(train_iter_a)
+            assert len(data) == len(task_ids_for_samples)
             # Move data to device
             data, labels = data.to(device), labels.to(device)
             # Select memory samples for this batch
