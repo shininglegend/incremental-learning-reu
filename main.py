@@ -80,7 +80,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
     epoch_loss = 0
     num_batches = 0
     samples_added = 0
-    batch_counter = 0
 
     # Some logic if you're doing continual task introduction.
     current_task_id = math.floor(epoch_task_id)
@@ -131,7 +130,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         # Add samples per batch based on sampling_rate
         if SAMPLING_RATE < 1:
             # Fractional sampling - add every 1/SAMPLING_RATE batches
-            if batch_counter % int(1 / SAMPLING_RATE) == 0:
+            if batch_idx % int(1 / SAMPLING_RATE) == 0:
                 samples_added += 1
                 clustering_memory.add_sample(
                     data[0].cpu(), labels[0].cpu(), task_ids[i]
