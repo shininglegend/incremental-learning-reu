@@ -294,6 +294,15 @@ if visualizer.epoch_data:
         f"\nFinal Average Accuracy (all epochs, all tasks): {final_average_accuracy:.4f}"
     )
 
+model.eval()
+accuracy = accuracy_test.evaluate_all_tasks(model, None, test_dataloaders, device)
+
+print(f"Accuracy: {accuracy}")
+
+
+
+
+
 # --- 3. Comprehensive Visualization and Analysis ---
 print("\nGenerating comprehensive analysis...")
 
