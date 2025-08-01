@@ -1,8 +1,7 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
-import math
 import time, os
+import numpy as np
 from utils import accuracy_test
-from utils.task_introduction import MixedTaskDataLoader
 from init import initialize_system
 
 # --- 1. Configuration and Initialization ---
@@ -21,41 +20,21 @@ from init import initialize_system
     _, # Clustering memory is ignored.
     bgd_handler, # Replaces agem_handler
     train_dataloaders,
-    test_dataloaders,  # list for legacy compatibility
+    test_dataloaders,
     visualizer,
-    epoch_list,
-    train_dataloaders_dict,
-    num_epochs_per_task,  # dict of task id to number of epochs it'll run
 ) = initialize_system()
 
 # Extract commonly used variables from config
 QUICK_TEST_MODE = config["lite"]
 VERBOSE = config["verbose"]
-TOTAL_EPOCHS = config["num_epochs"] * config["num_tasks"]
+NUM_EPOCHS = config["num_epochs"]
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
 BATCH_SIZE = config["batch_size"]
 SAMPLING_RATE = config["sampling_rate"]
-CONTINUAL_LEARNING = config["task_introduction"] == "continuous"
-
-tasks_seen = []  # Used so we're only testing on tasks the model has seen before.
-epochs_seen_per_task = []  # So we can track how many epochs per task we've seen before.
-task_training_times = (
-    []
-)  # So we can track task training times even when the epochs are separated.
-task_losses = []
-memory_snapshot = []
-samples_seen = 0
-
-# Initializations for lists who have indices directly corresponding to task_id
-for i in range(config["num_tasks"]):
-    epochs_seen_per_task.append(0)
-    task_training_times.append(0)
-    task_losses.append(0)
-
+t.start("training")
 
 # --- 2. Training Loop ---
-t.start("training")
 print("Starting training...")
 print(
     f"""
@@ -86,17 +65,12 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
             batch_loss = bgd_handler.optimize(data, labels)
             t.end("optimize")
 
-        # Track batch loss
-        if batch_loss is not None:
-            epoch_loss += batch_loss
-            visualizer.add_batch_loss(
-                current_task_id,
-                (epochs_seen_per_task[current_task_id] - 1),
-                batch_idx,
-                batch_loss,
-            )
+            # Track batch loss
+            if batch_loss is not None:
+                epoch_loss += batch_loss
+                visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
-        num_batches += 1
+            num_batches += 1
 
             # Update progress bar every 50 batches or on last batch
             if (
@@ -165,10 +139,10 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
     # Calculate training time for this task
     task_time = time.time() - task_start_time
 
-        # Get final accuracy from last epoch evaluation
-        final_avg_accuracy = (
-            visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
-        )
+    # Get final accuracy from last epoch evaluation
+    final_avg_accuracy = (
+        visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
+    )
 
     print(
         f"For task {task_id + 1}, final average accuracy landed at: {final_avg_accuracy:.4f}"
@@ -177,13 +151,6 @@ for task_id, train_dataloader in enumerate(train_dataloaders):
 
 t.end("training")
 print("\nTraining complete.")
-
-
-"""
-------------------------------
-Visualization and end-of-program code
-------------------------------
-"""
 
 # Calculate and display final average accuracy over all epochs and tasks
 if visualizer.epoch_data:
@@ -194,31 +161,23 @@ if visualizer.epoch_data:
         f"\nFinal Average Accuracy (all epochs, all tasks): {final_average_accuracy:.4f}"
     )
 
-
 # --- 3. Comprehensive Visualization and Analysis ---
 print("\nGenerating comprehensive analysis...")
 
 # Save metrics for future analysis
 timestamp = time.strftime("%Y%m%d_%H%M%S")
 
-# Build filename with task type, intro type, random em, quick test mode, and dataset
+# Build filename with task type, quick test mode, and dataset
 task_type_abbrev = {
     "class_incremental": "cla",
     "rotation": "rot",
     "permutation": "perm",
 }.get(config["task_type"], config["task_type"][:3])
 
-task_introduction_abbrev = {
-    "sequential": "seq",
-    "half and half": "half",
-    "random": "rand",
-    "continuous": "cont",
-}.get(config["task_introduction"], config["task_introduction"][:3])
-
 quick_mode = "q-" if QUICK_TEST_MODE else ""
 random_em = "rem-" if config["random_em"] else ""
 dataset_name = config["dataset_name"].lower()
-filename = f"results-{quick_mode}{task_introduction_abbrev}-{random_em}{SAMPLING_RATE}-{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+filename = f"results-{quick_mode}{random_em}{SAMPLING_RATE}-{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
 
 visualizer.save_metrics(
     os.path.join(params["output_dir"], filename),

@@ -147,38 +147,24 @@ class Cluster:
             return None
         return min(self.task_ids)
 
-    def _remove_sample(self, idx):
+    def _remove_sample(self, sample_idx):
         """
-        Removes the sample (and its metadata) at `idx`.
-        Keeps deques intact, maintains insertion_order, mean, and sum_samples.
+        Removes a sample from the cluster by index and updates the mean.
         """
+        samples_list = list(self.samples)
+        labels_list = list(self.labels)
+        task_ids_list = list(self.task_ids)
+        insertion_order_list = list(self.insertion_order)
 
-        # Fast aliases
-        S, L, T, O = self.samples, self.labels, self.task_ids, self.insertion_order
+        removed_sample = samples_list.pop(sample_idx)
+        removed_label = labels_list.pop(sample_idx)
+        task_ids_list.pop(sample_idx)
+        insertion_order_list.pop(sample_idx)
 
-        # Grab the items we’ll return before they’re gone
-        removed_sample = S[idx]
-        removed_label = L[idx]
-        removed_task_id = T[idx] if T else None
-        removed_order_id = O[idx] if O else None
-
-        # Bring target to the left end
-        S.rotate(-idx)
-        L.rotate(-idx)
-        T.rotate(-idx)
-        O.rotate(-idx)
-
-        # Pop from the left
-        S.popleft()
-        L.popleft()
-        T.popleft()
-        O.popleft()
-
-        # Restore original order
-        S.rotate(idx)
-        L.rotate(idx)
-        T.rotate(idx)
-        O.rotate(idx)
+        self.samples = deque(samples_list)
+        self.labels = deque(labels_list)
+        self.task_ids = deque(task_ids_list)
+        self.insertion_order = deque(insertion_order_list)
 
         self.sum_samples -= removed_sample
         if len(self.samples) > 0:
@@ -189,7 +175,7 @@ class Cluster:
         return removed_sample, removed_label
 
 
-class ClusterPool:
+class ClusteringMechanism:
     """Implements the clustering mechanism described in Algorithm 3."""
 
     def __init__(
@@ -581,7 +567,7 @@ if __name__ == "__main__":
     if VISUALIZE:
         import time
 
-    storage = ClusterPool(Q=CLUSTERS, P=MAX_PER_CLUSTER)
+    storage = ClusteringMechanism(Q=CLUSTERS, P=MAX_PER_CLUSTER)
     # Generate CLUSTERS+1 clusters with outliers
     import random, math
 

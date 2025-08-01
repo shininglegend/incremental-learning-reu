@@ -42,7 +42,6 @@ def get_dataset_path(dataset_name, kaggle_dataset_id, path_override=None):
 
     # Download dataset using kagglehub
     dataset_path = kagglehub.dataset_download(kaggle_dataset_id)
-    print("Downloaded dataset. It's saved at:", dataset_path)
 
     # Update .env file
     if set_key:

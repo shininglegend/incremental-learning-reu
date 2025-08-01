@@ -1,8 +1,8 @@
 # Handles the pools of clusters
 try:
-    from clustering_mechs import ClusterPool
+    from clustering_mechs import ClusteringMechanism
 except ImportError:
-    from em_tools.clustering_mechs import ClusterPool
+    from em_tools.clustering_mechs import ClusteringMechanism
 
 import torch
 import math
@@ -38,7 +38,7 @@ class ClusteringMemory:
         if self.add_remove_randomly:
             print("ALERT: Adding and removing randomly from clusters is enabled.")
 
-    def _get_or_create_pool(self, label) -> ClusterPool:
+    def _get_or_create_pool(self, label) -> ClusteringMechanism:
         """Get clustering mechanism for a label, creating if needed.
 
         Args:
@@ -49,7 +49,7 @@ class ClusteringMemory:
         """
         if label not in self.pools:
             # Create new pool for this label
-            self.pools[label] = ClusterPool(
+            self.pools[label] = ClusteringMechanism(
                 Q=self.Q,
                 P=self.P,
                 add_remove_randomly=self.add_remove_randomly,
@@ -115,6 +115,8 @@ class ClusteringMemory:
                 )
             )
         assert amount >= len(random_samples), "Wrong number of samples"
+        if amount > len(random_samples):
+            print("\nNot enough samples stored to return.")
         return random_samples
 
     def _get_random_samples_from_pool(self, pool_idx, amount):
