@@ -232,7 +232,7 @@ class MixedTaskDataLoader:
     ):
         assert isinstance(task_id_1, int) and isinstance(task_id_2, int)
         if not (0.0 <= proportion_task1 <= 1.0):
-            raise ValueError("proportFion_task1 must be between 0.0 and 1.0")
+            raise ValueError("proportion_task1 must be between 0.0 and 1.0")
         if batch_size <= 0:
             raise ValueError("batch_size must be a positive integer")
 
