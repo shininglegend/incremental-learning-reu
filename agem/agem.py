@@ -1,6 +1,5 @@
 import torch
 import random
-from em_tools.clustering_pools import ClusteringMemory
 
 
 class AGEMHandler:
@@ -156,19 +155,3 @@ class AGEMHandler:
             self.optimizer.step()
 
         return current_loss
-
-    def sample_from_memory(self, config, memory: list):
-
-        batch_size = config['batch_size']
-
-        if config["random_em"] and len(memory) > 0:
-            # Apply random mask to select BATCH_SIZE samples
-            num_samples = len(memory)
-            if num_samples <= batch_size:
-                batch_samples = memory
-            else:
-                batch_samples = random.sample(memory, batch_size)
-        else:
-            batch_samples = memory
-
-        return batch_samples

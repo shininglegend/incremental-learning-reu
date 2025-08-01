@@ -130,6 +130,13 @@ def initialize_system():
     # Sanity checks
     if config["sampling_rate"] > config["batch_size"]:
         raise Exception("Samping rate exceeds batch size.")
+    if config["task_introduction"] not in [
+        "sequential",
+        "half and half",
+        "random",
+        "continuous",
+    ]:
+        raise Exception("Configuration task_introduction is invalid.")
 
     # Apply lite mode overrides
     if config["lite"]:
@@ -162,6 +169,7 @@ def initialize_system():
         "random_em": config["random_em"],
         "sampling_rate": config["sampling_rate"],
         "task_type": config["task_type"],
+        "task_introduction": config["task_introduction"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
         "verbose": config["verbose"],
     }
@@ -235,7 +243,16 @@ def initialize_system():
     # each item in the list corresponds to a key in train_dataloaders_dict
     # the value in train_dataloaders_dict is a dataloader corresponding to that key
     # iterate over epoch_list to get the epoch order for training.
-    epoch_list, train_dataloaders_dict = task_introduction.get_epoch_order(train_dataloaders, config)
+    epoch_list, train_dataloaders_dict = task_introduction.get_epoch_order(
+        train_dataloaders=train_dataloaders,
+        num_tasks=config["num_tasks"],
+        num_epochs=config["num_epochs"],
+        batch_size=config["batch_size"],
+        num_transition_epochs=config["num_transition_epochs"],
+        task_introduction=config["task_introduction"]
+    )
+    
+    num_epochs_per_task = task_introduction.make_num_epochs_into_dict(num_epochs_per_task=config["num_epochs"], num_tasks=config["num_tasks"])
 
     # Create run name with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -264,4 +281,5 @@ def initialize_system():
         visualizer,
         epoch_list,
         train_dataloaders_dict,
+        num_epochs_per_task,
     )
