@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import yaml
 
-from agem import agem
+from agem import mega_agem
 from agem.learning_rate import TALearningRateScheduler
 from em_tools import clustering_pools
 from dataset_tools.load_dataset import load_dataset
@@ -213,7 +213,7 @@ def initialize_system():
         add_remove_randomly=config["add_remove_randomly"],
     )
 
-    agem_handler = agem.AGEMHandler(
+    agem_handler = mega_agem.MEGAHandler(
         model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
     )
 

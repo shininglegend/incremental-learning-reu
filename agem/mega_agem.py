@@ -1,7 +1,7 @@
 import torch
 
 
-class AGEMHandler:
+class MEGAHandler:
     def __init__(
         self,
         model: torch.nn.Module,
@@ -10,7 +10,7 @@ class AGEMHandler:
         device,
         batch_size=256,
         lr_scheduler=None,
-        epsilon=0.00001,  # Threshold for meaningful normalized losses (0-1 range)
+        epsilon=0.1,  # Threshold for meaningful raw losses
     ):
         self.model = model
         self.criterion = criterion
@@ -20,45 +20,7 @@ class AGEMHandler:
         self.lr_scheduler = lr_scheduler
         self.epsilon = epsilon
 
-    def start_epoch(self):
-        """Call this at the beginning of each epoch"""
-        self.epoch_min_loss = float('inf')
-        self.epoch_max_loss = float('-inf')
 
-    def normalize_loss_sliding_window(self, loss_value, add_to_history=True):
-        """Normalize using a sliding window of recent losses"""
-        if not hasattr(self, 'loss_history'):
-            self.loss_history = []
-        
-        # Only add to history if requested (for current losses, not reference losses)
-        if add_to_history:
-            self.loss_history.append(loss_value)
-            
-            # Keep only last N losses for normalization bounds
-            window_size = 200  # Adjust as needed (50-250, ...)
-            if len(self.loss_history) > window_size:
-                self.loss_history = self.loss_history[-window_size:]
-        
-        if len(self.loss_history) < 2:
-            return 0.5  # Default for insufficient data
-        
-        # For consistent normalization, always include the current value in bounds calculation
-        # but only permanently store it if add_to_history=True
-        all_losses = self.loss_history if add_to_history else self.loss_history + [loss_value]
-        min_val = min(all_losses)
-        max_val = max(all_losses)
-
-        if min_val == max_val:
-            return 0.5
-
-        return (loss_value - min_val) / (max_val - min_val)
-
-    def normalize_reference_loss(self, ref_loss):
-        """
-        Normalize reference loss using the same approach as current loss
-        but without adding to history permanently.
-        """
-        return self.normalize_loss_sliding_window(ref_loss, add_to_history=False)
 
     def compute_gradient(self, data, labels):
         """Compute gradients for given data and labels without corrupting model state"""
@@ -92,54 +54,45 @@ class AGEMHandler:
             else:
                 param.grad = None
 
-        return torch.cat(grads) if grads else torch.tensor([]).to(self.device), loss.item()
+        return (
+            torch.cat(grads) if grads else torch.tensor([]).to(self.device)
+        ), loss.item()
 
     def compute_loss(self, data, labels):
         """Compute loss for given data and labels without affecting gradients"""
         data, labels = data.to(self.device), labels.to(self.device)
-        
+
         with torch.no_grad():
             outputs = self.model(data)
             loss = self.criterion(outputs, labels)
-        
+
         return loss.item()
 
     def mega_i_gradient_balance(self, current_grad, ref_grad, current_loss, ref_loss):
         """
         Balance current and reference gradients using MEGA-I approach based on loss information.
-        
+
         According to equation:
         - If l_t(w; X) > e, then a1(w) = 1, a2(w) = l_ref(w; z) / l_t(w; X)
         - If l_t(w; X) <= e, then a1(w) = 0, a2(w) = 1
 
-        Normalized loss added
+
         """
         if current_grad.numel() == 0 or ref_grad.numel() == 0:
             return current_grad
 
-        # Normalize the current loss
-        normalized_current_loss = self.normalize_loss_sliding_window(current_loss, add_to_history=True)
-        # Normalize the reference loss
-        normalized_ref_loss = self.normalize_reference_loss(ref_loss)
-        
-        #print(f"Original loss: {current_loss:.6f}, Normalized loss: {normalized_current_loss:.6f}, epsilon: {self.epsilon}")
-
-        if normalized_current_loss > self.epsilon:
-            # Case 1: Normalized current loss > epsilon
-            #print("| ========== | CASE 1111111111 | ========== |")
-            #print("*****************************************************************************************")
+        if current_loss > self.epsilon:
+            # Case 1: Current loss > epsilon
             alpha1 = 1.0
-            alpha2 = normalized_ref_loss / normalized_current_loss if normalized_current_loss > 0 else 0.0
+            alpha2 = ref_loss / current_loss if current_loss > 0 else 0.0
         else:
-            # Case 2: Normalized current loss <= epsilon
-            #print("| ========== | CASE 2222222222 | ========== |")
-            #print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+            # Case 2: Current loss <= epsilon
             alpha1 = 0.0
             alpha2 = 1.0
 
         # Balance the gradients
         balanced_grad = alpha1 * current_grad + alpha2 * ref_grad
-        
+
         return balanced_grad
 
     def set_gradient(self, grad_vector):
@@ -157,16 +110,16 @@ class AGEMHandler:
                 pointer += num_param
 
     def optimize(self, data, labels, memory_samples=None):
-        """MEGA-I optimization with normalized loss-based gradient balancing"""
+        """MEGA-I optimization with loss-based gradient balancing"""
         data, labels = data.to(self.device), labels.to(self.device)
-        
+
         # Compute loss for tracking
         self.model.zero_grad()
         outputs = self.model(data)
         loss = self.criterion(outputs, labels)
         current_loss = loss.item()
 
-        #Update learning rate if scheduler is provided
+        # Update learning rate if scheduler is provided
         if self.lr_scheduler is not None:
             new_lr = self.lr_scheduler.step(current_loss)
             for param_group in self.optimizer.param_groups:
@@ -178,7 +131,11 @@ class AGEMHandler:
         for param in self.model.parameters():
             if param.grad is not None:
                 current_grad.append(param.grad.view(-1))
-        current_grad = torch.cat(current_grad) if current_grad else torch.tensor([]).to(self.device)
+        current_grad = (
+            torch.cat(current_grad)
+            if current_grad
+            else torch.tensor([]).to(self.device)
+        )
 
         # If we have memory samples, apply MEGA-I gradient balancing
         if memory_samples is not None and len(memory_samples) > 0:
@@ -213,7 +170,7 @@ class AGEMHandler:
                     balanced_grad = self.mega_i_gradient_balance(
                         current_grad, ref_grad, current_loss, ref_loss
                     )
-                    #print("balanced grad: ", balanced_grad)
+                    # print("balanced grad: ", balanced_grad)
 
                     # Set balanced gradient and optimize
                     self.set_gradient(balanced_grad)
