@@ -48,13 +48,16 @@ task_specific:
     num_pools: 2
     clusters_per_pool: 50
 
+<<<<<<< HEAD
 
-# Task Introduction Configuration
-task_introduction: 'continuous'
-# Introduction type to use. Supports: 'sequential', 'half and half', 'random', 'continuous'
 
 # For continuous change only
 num_transition_epochs: 10  # how many epochs it takes to transition between tasks.
 
 # If the loss is greater than or equal to this, commit to memory
 memory loss commitment threshold: 0.1
+
+# Task Introduction Configuration
+task_introduction: "sequential" # How to introduce tasks. One of: 'sequential', 'half and half', 'random', 'continuous'
+
+
