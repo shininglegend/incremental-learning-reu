@@ -77,7 +77,6 @@ class FashionMnistDatasetLoader(DatasetLoader):
             "zalando-research/fashionmnist",
             path_override=path_override,
         )
-        print(f"Fashion-MNIST dataset is at {path}")
         self.training_images_filepath = join(path, "train-images-idx3-ubyte")
         self.training_labels_filepath = join(path, "train-labels-idx1-ubyte")
         self.test_images_filepath = join(path, "t10k-images-idx3-ubyte")
