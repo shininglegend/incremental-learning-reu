@@ -187,7 +187,7 @@ class MnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True
+                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -259,7 +259,7 @@ class MnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True
+                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -322,7 +322,7 @@ class MnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_task)
             test_dataset = TensorDataset(x_test_task, y_test_task)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True
+                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False

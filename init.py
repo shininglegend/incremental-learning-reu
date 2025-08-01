@@ -11,6 +11,7 @@ from agem.learning_rate import TALearningRateScheduler
 from em_tools import clustering_pools
 from dataset_tools.load_dataset import load_dataset
 from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
+from utils import task_introduction
 
 
 def load_config(config_path="config/default.yaml"):
@@ -129,6 +130,13 @@ def initialize_system():
     # Sanity checks
     if config["sampling_rate"] > config["batch_size"]:
         raise Exception("Samping rate exceeds batch size.")
+    if config["task_introduction"] not in [
+        "sequential",
+        "half and half",
+        "random",
+        "continuous",
+    ]:
+        raise Exception("Configuration task_introduction is invalid.")
 
     # Apply lite mode overrides
     if config["lite"]:
@@ -161,6 +169,7 @@ def initialize_system():
         "random_em": config["random_em"],
         "sampling_rate": config["sampling_rate"],
         "task_type": config["task_type"],
+        "task_introduction": config["task_introduction"],
         "use_lr_scheduler": config["use_learning_rate_scheduler"],
         "verbose": config["verbose"],
     }
@@ -229,6 +238,22 @@ def initialize_system():
         sampling_rate=config["sampling_rate"],
     )
 
+    # Per-epoch main.py construction
+    # epoch_list is a list of keys for the program to run in sequence
+    # each item in the list corresponds to a key in train_dataloaders_dict
+    # the value in train_dataloaders_dict is a dataloader corresponding to that key
+    # iterate over epoch_list to get the epoch order for training.
+    epoch_list, train_dataloaders_dict = task_introduction.get_epoch_order(
+        train_dataloaders=train_dataloaders,
+        num_tasks=config["num_tasks"],
+        num_epochs=config["num_epochs"],
+        batch_size=config["batch_size"],
+        num_transition_epochs=config["num_transition_epochs"],
+        task_introduction=config["task_introduction"]
+    )
+    
+    num_epochs_per_task = task_introduction.make_num_epochs_into_dict(num_epochs_per_task=config["num_epochs"], num_tasks=config["num_tasks"])
+
     # Create run name with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     run_name = f"{config['task_type']}_{timestamp}"
@@ -251,7 +276,10 @@ def initialize_system():
         lr_scheduler,
         clustering_memory,
         agem_handler,
-        train_dataloaders,
-        test_dataloaders,
+        train_dataloaders,  # dict
+        test_dataloaders,  # list for legacy compatibility
         visualizer,
+        epoch_list,
+        train_dataloaders_dict,
+        num_epochs_per_task,
     )
