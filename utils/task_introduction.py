@@ -67,23 +67,20 @@ def get_epoch_order(
             train_dataloaders_dict,
         )
     else:
-        print(
-            f'task_introduction has value "{task_introduction}", which isn\'t currently supported.'
+        raise Exception(
+            f'Config value task_introduction is set to "{task_introduction}", which isn\'t currently supported.'
         )
-        print("Please edit default.yaml or task_introduction.py and try again.")
-        exit("Goodbye. :)")
 
 
 def _get_random_epoch_order(task_epochs_dict):
     epoch_order = _get_pure_sequential_order(task_epochs_dict=task_epochs_dict)
     random.shuffle(epoch_order)
-    print("ts random i promise")
     return epoch_order
 
 
 def _get_half_and_half_epoch_order(task_epochs_dict):
     """
-    Inherently assumes config['num_epochs'] is a dictionary.
+    Gives an epoch order where the tasks are seen twice.
     """
     first_half = []
     second_half = []
