@@ -56,15 +56,12 @@ for task_id in range(len(train_dataloaders)):
     task_start_time = time.time()
     task_epoch_losses = []
 
-    # Query clustering_memory for all samples once per task
-    t.start("get samples")
-    all_samples = clustering_memory.get_memory_samples()
-    t.end("get samples")
-
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(9, NUM_EPOCHS):
         model.train()
         epoch_loss = 0.0
         batches_seen = 0
+        samples_added = 0
+
         total_batches = len(train_dataloaders[task_id])
 
         # Convert dataloader to iterator for this epoch
@@ -95,8 +92,14 @@ for task_id in range(len(train_dataloaders)):
                 and epoch >= NUM_EPOCHS / 2
                 and task_id != len(train_dataloaders) - 1
             ):
-                # q should decrease linearly from 1.0 to 0.0
-                q = 1 - ((batch_idx * epoch) / ((NUM_EPOCHS / 2) * total_batches))
+                # q should decrease linearly from 1.0 to 0.0 per epoch per batch.
+                q = 1.0 - ((epoch - NUM_EPOCHS / 2) + batch_idx / total_batches) * 0.1
+                # Q should only move 0.1 down linearly per epoch.
+                assert (
+                    (NUM_EPOCHS - (epoch + 1)) / (NUM_EPOCHS / 2)
+                    <= q
+                    <= (NUM_EPOCHS - epoch) / (NUM_EPOCHS / 2)
+                ), "Incorrect q: " + str(q)
                 take_from_a = math.floor(q * BATCH_SIZE)
                 take_from_b = math.ceil((1 - q) * BATCH_SIZE)
                 # Take floor q*z samples from a
@@ -115,28 +118,30 @@ for task_id in range(len(train_dataloaders)):
                 data = torch.cat((samples_a, samples_b))
                 labels = torch.cat((labels_a, labels_b))
                 # Shuffle while keeping data and labels matched
-                shuffle_idx = torch.randperm(data.size(0))
+                shuffle_idx = torch.randperm(BATCH_SIZE)
                 data = data[shuffle_idx]
                 labels = labels[shuffle_idx]
+                task_ids_for_samples = torch.tensor(
+                    [task_id for _ in range(take_from_a)]
+                    + [task_id + 1 for _ in range(take_from_b)]
+                )
+                task_ids_for_samples = task_ids_for_samples[shuffle_idx]
             else:
+                task_ids_for_samples = torch.tensor(
+                    [task_id for _ in range(BATCH_SIZE)]
+                )
                 (data, labels) = next(train_iter_a)
             # Move data to device
             data, labels = data.to(device), labels.to(device)
             # Select memory samples for this batch
-            if config["random_em"] and len(all_samples) > 0:
-                # Apply random mask to select BATCH_SIZE samples
-                t.start("choose random samples")
-                num_samples = len(all_samples)
-                if num_samples <= BATCH_SIZE:
-                    batch_samples = all_samples
-                else:
-                    mem_sample_mask = np.random.choice(
-                        num_samples, BATCH_SIZE, replace=False
-                    )
-                    batch_samples = [all_samples[i] for i in mem_sample_mask]
-                t.end("choose random samples")
+
+            t.start("get samples")
+            if config["random_em"]:
+                # Query clustering_memory for all samples once per task
+                batch_samples = clustering_memory.get_random_samples(BATCH_SIZE)
             else:
-                batch_samples = all_samples
+                batch_samples = clustering_memory.get_memory_samples()
+            t.end("get samples")
 
             # Step 1: Use A-GEM logic for current batch and current memory
             # agem_handler.optimize handles model update and gradient projection
@@ -149,6 +154,30 @@ for task_id in range(len(train_dataloaders)):
                 epoch_loss += batch_loss
                 visualizer.add_batch_loss(task_id, epoch, batch_idx, batch_loss)
 
+            # Step 2: Update the clustered memory with some samples from this task's dataloader
+            # This is where the core clustering for TA-A-GEM happens
+            t.start("add samples")
+            # Add samples per batch based on sampling_rate
+            if SAMPLING_RATE < 1:
+                # Fractional sampling - add every 1/SAMPLING_RATE batches
+                if batches_seen % int(1 / SAMPLING_RATE) == 0:
+                    samples_added += 1
+                    clustering_memory.add_sample(
+                        data[0].cpu(), labels[0].cpu(), task_ids_for_samples[0]
+                    )
+                    # Track oldest task IDs after adding sample
+                    visualizer.track_oldest_task_ids(clustering_memory, task_id)
+            else:
+                # Sample multiple items per batch (up to batch size and sampling rate)
+                num_to_sample = min(int(SAMPLING_RATE), len(data))
+                for i in range(num_to_sample):
+                    samples_added += 1
+                    clustering_memory.add_sample(
+                        data[i].cpu(), labels[i].cpu(), task_ids_for_samples[i]
+                    )
+                    # Track oldest task IDs after adding sample
+                    visualizer.track_oldest_task_ids(clustering_memory, task_id)
+            t.end("add samples")
             batches_seen += 1
 
             # Update progress bar every 50 batches or on last batch
@@ -170,6 +199,14 @@ for task_id in range(len(train_dataloaders)):
         # Print newline after progress bar completion
         if not QUICK_TEST_MODE and VERBOSE:
             print()
+
+        print(
+            f"Added {samples_added} out of {len(train_dataloaders[task_id]) * BATCH_SIZE} samples this round."
+        )
+        print(
+            "Sample throughput (cumulative):",
+            clustering_memory.get_sample_throughputs(),
+        )
 
         # Track epoch loss
         avg_epoch_loss = epoch_loss / max(batches_seen, 1)
@@ -215,38 +252,6 @@ for task_id in range(len(train_dataloaders)):
             print(
                 f"  Epoch {epoch+1}/{NUM_EPOCHS}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
             )
-    # Step 2: Update the clustered memory with some samples from this task's dataloader
-    # This is where the core clustering for TA-A-GEM happens
-    t.start("add samples")
-    samples_added = 0
-    batch_counter = 0
-    # Add samples per batch based on sampling_rate
-    for sample_data, sample_labels in train_dataloaders[task_id]:
-        if SAMPLING_RATE < 1:
-            # Fractional sampling - add every 1/SAMPLING_RATE batches
-            if batch_counter % int(1 / SAMPLING_RATE) == 0:
-                samples_added += 1
-                clustering_memory.add_sample(
-                    sample_data[0].cpu(), sample_labels[0].cpu(), task_id
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, task_id)
-        else:
-            # Sample multiple items per batch (up to batch size and sampling rate)
-            num_to_sample = min(int(SAMPLING_RATE), len(sample_data))
-            for i in range(num_to_sample):
-                samples_added += 1
-                clustering_memory.add_sample(
-                    sample_data[i].cpu(), sample_labels[i].cpu(), task_id
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, task_id)
-        batch_counter += 1
-    print(
-        f"Added {samples_added} out of {len(train_dataloaders[task_id]) * BATCH_SIZE} samples this round."
-    )
-    print("Sample throughput (cumulative):", clustering_memory.get_sample_throughputs())
-    t.end("add samples")
 
     # Calculate training time for this task
     task_time = time.time() - task_start_time
