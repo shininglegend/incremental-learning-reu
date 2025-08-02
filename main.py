@@ -237,6 +237,15 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             f"  Epoch {epoch_number + 1}/{num_epochs_per_task[current_task_id]}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
         )
 
+    if epoch_number % 20 == 0:
+        print(f"\r{" " * 80}\rAdded {samples_added} out of {samples_seen} samples.")
+        print(
+            "Sample throughput (cumulative):",
+            clustering_memory.get_sample_throughputs(),
+        )
+        samples_added = 0
+        samples_seen = 0
+
     if not QUICK_TEST_MODE:
         task_str = (
             f"Tasks {current_task_id + 1:1} and {next_task_id + 1:1}"
@@ -250,15 +259,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
         # Print the final string, padding with spaces, and then a newline
         print(f"{final_output_str:<80}")  # Adjust padding width as needed
-
-    if (epoch_number + 1) % 20 == 0:
-        print(f"\r{' ' * 80}\rAdded {samples_added} out of {samples_seen} samples.")
-        print(
-            "Sample throughput (cumulative):",
-            clustering_memory.get_sample_throughputs(),
-        )
-        samples_added = 0
-        samples_seen = 0
 
     # End of task summary
     if end_of_task:
