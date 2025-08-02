@@ -223,7 +223,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             f"After fully training task {current_task_id + 1}, average accuracy landed at: {final_avg_accuracy:.4f}"
         )
         print(f"Task training time: {task_time:.2f}s")
-        print(t)
 
 t.end("training")
 print("\nTraining complete.")
