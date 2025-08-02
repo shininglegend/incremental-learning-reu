@@ -20,7 +20,7 @@ def evaluate_all_tasks(model, _, task_dataloaders, device):
 
 
 def evaluate_tasks_up_to(model, _, task_dataloaders, current_task_id, device):
-    """Evaluate model only on tasks seen so far using test data"""
+    """Evaluate model only on tasks up to the given task_id using test data"""
     model.eval()
     total_correct = 0
     total_samples = 0
@@ -51,5 +51,24 @@ def evaluate_single_task(model, _, task_dataloader, device):
             _, predicted = torch.max(outputs.data, 1)
             total_samples += labels.size(0)
             total_correct += (predicted == labels).sum().item()
+
+    return total_correct / total_samples if total_samples > 0 else 0.0
+
+
+def evaluate_particular_tasks(model, _, test_dataloaders, list_of_tasks, device):
+    """Evaluate model on a specific list of tasks."""
+    model.eval()
+    total_correct = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for _, task_id in enumerate(list_of_tasks):
+            task_dataloader = test_dataloaders[task_id]
+            for data, labels in task_dataloader:
+                data, labels = data.to(device), labels.to(device)
+                outputs = model(data)
+                _, predicted = torch.max(outputs.data, 1)
+                total_samples += labels.size(0)
+                total_correct += (predicted == labels).sum().item()
 
     return total_correct / total_samples if total_samples > 0 else 0.0

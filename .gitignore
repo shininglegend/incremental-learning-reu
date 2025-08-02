@@ -2,6 +2,7 @@
 /sbatch_results/*
 TRAINING_LOG.md
 /mlruns/*
+/.idea/
 
 # Ignore the data file itself
 *.csv
