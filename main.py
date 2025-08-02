@@ -18,8 +18,7 @@ from init import initialize_system
     optimizer,
     criterion,
     lr_scheduler,
-    clustering_memory,
-    agem_handler,
+    bgd_handler,
     train_dataloaders,
     test_dataloaders,  # list for legacy compatibility
     visualizer,
@@ -44,8 +43,6 @@ task_training_times = (
     []
 )  # So we can track task training times even when the epochs are separated.
 task_losses = []
-memory_snapshot = []
-samples_seen = 0
 
 # Initializations for lists who have indices directly corresponding to task_id
 for i in range(config["num_tasks"]):
@@ -105,23 +102,12 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
     """Per batch training loop"""
     for batch_idx, (data, labels) in enumerate(epoch_dataloader):
-        if isinstance(epoch_dataloader, MixedTaskDataLoader):
-            task_ids = epoch_dataloader.current_shuffled_task_ids
-        else:
-            task_ids = [current_task_id for _ in range(data.size(0))]
-        assert len(task_ids) == data.size(0)
-        t.start("get from memory")
-        # Get a fresh batch of samples from memory
-        episodic_memory_samples = clustering_memory.get_random_samples(len(data))
-        t.end("get from memory")
-
         # Move data to device
         data, labels = data.to(device), labels.to(device)
-        samples_seen += len(data)
 
-        # agem_handler.optimize handles model update and gradient projection
+        # optimize handles model update
         t.start("optimize")
-        batch_loss = agem_handler.optimize(data, labels, episodic_memory_samples)
+        batch_loss = bgd_handler.optimize(data, labels)
         t.end("optimize")
 
         # Track batch loss
@@ -159,33 +145,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
                 flush=True,
             )
 
-    # Update the clustered memory with some samples from this epoch
-    # This is where the core clustering for TA-A-GEM happens
-    t.start("add samples")
-    samples_added = 0
-    for batch_idx, (data, labels) in enumerate(epoch_dataloader):
-        # Add samples per batch based on sampling_rate
-        if SAMPLING_RATE < 1:
-            # Fractional sampling - add every 1/SAMPLING_RATE batches
-            if batch_idx % int(1 / SAMPLING_RATE) == 0:
-                samples_added += 1
-                clustering_memory.add_sample(
-                    data[0].cpu(), labels[0].cpu(), task_ids[0]
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-        else:
-            # Sample multiple items per batch (up to batch size and sampling rate)
-            num_to_sample = min(int(SAMPLING_RATE), len(data))
-            for i in range(num_to_sample):
-                samples_added += 1
-                clustering_memory.add_sample(
-                    data[i].cpu(), labels[i].cpu(), task_ids[i]
-                )
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-    t.end("add samples")
-
     epoch_training_time = time.time() - epoch_start_time
     task_training_times[current_task_id] += epoch_training_time
 
@@ -214,7 +173,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
     t.start("visualizer")
     # Update visualizer with epoch metrics
-    memory_size = clustering_memory.get_memory_size()
     current_lr = lr_scheduler.get_lr() if USE_LEARNING_RATE_SCHEDULER else LEARNING_RATE
 
     visualizer.update_metrics(
@@ -222,7 +180,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         overall_accuracy=avg_accuracy,
         individual_accuracies=individual_accuracies,
         epoch_loss=avg_epoch_loss,
-        memory_size=memory_size,
+        memory_size=None,
         training_time=time.time() - epoch_start_time,
         learning_rate=current_lr,
     )
@@ -236,15 +194,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         print(
             f"  Epoch {epoch_number + 1}/{num_epochs_per_task[current_task_id]}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
         )
-
-    if epoch_number % 20 == 0:
-        print(f"\r{" " * 80}\rAdded {samples_added} out of {samples_seen} samples.")
-        print(
-            "Sample throughput (cumulative):",
-            clustering_memory.get_sample_throughputs(),
-        )
-        samples_added = 0
-        samples_seen = 0
 
     if not QUICK_TEST_MODE:
         task_str = (
@@ -265,11 +214,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         # Calculate training time for this task
         task_time = task_training_times[current_task_id]
 
-        # Final task summary
-        pool_sizes = clustering_memory.get_pool_sizes()
-        num_active_pools = clustering_memory.get_num_active_pools()
-        final_memory_size = clustering_memory.get_memory_size()
-
         # Get final accuracy from last epoch evaluation
         final_avg_accuracy = (
             visualizer.task_accuracies[-1] if visualizer.task_accuracies else 0.0
@@ -278,11 +222,8 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         print(
             f"After fully training task {current_task_id + 1}, average accuracy landed at: {final_avg_accuracy:.4f}"
         )
-        print(
-            f"Memory size: {final_memory_size} samples across {num_active_pools} active pools"
-        )
-        print(f"Pool sizes: {pool_sizes}")
         print(f"Task training time: {task_time:.2f}s")
+        print(t)
 
 t.end("training")
 print("\nTraining complete.")
@@ -336,7 +277,6 @@ visualizer.save_metrics(
 
 # Generate simplified report with 3 key visualizations
 visualizer.generate_simple_report(
-    # clustering_memory,
     show_images=config["show_images"],
 )
 

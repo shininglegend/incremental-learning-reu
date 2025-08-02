@@ -6,10 +6,8 @@ import torch.nn as nn
 import torch.optim as optim
 import yaml
 
-from agem import agem
-from agem import bgd
-from agem.learning_rate import TALearningRateScheduler
-from em_tools import clustering_pools
+from bgd_agem import bgd
+from bgd_agem.learning_rate import TALearningRateScheduler
 from dataset_tools.load_dataset import load_dataset
 from visualization_analysis.visualization_analysis import TAGemVisualizer, Timer
 from utils import task_introduction
@@ -204,16 +202,6 @@ def initialize_system():
         else None
     )
 
-    # Initialize TA-A-GEM components
-    clustering_memory = clustering_pools.ClusteringMemory(
-        Q=config["clusters_per_pool"],
-        P=config["memory_size_p"],
-        input_type="samples",
-        device=device,
-        num_pools=config["num_pools"],
-        add_remove_randomly=config["add_remove_randomly"],
-    )
-
     # Formerly agem
     bgd_handler = bgd.BGDHandler(
         model,
@@ -284,9 +272,7 @@ def initialize_system():
         optimizer,
         criterion,
         lr_scheduler,
-        clustering_memory,
-        # agem_handler,
-        bgd_handler,
+        bgd_handler,  # Replaces A-GEM
         train_dataloaders,
         test_dataloaders,
         visualizer,

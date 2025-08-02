@@ -84,7 +84,8 @@ class TAGemVisualizer:
         """Backward compatibility: return memory efficiency"""
         return [
             ep["overall_accuracy"] / ep["memory_size"] if ep["memory_size"] > 0 else 0.0
-            for ep in self.epoch_data if ep.get("memory_size", None) is not None
+            for ep in self.epoch_data
+            if ep.get("memory_size", None) is not None
         ]
 
     @property
@@ -182,7 +183,6 @@ class TAGemVisualizer:
                 metrics = {
                     "overall_accuracy": overall_accuracy,
                     "epoch_loss": epoch_data["epoch_loss"],
-                    # "memory_size": memory_size,
                     "current_task": task_id,
                 }
 
@@ -190,6 +190,8 @@ class TAGemVisualizer:
                     metrics["learning_rate"] = learning_rate
                 if training_time is not None:
                     metrics["training_time"] = training_time
+                if memory_size is not None:
+                    metrics["memory_size"] = memory_size
 
                 # Log individual task accuracies
                 for i, acc in enumerate(individual_accuracies):
@@ -226,8 +228,8 @@ class TAGemVisualizer:
         """Save all metrics and params to file for later analysis"""
         metrics = {
             "epoch_data": self.epoch_data,
-            "task_boundaries": None, # self.task_boundaries,
-            "batch_losses": None, # self.batch_losses,
+            "task_boundaries": None,  # self.task_boundaries,
+            "batch_losses": None,  # self.batch_losses,
             "training_times": self.training_times,
             "oldest_task_ids_tracking": self._oldest_task_ids_tracking,
             "timestamp": datetime.now().isoformat(),
@@ -348,7 +350,11 @@ class TAGemVisualizer:
         return fig
 
     def generate_simple_report(
-        self, clustering_memory, clusters_to_show=1, show_images=True, save_path=None
+        self,
+        clustering_memory=None,
+        clusters_to_show=1,
+        show_images=True,
+        save_path=None,
     ):
         """Generate simplified analysis with just 3 graphs"""
         if not self.epoch_data:
@@ -379,12 +385,15 @@ class TAGemVisualizer:
             print(f"Error creating per-task accuracy graph: {e}")
 
         # Graph 2: Cluster storage visualization
-        try:
-            print("Displaying cluster storage visualization...")
-            if show_images:
-                self.create_cluster_visualization(clustering_memory, clusters_to_show)
-        except Exception as e:
-            print(f"Error creating cluster visualization: {e}")
+        if clustering_memory is not None:
+            try:
+                print("Displaying cluster storage visualization...")
+                if show_images:
+                    self.create_cluster_visualization(
+                        clustering_memory, clusters_to_show
+                    )
+            except Exception as e:
+                print(f"Error creating cluster visualization: {e}")
 
         # Graph 3: Overall accuracy over time
         try:
