@@ -252,7 +252,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         print(f"{final_output_str:<80}")  # Adjust padding width as needed
 
     if (epoch_number + 1) % 20 == 0:
-        print(f"\r{' ' * 80}\rAdded {samples_added} out of {samples_seen} samples.")
+        print(f"\r{' ' * 85}\rAdded {samples_added} out of {samples_seen} samples.")
         print(
             "Sample throughput (cumulative):",
             clustering_memory.get_sample_throughputs(),
