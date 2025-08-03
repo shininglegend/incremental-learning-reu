@@ -202,7 +202,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             else f"Task {current_task_id + 1}"
         )
         final_output_str = (
-            f"\r{task_str}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{num_epochs_per_task[current_task_id]}:"
+            f"\r{' ' * 85}\r{task_str}, Epoch {epochs_seen_per_task[current_task_id]:>2}/{num_epochs_per_task[current_task_id]}:"
             f" Accuracy: {avg_accuracy:.2%} Loss {avg_epoch_loss:.4}"
         )
 
