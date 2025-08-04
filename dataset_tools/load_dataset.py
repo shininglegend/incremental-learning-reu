@@ -52,7 +52,12 @@ class DatasetLoader(ABC):
         pass
 
     def prepare_domain_incremental_data(
-        self, task_type: str, num_tasks: int, batch_size: int, quick_test: bool = False
+        self,
+        task_type: str,
+        num_tasks: int,
+        batch_size: int,
+        quick_test: bool = False,
+        use_cuda: bool = False,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Prepare data for domain-incremental learning.
 
@@ -88,6 +93,7 @@ class DatasetLoader(ABC):
             task_type,
             num_tasks,
             batch_size,
+            use_cuda,
         )
 
     def _create_task_dataloaders(
@@ -99,6 +105,7 @@ class DatasetLoader(ABC):
         task_type: str,
         num_tasks: int,
         batch_size: int,
+        use_cuda: bool,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create task-specific data loaders based on task type."""
         if task_type == "permutation":
@@ -109,6 +116,7 @@ class DatasetLoader(ABC):
                 y_test_tensor,
                 num_tasks,
                 batch_size,
+                use_cuda,
             )
         elif task_type == "rotation":
             return self._create_rotation_tasks(
@@ -118,6 +126,7 @@ class DatasetLoader(ABC):
                 y_test_tensor,
                 num_tasks,
                 batch_size,
+                use_cuda,
             )
         elif task_type == "class_split":
             return self._create_class_split_tasks(
@@ -127,6 +136,7 @@ class DatasetLoader(ABC):
                 y_test_tensor,
                 num_tasks,
                 batch_size,
+                use_cuda,
             )
         else:
             raise ValueError(f"Unknown task_type: {task_type}")
@@ -140,6 +150,7 @@ class DatasetLoader(ABC):
         y_test_tensor: torch.Tensor,
         num_tasks: int,
         batch_size: int,
+        use_cuda: bool,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create permutation-based tasks."""
         pass
@@ -153,6 +164,7 @@ class DatasetLoader(ABC):
         y_test_tensor: torch.Tensor,
         num_tasks: int,
         batch_size: int,
+        use_cuda: bool,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create rotation-based tasks."""
         pass
@@ -166,6 +178,7 @@ class DatasetLoader(ABC):
         y_test_tensor: torch.Tensor,
         num_tasks: int,
         batch_size: int,
+        use_cuda: bool,
     ) -> Tuple[List[DataLoader], List[DataLoader]]:
         """Create class-split-based tasks."""
         pass

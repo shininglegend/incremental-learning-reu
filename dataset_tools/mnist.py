@@ -77,7 +77,9 @@ class MnistDatasetLoader(DatasetLoader):
     def __init__(self, path_override=None):
         super().__init__()
         # Set file paths based on MNIST datasets
-        path = get_dataset_path("MNIST", "hojjatk/mnist-dataset", path_override=path_override)
+        path = get_dataset_path(
+            "MNIST", "hojjatk/mnist-dataset", path_override=path_override
+        )
         self.training_images_filepath = join(
             path, "train-images-idx3-ubyte/train-images-idx3-ubyte"
         )
@@ -142,6 +144,7 @@ class MnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
+        use_cuda,
     ):
         """Create permutation-based tasks for MNIST."""
         train_dataloaders = []
@@ -187,7 +190,11 @@ class MnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                drop_last=True,
+                pin_memory=use_cuda,
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -205,6 +212,7 @@ class MnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
+        use_cuda,
     ):
         """Create rotation-based tasks for MNIST."""
         train_dataloaders = []
@@ -259,7 +267,11 @@ class MnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                drop_last=True,
+                pin_memory=use_cuda,
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -277,6 +289,7 @@ class MnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
+        use_cuda,
     ):
         """Create class-split-based tasks for MNIST."""
         train_dataloaders = []
@@ -322,7 +335,11 @@ class MnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_task)
             test_dataset = TensorDataset(x_test_task, y_test_task)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                drop_last=True,
+                pin_memory=use_cuda,
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -359,10 +376,12 @@ if __name__ == "__main__":
             image = x[0]
             title_text = x[1]
             plt.subplot(rows, cols, index)
-            plt.imshow(image.reshape(28, 28) if len(image.shape) == 1 else image, cmap="gray")
+            plt.imshow(
+                image.reshape(28, 28) if len(image.shape) == 1 else image, cmap="gray"
+            )
             if title_text != "":
                 plt.title(title_text, fontsize=10)
-            plt.axis('off')
+            plt.axis("off")
             index += 1
         plt.tight_layout()
         plt.show()
@@ -371,7 +390,9 @@ if __name__ == "__main__":
 
     # Load and preprocess data with quick_test for faster demonstration
     x_train, y_train, x_test, y_test = loader.load_raw_data()
-    x_train, y_train, x_test, y_test = loader.preprocess_data(x_train, y_train, x_test, y_test, quick_test=True)
+    x_train, y_train, x_test, y_test = loader.preprocess_data(
+        x_train, y_train, x_test, y_test, quick_test=True
+    )
 
     print(f"Dataset shapes: train {x_train.shape}, test {x_test.shape}")
 
@@ -387,7 +408,9 @@ if __name__ == "__main__":
 
     # Permutation task samples
     print("2. Permutation task samples:")
-    train_loaders, test_loaders = loader._create_permutation_tasks(x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32)
+    train_loaders, test_loaders = loader._create_permutation_tasks(
+        x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32
+    )
 
     for task_id in range(3):
         images_2_show = []
@@ -401,7 +424,9 @@ if __name__ == "__main__":
 
     # Rotation task samples
     print("3. Rotation task samples:")
-    train_loaders, test_loaders = loader._create_rotation_tasks(x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32)
+    train_loaders, test_loaders = loader._create_rotation_tasks(
+        x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32
+    )
 
     for task_id in range(3):
         images_2_show = []
@@ -410,11 +435,17 @@ if __name__ == "__main__":
         for i in range(min(5, len(batch_x))):
             images_2_show.append(batch_x[i].numpy())
             titles_2_show.append(f"Label: {batch_y[i].item()}, Rot: {task_id * 20}°")
-        show_images(images_2_show, titles_2_show, f"Rotation Task {task_id + 1} ({task_id * 20}° rotation)")
+        show_images(
+            images_2_show,
+            titles_2_show,
+            f"Rotation Task {task_id + 1} ({task_id * 20}° rotation)",
+        )
 
     # Class split task samples
     print("4. Class split task samples:")
-    train_loaders, test_loaders = loader._create_class_split_tasks(x_train, y_train, x_test, y_test, num_tasks=5, batch_size=32)
+    train_loaders, test_loaders = loader._create_class_split_tasks(
+        x_train, y_train, x_test, y_test, num_tasks=5, batch_size=32
+    )
 
     for task_id in range(5):
         images_2_show = []
@@ -424,6 +455,10 @@ if __name__ == "__main__":
             images_2_show.append(batch_x[i].numpy())
             orig_classes = f"{task_id*2},{task_id*2+1}"
             titles_2_show.append(f"Orig: {orig_classes}, New: {batch_y[i].item()}")
-        show_images(images_2_show, titles_2_show, f"Class Split Task {task_id + 1} (classes {task_id*2}-{task_id*2+1})")
+        show_images(
+            images_2_show,
+            titles_2_show,
+            f"Class Split Task {task_id + 1} (classes {task_id*2}-{task_id*2+1})",
+        )
 
     print("Visualization complete!")
