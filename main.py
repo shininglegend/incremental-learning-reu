@@ -1,5 +1,6 @@
 # This is the file pulling it all together. Edit sparingly, if at all!
 import math
+import random
 import time, os
 from utils import accuracy_test
 from utils.task_introduction import MixedTaskDataLoader
@@ -336,7 +337,10 @@ task_introduction_abbrev = {
 quick_mode = "q-" if QUICK_TEST_MODE else ""
 random_em = "rem-" if config["random_em"] else ""
 dataset_name = config["dataset_name"].lower()
-filename = f"results-{quick_mode}{task_introduction_abbrev}-{random_em}{SAMPLING_RATE}-{task_type_abbrev}-{dataset_name}-{timestamp}.pkl"
+filename = f"results-{quick_mode}{task_introduction_abbrev}-{random_em}{SAMPLING_RATE}-{task_type_abbrev}-{dataset_name}-{timestamp}"
+
+random_signifier = random.randint(0, 999999)
+filename += f"_{random_signifier}.pkl"
 
 visualizer.save_metrics(
     os.path.join(params["output_dir"], filename),
