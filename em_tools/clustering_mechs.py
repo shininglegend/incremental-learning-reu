@@ -92,7 +92,7 @@ class Cluster:
             sample_idx = random.randint(0, len(self.samples) - 1)
             self._remove_sample(sample_idx)
         else:
-            return self.remove_based_on_mean()
+            return self.remove_oldest_with_distance_override()
 
     def remove_based_on_mean(self):
         """
@@ -135,6 +135,35 @@ class Cluster:
                 self.mean = self.sum_samples / len(self.samples)
             else:
                 self.mean = torch.zeros_like(self.mean)  # If cluster becomes empty
+
+    def remove_oldest_with_distance_override(self, distance_threshold_multiplier=1.5):
+        """
+        Removes oldest sample (leftmost in deque) unless a newer sample is much worse.
+        New sample must be 1.5x worse than old sample to get removed.
+        """
+        if len(self.samples) <= 1:
+            return self.remove_oldest()
+
+        # Oldest is at index 0, newest at index -1
+        oldest_distance = distance_h(self.samples[0] - self.mean)
+
+        # Find worst distance among newer samples (indices 1 to end)
+        worst_newer_idx = 0
+        worst_newer_distance = oldest_distance
+
+        end_range = len(self.samples) - 1
+        for i in range(1, end_range):
+            distance = distance_h(self.samples[i] - self.mean)
+            if distance > worst_newer_distance:
+                worst_newer_distance = distance
+                worst_newer_idx = i
+
+        # Remove the bad newer sample if it's significantly worse
+        if worst_newer_distance > oldest_distance * distance_threshold_multiplier:
+            # print("override engaged. let's hack the mainframe.")
+            return self._remove_sample(worst_newer_idx)
+        else:
+            return self._remove_sample(0)  # Remove oldest (leftmost)
 
     def get_oldest_task_id(self):
         """

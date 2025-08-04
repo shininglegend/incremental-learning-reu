@@ -214,7 +214,7 @@ def initialize_system():
         add_remove_randomly=config["add_remove_randomly"],
     )
 
-    agem_handler = hybrid_handlers.ProgressiveHybridHandler(
+    agem_handler = mega_ii.MEGA2Handler(
         model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
     )
 

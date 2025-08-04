@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --exclusive
 #SBATCH --job-name="parallel_taagem"
 #SBATCH --output="./sbatch_results/slurm-%A_%a.out" # %A for Job Array ID, %a for Task ID output
 #SBATCH --error="./sbatch_results/slurm-%A_%a.err"  # Error log file
@@ -27,7 +28,7 @@ fi
 
 # General Job Settings
 JOB_NAME="parallel_taagem"          # A descriptive name for your job
-TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS)
+TIME_LIMIT="00:30:00"            # Max time for each task (HH:MM:SS)
 TASK_TYPE=$1 # Type of task: "permutation", "class_split", "rotation"
 DATASET_NAME=$2 # mnist or fashion_mnist
 if [[ -z "$TASK_TYPE" || -z "$DATASET_NAME" ]]; then
