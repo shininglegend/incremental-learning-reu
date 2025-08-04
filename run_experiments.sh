@@ -12,14 +12,13 @@ NUM_RUNS=5
 BATCH_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 echo "Batch timestamp: $BATCH_TIMESTAMP"
 
-# Choose dataset based on user input (restrict to mnist or fashion_mnist)
-if [[ "$1" == "mnist" || "$1" == "fashion_mnist" ]]; then
-    DATASET_NAME=$1
-else
+# Choose dataset based on user input (restrict to mnist, fashion_mnist, and cifar_10)
+if [[ "$1" != "mnist" && "$1" == "fashion_mnist" && "$1" != "cifar_10" ]]; then
     echo "Usage: $0 <dataset_name> <save_location>"
     echo "Example: $0 mnist test-new-remove-one"
     exit 1
 fi
+DATASET_NAME=$1
 
 # Add a folder to save test results based on user input
 if [[ -z "$2" ]]; then
