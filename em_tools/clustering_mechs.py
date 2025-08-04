@@ -1,9 +1,11 @@
 # Handles the clusters themselves - assigning and removing as needed
+import math
 import random
 import torch
 import pandas
 from collections import deque
 
+DIST_THRESHOLD_OVERRIDE = 1.5
 
 DEBUG = False
 
@@ -11,6 +13,13 @@ triggered = set()
 dtriggered = lambda s: triggered.add(s) if DEBUG else None
 # Helper function that allows conditional function execution based on flag above
 debug = lambda f, *args, **kwargs: f(*args, **kwargs) if DEBUG else None
+
+counter = {}
+dcount = lambda s: counter.update({s: counter.get(s, 0) + 1})
+
+
+def get_final_count():
+    return counter
 
 
 # Distance heuristic
@@ -92,7 +101,7 @@ class Cluster:
             sample_idx = random.randint(0, len(self.samples) - 1)
             self._remove_sample(sample_idx)
         else:
-            return self.remove_oldest()
+            return self.remove_oldest_dist_override_v2()
 
     def remove_based_on_mean(self):
         """
@@ -147,6 +156,60 @@ class Cluster:
             return None
         return min(self.task_ids)
 
+    def remove_oldest_with_distance_override(self):
+        """
+        Removes oldest sample (leftmost in deque) unless a newer sample is much worse.
+        New sample must be 1.5x worse than old sample to get removed.
+        {'removed newest': 21716, 'removed oldest': 97986}
+        """
+        if len(self.samples) < 2:
+            dcount("removed oldest, not enough samples")
+            return self.remove_oldest()
+
+        indx_of_new = -1
+        dist_to_new = distance_h(self.samples[-1] - self.mean)
+
+        # Remove the bad new sample if it's significantly worse (DIST_THRESHOLD_OVERRIDE) further
+        if dist_to_new > (
+            distance_h(self.samples[0] - self.mean) * DIST_THRESHOLD_OVERRIDE
+        ):
+            dcount("removed newest")
+            return self._remove_sample(indx_of_new)
+        else:
+            dcount("removed oldest")
+            return self.remove_oldest()
+
+    def remove_oldest_dist_override_v2(self):
+        """
+        Removes oldest sample (leftmost in deque) unless one of the other two samples is worse.
+        Newer samples must be 1.5x worse than the old sample to get removed.
+        {'remove oldest': 112091, 'remove newest': 7611}
+        """
+        if len(self.samples) < 3:
+            dcount("not enough samples, removed oldest")
+            return self.remove_oldest()
+
+        # Oldest is at index 0, newest at index -1
+        oldest_distance = distance_h(self.samples[0] - self.mean)
+
+        # Find worst distance among newer samples (indices 1 to n - 1)
+        sample_w_biggest_dist = -1
+        biggest_dist_found = -math.inf
+
+        for i in range(1, len(self.samples) - 1):  # Checks two middle samples
+            distance = distance_h(self.samples[i] - self.mean)
+            if distance > biggest_dist_found:
+                biggest_dist_found = distance
+                sample_w_biggest_dist = i
+
+        # Remove the oldest sample only if all other samples except for the newest are somewhat closer
+        if biggest_dist_found > (oldest_distance * DIST_THRESHOLD_OVERRIDE):
+            dcount("remove newest")
+            return self._remove_sample(sample_w_biggest_dist)
+        else:
+            dcount("remove oldest")
+            return self.remove_oldest()
+
     def _remove_sample(self, idx):
         """
         Removes the sample (and its metadata) at `idx`.
@@ -159,8 +222,6 @@ class Cluster:
         # Grab the items we’ll return before they’re gone
         removed_sample = S[idx]
         removed_label = L[idx]
-        removed_task_id = T[idx] if T else None
-        removed_order_id = O[idx] if O else None
 
         # Bring target to the left end
         S.rotate(-idx)
@@ -254,7 +315,9 @@ class ClusterPool:
             )
 
         # If we're at 0 samples, or at 1 sample and there's space for a second one, add it
-        if len(self.clusters) == 0 or (len(self.clusters) == 1 and self.max_clusters > 1):
+        if len(self.clusters) == 0 or (
+            len(self.clusters) == 1 and self.max_clusters > 1
+        ):
             return self._add_new_cluster(
                 z=z,
                 add_or_remove_randomly=self.add_rem_rand,
@@ -468,7 +531,8 @@ class ClusterPool:
             list: List of oldest task IDs for each cluster, padded with None for unused cluster slots
         """
         oldest_task_ids = [
-            cluster.get_oldest_task_id() if cluster else None for cluster in self.clusters
+            cluster.get_oldest_task_id() if cluster else None
+            for cluster in self.clusters
         ]
 
         # Pad with None for unused cluster slots up to max_clusters
@@ -564,9 +628,9 @@ class ClusterPool:
             y=y_col,
             z=z_col,
             color="Cluster",
-            symbol="Label",
+            symbol="Task",
             title=title,
-            hover_data={"Cluster": True, "Label": True},
+            hover_data={"Cluster": True, "Task": True},
         )
 
         fig.show()

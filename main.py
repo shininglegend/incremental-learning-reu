@@ -4,6 +4,7 @@ import time, os
 from utils import accuracy_test
 from utils.task_introduction import MixedTaskDataLoader
 from init import initialize_system
+from em_tools.clustering_mechs import get_final_count
 
 # --- 1. Configuration and Initialization ---
 
@@ -286,6 +287,8 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         )
         print(f"Pool sizes: {pool_sizes}")
         print(f"Task training time: {task_time:.2f}s")
+        print(get_final_count())
+        clustering_memory.pools[0].visualize()
 
 t.end("training")
 print("\nTraining complete.")
@@ -345,6 +348,7 @@ visualizer.generate_simple_report(
 
 print(f"\nAnalysis complete! Files saved with timestamp: {timestamp}")
 print(t)
+print(get_final_count())
 
 # End MLFlow run
 visualizer.end_run()
