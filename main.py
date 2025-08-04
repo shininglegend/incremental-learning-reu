@@ -101,13 +101,14 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         end_of_task = True
 
     # Tracks when we've trained on all tasks for at least one epoch.
-    if (next_task_id not in tasks_seen) and (next_task_id != -1):
-        tasks_seen.append(next_task_id)
+    if (current_task_id not in tasks_seen) and (next_task_id != -1):
+        tasks_seen.append(current_task_id)
         if len(tasks_seen) == config["num_tasks"]:
             print("\nAll tasks have been seen at least once.")
 
     # Train the model per batch.
     model.train()
+    samples_added = 0
 
     """Per batch training loop"""
     for batch_idx, (data, labels) in enumerate(epoch_dataloader):
@@ -116,6 +117,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         else:
             task_ids = [current_task_id for _ in range(data.size(0))]
         assert len(task_ids) == data.size(0)
+
         t.start("get from memory")
         # Get a fresh batch of samples from memory
         episodic_memory_samples = clustering_memory.get_random_samples(len(data))
@@ -141,6 +143,25 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
         num_batches += 1
 
+        t.start("add samples")
+        # Add samples per batch based on sampling_rate
+        if SAMPLING_RATE < 1:
+            # Fractional sampling - add every 1/SAMPLING_RATE batches
+            if batch_idx % int(1 / SAMPLING_RATE) == 0:
+                samples_added += 1
+                clustering_memory.add_sample(data[0].cpu(), labels[0].cpu(), task_ids[0])
+                # Track oldest task IDs after adding sample
+                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+        else:
+            # Sample multiple items per batch (up to batch size and sampling rate)
+            num_to_sample = min(int(SAMPLING_RATE), len(data))
+            for i in range(num_to_sample):
+                samples_added += 1
+                clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
+                # Track oldest task IDs after adding sample
+                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+        t.end("add samples")
+
         # Update progress bar every 50 batches or on last batch
         if (
             not QUICK_TEST_MODE
@@ -164,11 +185,11 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
                 flush=True,
             )
 
+
     # Update the clustered memory with some samples from this epoch
     # This is where the core clustering for TA-A-GEM happens
-    t.start("add samples")
-    samples_added = 0
     for batch_idx, (data, labels) in enumerate(epoch_dataloader):
+        continue
         # Add samples per batch based on sampling_rate
         if SAMPLING_RATE < 1:
             # Fractional sampling - add every 1/SAMPLING_RATE batches
@@ -185,7 +206,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
                 clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
                 # Track oldest task IDs after adding sample
                 visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-    t.end("add samples")
+
 
     epoch_training_time = time.time() - epoch_start_time
     task_training_times[current_task_id] += epoch_training_time
@@ -194,7 +215,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
     avg_epoch_loss = epoch_loss / max(num_batches, 1)
 
     # Evaluate performance after each epoch
-    # <editor-fold desc="Evaluation">
     t.start("eval")
     model.eval()
 
@@ -258,7 +278,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
     # Add samples to memory if loss greater than threshold
     # if (avg_epoch_loss >= LOSS_THRESHOLD):
-    if True:
+    if False:
         # Step 2: Update the clustered memory with some samples from this task's dataloader
         # This is where the core clustering for TA-A-GEM happens
         # print(f"Loss = {avg_epoch_loss}. Committing to memory.")

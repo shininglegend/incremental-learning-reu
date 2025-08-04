@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import yaml
+import random
 
 from agem import agem
 from agem.learning_rate import TALearningRateScheduler
@@ -227,6 +228,10 @@ def initialize_system():
         quick_test=config["lite"],
     )
 
+    combined_dataloaders = list(zip(train_dataloaders, test_dataloaders))
+    # random.shuffle(combined_dataloaders)
+    train_dataloaders, test_dataloaders = zip(*combined_dataloaders)
+
     # Initialize visualizer with experiment name
     experiment_name = config.get("experiment_name", "Unnamed")
     visualizer = TAGemVisualizer(
@@ -277,7 +282,7 @@ def initialize_system():
         lr_scheduler,
         clustering_memory,
         agem_handler,
-        train_dataloaders,  # dict
+        train_dataloaders,
         test_dataloaders,  # list for legacy compatibility
         visualizer,
         epoch_list,

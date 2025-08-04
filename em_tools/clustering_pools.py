@@ -243,3 +243,24 @@ class ClusteringMemory:
             matrix.append(none_row)
 
         return matrix
+
+
+def time_to_update_memory(
+        batches_since_update: int,
+        update_count_at_current_rate: int,
+        interval: int,
+):
+    if batches_since_update >= interval:
+        return True
+    return False
+
+
+def update_interval(interval: int):
+    new_interval = interval+1
+    return new_interval
+
+
+def time_to_update_interval(interval: int, update_count_at_current_rate: int):
+    if interval == update_count_at_current_rate:
+        return True
+    return False

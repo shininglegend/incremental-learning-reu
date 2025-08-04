@@ -15,7 +15,7 @@ input_dim: 784 # For MNIST (28*28)
 
 # Model Configuration
 hidden_dim: 200 # Hidden layer dimension as per paper
-device: "cpu" # Override to use cuda, we found it was slower on average
+device: "cuda" # Override to use cuda, we found it was slower on average
 random_em: true # Fetch randomly from episodic memory instead of getting all samples
 
 # Memory Configuration
@@ -47,8 +47,6 @@ task_specific:
     num_tasks: 5
     num_pools: 2
     clusters_per_pool: 50
-
-<<<<<<< HEAD
 
 
 # For continuous change only
