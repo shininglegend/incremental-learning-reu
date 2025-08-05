@@ -5,7 +5,7 @@ them for incremental learning tasks.
 """
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Any
+from typing import Tuple, List, Any, Optional
 import torch
 from torch.utils.data import DataLoader
 
@@ -184,11 +184,11 @@ class DatasetLoader(ABC):
         pass
 
 
-def load_dataset(dataset_name: str, path_override: str = None) -> DatasetLoader:
+def load_dataset(dataset_name: str, path_override: Optional[str] = None) -> DatasetLoader:
     """Factory function to load the appropriate dataset loader.
 
     Args:
-        dataset_name: Name of the dataset ('mnist', 'fashion_mnist', etc.)
+        dataset_name: Name of the dataset ('mnist', 'fashion_mnist', 'cifar_10', etc.)
         path_override: If given, overrides the path to locate the dataset (for SBATCH)
 
     Returns:
@@ -206,5 +206,11 @@ def load_dataset(dataset_name: str, path_override: str = None) -> DatasetLoader:
         except ImportError:
             from mnist_fashion import FashionMnistDatasetLoader
         return FashionMnistDatasetLoader(path_override)
+    elif dataset_name.lower() == "cifar_10":
+        try:
+            from .cifar_10 import Cifar10DatasetLoader
+        except ImportError:
+            from cifar_10 import Cifar10DatasetLoader
+        return Cifar10DatasetLoader(path_override)
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
