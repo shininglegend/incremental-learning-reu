@@ -288,7 +288,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         print(f"Pool sizes: {pool_sizes}")
         print(f"Task training time: {task_time:.2f}s")
         print(get_final_count())
-        clustering_memory.pools[0].visualize()
+        # clustering_memory.pools[0].visualize()
 
 t.end("training")
 print("\nTraining complete.")
