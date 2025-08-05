@@ -224,11 +224,11 @@ class ClusterPool:
         return sum([len(cluster) for cluster in self.clusters])
 
     @classmethod
-    def get_removal_function(self):
+    def get_removal_function(cls):
         # Initialize to get removal function
-        if not hasattr(self, "removal_function"):
-            self.__init__(self)
-        return self.removal_function.__name__
+        if not hasattr(cls, "removal_function"):
+            cls.__init__(cls)
+        return cls.removal_function.__name__
 
     def add(self, z: torch.Tensor, label=None, task_id=None):
         """
