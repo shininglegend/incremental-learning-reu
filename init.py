@@ -47,7 +47,7 @@ def parse_args():
         "--dataset",
         type=str,
         default=None,
-        choices=["mnist", "fashion_mnist"],
+        choices=["mnist", "fashion_mnist", "cifar10"],
         help="Which dataset to use",
     )
     parser.add_argument(
@@ -72,7 +72,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def create_model(config):
+def create_model(input_dim, hidden_dim, num_classes):
     """Create and return a simple MLP model."""
 
     class SimpleMLP(nn.Module):
@@ -97,7 +97,7 @@ def create_model(config):
             x = self.fc3(x)
             return x
 
-    return SimpleMLP(config["input_dim"], config["hidden_dim"], config["num_classes"])
+    return SimpleMLP(input_dim, hidden_dim, num_classes)
 
 
 def initialize_system():
@@ -142,6 +142,17 @@ def initialize_system():
     if config["lite"]:
         config["num_tasks"] = 2
         config["batch_size"] = 50
+
+    # Apply per-dataset overrides
+    match config["dataset_name"]:
+        case "mnist" | "fashion_mnist":
+            config["input_dim"] = 784
+            config["num_classes"] = 10
+        case "cifar10":
+            config["input_dim"] = 1024
+            config["num_classes"] = 10
+        case _:
+            raise Exception("Dataset name not recognized.")
 
     # Determine configuration based on task type
     task_specific_config = config["task_specific"][config["task_type"]]
@@ -192,7 +203,9 @@ def initialize_system():
     print(f"Using device: {device}")
 
     # Initialize model, optimizer, and loss function
-    model = create_model(config).to(device)
+    model = create_model(
+        config["input_dim"], config["hidden_dim"], config["num_classes"]
+    ).to(device)
     optimizer = optim.SGD(model.parameters(), lr=config["learning_rate"])
     criterion = nn.CrossEntropyLoss()
 
