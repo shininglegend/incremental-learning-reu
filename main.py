@@ -53,7 +53,6 @@ for i in range(config["num_tasks"]):
 
 # --- 2. Training Loop ---
 t.start("training")
-print("Starting training...")
 print(
     f"""
 Quick Test mode: {QUICK_TEST_MODE} | Task Type: {config['task_type']}
@@ -61,6 +60,10 @@ Random EM sampling: {config["random_em"]} | Dataset: {config['dataset_name']}
 Use LR: {USE_LEARNING_RATE_SCHEDULER} | Sampling Rate: {SAMPLING_RATE}
 Total tasks: {len(train_dataloaders)} | Task introduction type: {config['task_introduction']}"""
 )
+print("Starting training...")
+
+if not VERBOSE:
+    print("Verbose mode is disabled. Updates will be given once per task.\n")
 
 """
 -------------------------------------------
@@ -195,7 +198,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
             f"  Epoch {epoch_number + 1}/{num_epochs_per_task[current_task_id]}: Loss = {avg_epoch_loss:.4f}, Accuracy = {avg_accuracy:.4f}"
         )
 
-    if not QUICK_TEST_MODE:
+    if VERBOSE and not QUICK_TEST_MODE:
         task_str = (
             f"Tasks {current_task_id + 1:1} and {next_task_id + 1:1}"
             if current_task_id != next_task_id

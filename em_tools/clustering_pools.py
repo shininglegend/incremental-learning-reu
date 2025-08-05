@@ -243,3 +243,6 @@ class ClusteringMemory:
             matrix.append(none_row)
 
         return matrix
+
+    def get_removal_function(self):
+        return ClusterPool.get_removal_function()
