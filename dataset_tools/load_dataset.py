@@ -5,7 +5,10 @@ them for incremental learning tasks.
 """
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Any
+import argparse
+import os
+import shutil
+from typing import Tuple, List, Any, Optional
 import torch
 from torch.utils.data import DataLoader
 
@@ -184,11 +187,13 @@ class DatasetLoader(ABC):
         pass
 
 
-def load_dataset(dataset_name: str, path_override: str = None) -> DatasetLoader:
+def load_dataset(
+    dataset_name: str, path_override: Optional[str] = None
+) -> DatasetLoader:
     """Factory function to load the appropriate dataset loader.
 
     Args:
-        dataset_name: Name of the dataset ('mnist', 'fashion_mnist', etc.)
+        dataset_name: Name of the dataset ('mnist', 'fashion_mnist', 'cifar10', etc.)
         path_override: If given, overrides the path to locate the dataset (for SBATCH)
 
     Returns:
@@ -206,5 +211,65 @@ def load_dataset(dataset_name: str, path_override: str = None) -> DatasetLoader:
         except ImportError:
             from mnist_fashion import FashionMnistDatasetLoader
         return FashionMnistDatasetLoader(path_override)
+    elif dataset_name.lower() == "cifar10":
+        try:
+            from .cifar10 import Cifar10DatasetLoader
+        except ImportError:
+            from cifar10 import Cifar10DatasetLoader
+        return Cifar10DatasetLoader(path_override)
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
+
+def download_dataset(dataset_name: str):
+    """
+    Downloads the datasets, copies them to "./datasets/{dataset_name}"
+    """
+    try:
+        from .dataset_utils import get_dataset_path
+    except ImportError:
+        from dataset_utils import get_dataset_path
+
+    # Create datasets directory if it doesn't exist
+    datasets_dir = "./datasets"
+    os.makedirs(datasets_dir, exist_ok=True)
+    target_path = os.path.join(datasets_dir, dataset_name)
+
+    # get_dataset_path automatically downloads if needed
+    if dataset_name.lower() == "cifar10":
+        source_path = get_dataset_path("CIFAR10", "pankrzysiu/cifar10-python")
+    elif dataset_name.lower() == "mnist":
+        source_path = get_dataset_path("MNIST", "hojjatk/mnist-dataset")
+    elif dataset_name.lower() == "fashion_mnist":
+        source_path = get_dataset_path("MNIST_FASHION", "zalando-research/fashionmnist")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
+
+    # Copy to target location
+    if not os.path.exists(target_path):
+        print(f"Copying dataset from {source_path} to {target_path}...")
+        shutil.copytree(source_path, target_path)
+        print(f"Successfully copied dataset to {target_path}")
+    else:
+        print(f"Dataset already exists at {target_path}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Download and prepare datasets for incremental learning"
+    )
+    parser.add_argument(
+        "--dataset",
+        required=True,
+        choices=["mnist", "fashion_mnist", "cifar10"],
+        help="Dataset to download",
+    )
+
+    args = parser.parse_args()
+
+    try:
+        download_dataset(args.dataset)
+        print(f"Successfully prepared {args.dataset} dataset")
+    except Exception as e:
+        print(f"Failed to prepare {args.dataset} dataset: {e}")
+        exit(1)

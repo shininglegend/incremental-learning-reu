@@ -25,10 +25,34 @@ if [[ -z "$dataset_name" ]]; then
     exit 1
 fi
 
-if [[ "$dataset_name" != "mnist" && "$dataset_name" != "fashion_mnist" ]]; then
-    echo "Error: Invalid dataset name. Please choose from ['mnist', 'fashion_mnist']."
+if [[ "$dataset_name" != "mnist" && "$dataset_name" != "fashion_mnist" && "$dataset_name" != "cifar10" ]]; then
+    echo "Error: Invalid dataset name. Please choose from ['mnist', 'fashion_mnist', 'cifar10']."
     exit 1
 fi
+
+# Check if dataset exists, download if missing
+DATASET_DIR="./datasets/$dataset_name"
+if [[ ! -d "$DATASET_DIR" ]]; then
+    echo "Dataset '$dataset_name' not found in $DATASET_DIR. Downloading..."
+    "$PYTHON_EXEC" dataset_tools/load_dataset.py --dataset "$dataset_name"
+
+    # Check if download was successful
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to download dataset '$dataset_name'."
+        exit 1
+    fi
+
+    # Verify dataset directory was created
+    if [[ ! -d "$DATASET_DIR" ]]; then
+        echo "Error: Dataset directory '$DATASET_DIR' was not created after download."
+        exit 1
+    fi
+
+    echo "Dataset '$dataset_name' downloaded successfully."
+else
+    echo "Dataset '$dataset_name' found in $DATASET_DIR."
+fi
+
 
 # Subfolder to save test results to
 save_location=$2

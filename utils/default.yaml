@@ -10,8 +10,6 @@ experiment_name: ""
 
 # Dataset Configuration
 dataset_name: "mnist" # Dataset to use: mnist or fashion_mnist
-num_classes: 10 # For MNIST
-input_dim: 784 # For MNIST (28*28)
 
 # Model Configuration
 hidden_dim: 200 # Hidden layer dimension as per paper
