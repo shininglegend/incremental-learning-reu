@@ -226,6 +226,11 @@ def initialize_system():
         add_remove_randomly=config["add_remove_randomly"],
     )
 
+    # Get the current removal function and save it
+    config["removal_function"] = clustering_memory.get_removal_function()
+    params["removal_function"] = config["removal_function"]
+    print(f"Removal function name: {config["removal_function"]}")
+
     agem_handler = agem.AGEMHandler(
         model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
     )

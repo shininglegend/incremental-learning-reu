@@ -24,6 +24,7 @@ class Cluster:
     def __init__(
         self,
         initial_sample: torch.Tensor,
+        removal_function,
         initial_label=None,
         initial_task_id=None,
         random_add_or_remove=False,
@@ -42,6 +43,9 @@ class Cluster:
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
         self.random_add_or_remove = random_add_or_remove
+
+        # Set the removal function
+        self.removal_function = removal_function
 
         # Sanity check
         assert self.random_add_or_remove in [True, False]
@@ -92,7 +96,7 @@ class Cluster:
             sample_idx = random.randint(0, len(self.samples) - 1)
             self._remove_sample(sample_idx)
         else:
-            return self.remove_oldest()
+            return self.removal_function(self)
 
     def remove_based_on_mean(self):
         """
@@ -211,12 +215,20 @@ class ClusterPool:
         self.dimensionality_reducer = dimensionality_reducer
         self.sample_throughput = 0
         self.add_rem_rand = add_remove_randomly
+        self.removal_function = Cluster.remove_oldest_dist_override_v2
 
         assert self.max_cluster_size > 0
         assert self.max_clusters > 0
 
     def __len__(self):
         return sum([len(cluster) for cluster in self.clusters])
+
+    @classmethod
+    def get_removal_function(self):
+        # Initialize to get removal function
+        if not hasattr(self, "removal_function"):
+            self.__init__(self)
+        return self.removal_function.__name__
 
     def add(self, z: torch.Tensor, label=None, task_id=None):
         """
@@ -286,6 +298,7 @@ class ClusterPool:
                 closest_cluster_to_old, nearest_old_sample, nearest_old_label, task_id
             )
             self.clusters[nearest_cluster_idx_to_new] = Cluster(
+                removal_function=self.removal_function,
                 initial_sample=z,
                 random_add_or_remove=self.add_rem_rand,
                 initial_label=label,
@@ -343,6 +356,7 @@ class ClusterPool:
             label (, optional): Label to assign to the sample. Defaults to None.
         """
         new_cluster = Cluster(
+            removal_function=self.removal_function,
             initial_sample=z,
             random_add_or_remove=add_or_remove_randomly,
             initial_label=label,
