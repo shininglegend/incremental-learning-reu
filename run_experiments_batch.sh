@@ -18,7 +18,7 @@ if [ ! -f "$PYTHON_EXEC" ]; then
 fi
 
 dataset_name=$1
-# Ensure the dataset name is provided and is one of ["mnist", "fashion_mnist"]
+# Ensure the dataset name is provided and is one of ["mnist", "fashion_mnist", "cifar10"]
 if [[ -z "$dataset_name" ]]; then
     echo "Usage: $0 <dataset_name> <save_location>"
     echo "Example: $0 mnist test-new-remove-one"

@@ -92,7 +92,7 @@ class Cluster:
             sample_idx = random.randint(0, len(self.samples) - 1)
             self._remove_sample(sample_idx)
         else:
-            return self.remove_oldest_with_distance_override()
+            return self.remove_based_on_mean()
 
     def remove_based_on_mean(self):
         """

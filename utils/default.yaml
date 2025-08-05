@@ -9,7 +9,7 @@ output_dir: "./test_results" # Where to put any output files
 experiment_name: ""
 
 # Dataset Configuration
-dataset_name: "mnist" # Dataset to use: mnist or fashion_mnist
+dataset_name: "cifar10" # Dataset to use: 'mnist', 'fashion_mnist', or 'cifar10'
 
 # Model Configuration
 hidden_dim: 200 # Hidden layer dimension as per paper
@@ -57,4 +57,4 @@ memory loss commitment threshold: 0.1
 task_introduction: "sequential" # How to introduce tasks. One of: 'sequential', 'half and half', 'random', 'continuous'
 
 # Memory sampling config
-memory_sampling: 'interval' # 'sampling rate' or 'interval'
+memory_sampling: 'sampling rate' # 'sampling rate' or 'interval'
