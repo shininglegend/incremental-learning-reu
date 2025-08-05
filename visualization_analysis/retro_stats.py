@@ -155,40 +155,32 @@ def analyze_experiments(results):
 
 
 def calculate_first_task_forgetting(data):
-    """Calculate forgetting for the first task"""
-    if "epoch_data" not in data or not data["epoch_data"]:
-        return None
+    """Calculate average forgetting for the first task across all epochs after first task completion"""
+    assert data["epoch_data"], "epoch_data is empty"
 
     epoch_data = data["epoch_data"]
-    # Track max accuracy during first task training
     max_first_task_accuracy = 0.0
-    min_first_task_accuracy_after = None
+    forgetting_values = []
 
-    for _, epoch_info in enumerate(epoch_data):
-        if (
-            "individual_accuracies" not in epoch_info
-            or len(epoch_info["individual_accuracies"]) == 0
-        ):
-            continue
+    for epoch_info in epoch_data:
+        assert (
+            len(epoch_info["individual_accuracies"]) > 0
+        ), f"individual_accuracies is empty for epoch {epoch_info}"
 
         first_task_accuracy = epoch_info["individual_accuracies"][0]
 
-        # During first task training (task_id == 0)
-        if epoch_info["task_id"] == 0:
-            max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
-        # After first task training is complete
-        elif epoch_info["task_id"] > 0:
-            if min_first_task_accuracy_after is None:
-                min_first_task_accuracy_after = first_task_accuracy
-            else:
-                min_first_task_accuracy_after = min(
-                    min_first_task_accuracy_after, first_task_accuracy
-                )
+        # Update max accuracy seen so far for first task
+        max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
 
-    if min_first_task_accuracy_after is None:
+        # After first task training is complete, calculate forgetting for this epoch
+        if epoch_info["task_id"] > 0:
+            forgetting = max_first_task_accuracy - first_task_accuracy
+            forgetting_values.append(forgetting)
+
+    if len(forgetting_values) == 0:
         return None
 
-    return max_first_task_accuracy - min_first_task_accuracy_after
+    return sum(forgetting_values) / len(forgetting_values)
 
 
 def create_summary_table(statistics):
