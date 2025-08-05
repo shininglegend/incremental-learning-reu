@@ -132,7 +132,7 @@ class Cifar10DatasetLoader(DatasetLoader):
         """Create permutation-based tasks for CIFAR-10."""
         train_dataloaders = []
         test_dataloaders = []
-        num_pixels = 32 * 32 * 3 # TODO: Probably shouldn't be hardcoded.
+        num_pixels = 32 * 32
 
         # Split data into disjoint subsets for each task
         train_size_per_task = len(x_train_tensor) // num_tasks
