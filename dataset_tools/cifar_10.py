@@ -364,8 +364,8 @@ if __name__ == "__main__":
     x_train, y_train, x_test, y_test = loader.load_raw_data()
 
     # Print the actual shape
-    print(f"CIFAR-10 image shape: {x_train[0].shape}")  # Should be (32, 32, 3)
-    print(f"Total pixels per image: {x_train[0].size}")  # Should be 3,072
+    print(f"CIFAR-10 image shape: {x_train[0].shape}")  # Should be (32, 32, 3) in color
+    print(f"Total pixels per image: {x_train[0].size}")  # Should be 3,072 in color
 
     # Show original color images
     plt.figure(figsize=(10, 2))

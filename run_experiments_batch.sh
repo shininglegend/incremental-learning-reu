@@ -26,7 +26,7 @@ if [[ -z "$dataset_name" ]]; then
 fi
 
 if [[ "$dataset_name" != "mnist" && "$dataset_name" != "fashion_mnist" && "$dataset_name" != "cifar_10" ]]; then
-    echo "Error: Invalid dataset name. Please choose from ['mnist', 'fashion_mnist']."
+    echo "Error: Invalid dataset name. Please choose from ['mnist', 'fashion_mnist', 'cifar_10']."
     exit 1
 fi
 
