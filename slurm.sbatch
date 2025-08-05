@@ -8,7 +8,7 @@
 #SBATCH --time="00:30:00" # 00:12:41 baseline. Request a little extra.
 #SBATCH --array=0-4 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
 #SBATCH --exclusive
-#SBATCH --exclude=hpcl4-1,hpcl4-2,hpcl4-3,hpcl4-5,hpcl5-3,hpcl6-1, # Block nodes
+#SBATCH --exclude=hpcl4-1,hpcl4-2,hpcl4-3,hpcl4-5,hpcl5-3,hpcl6-1 # Block nodes
 # #SBATCH --partition="$PARTITION_NAME"
 # #SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
 
