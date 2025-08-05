@@ -231,11 +231,6 @@ def initialize_system():
     params["removal_function"] = config["removal_function"]
     print(f"Removal function name: {config['removal_function']}")
 
-    # Get the current removal function and save it
-    config["removal_function"] = clustering_memory.get_removal_function()
-    params["removal_function"] = config["removal_function"]
-    print(f"Removal function name: {config['removal_function']}")
-
     agem_handler = mega_agem.MEGAHandler(
         model, criterion, optimizer, device=device, lr_scheduler=lr_scheduler
     )
