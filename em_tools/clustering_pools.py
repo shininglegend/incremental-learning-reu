@@ -249,6 +249,9 @@ class ClusteringMemory:
 
         return matrix
 
+    def get_removal_function(self):
+        return ClusterPool.get_removal_function()
+
     def time_to_update_memory(self):
         # The first 10,000 batches should update every time
         # After 10,000 batches, we start the decay function.

@@ -24,6 +24,7 @@ class Cluster:
     def __init__(
         self,
         initial_sample: torch.Tensor,
+        removal_function,
         initial_label=None,
         initial_task_id=None,
         random_add_or_remove=False,
@@ -42,6 +43,9 @@ class Cluster:
         self.mean = initial_sample.clone().detach()
         self.sum_samples = initial_sample.clone().detach()  # To efficiently update mean
         self.random_add_or_remove = random_add_or_remove
+
+        # Set the removal function
+        self.removal_function = removal_function
 
         # Sanity check
         assert self.random_add_or_remove in [True, False]
@@ -92,7 +96,7 @@ class Cluster:
             sample_idx = random.randint(0, len(self.samples) - 1)
             self._remove_sample(sample_idx)
         else:
-            return self.remove_oldest_with_distance_override()
+            return self.removal_function(self)
 
     def remove_based_on_mean(self):
         """
@@ -181,33 +185,24 @@ class Cluster:
         Removes the sample (and its metadata) at `idx`.
         Keeps deques intact, maintains insertion_order, mean, and sum_samples.
         """
-
         # Fast aliases
         S, L, T, O = self.samples, self.labels, self.task_ids, self.insertion_order
 
         # Grab the items we’ll return before they’re gone
         removed_sample = S[idx]
         removed_label = L[idx]
-        removed_task_id = T[idx] if T else None
-        removed_order_id = O[idx] if O else None
+        for x in [S, L, T, O]:
+            x.rotate(-idx)
+            x.popleft()
+            x.rotate(idx)
 
-        # Bring target to the left end
-        S.rotate(-idx)
-        L.rotate(-idx)
-        T.rotate(-idx)
-        O.rotate(-idx)
+        # Just in case, write them back. (Yes, it uses pointers, but just to be sure.)
+        self.samples, self.labels, self.task_ids, self.insertion_order = S, L, T, O
 
-        # Pop from the left
-        S.popleft()
-        L.popleft()
-        T.popleft()
-        O.popleft()
-
-        # Restore original order
-        S.rotate(idx)
-        L.rotate(idx)
-        T.rotate(idx)
-        O.rotate(idx)
+        assert len(self.samples) <= 3
+        assert len(self.labels) <= 3
+        assert len(self.task_ids) <= 3
+        assert len(self.insertion_order) <= 3
 
         self.sum_samples -= removed_sample
         if len(self.samples) > 0:
@@ -240,12 +235,20 @@ class ClusterPool:
         self.dimensionality_reducer = dimensionality_reducer
         self.sample_throughput = 0
         self.add_rem_rand = add_remove_randomly
+        self.removal_function = Cluster.remove_oldest
 
         assert self.max_cluster_size > 0
         assert self.max_clusters > 0
 
     def __len__(self):
         return sum([len(cluster) for cluster in self.clusters])
+
+    @classmethod
+    def get_removal_function(cls):
+        # Initialize to get removal function
+        if not hasattr(cls, "removal_function"):
+            cls.__init__(cls)
+        return cls.removal_function.__name__
 
     def add(self, z: torch.Tensor, label=None, task_id=None):
         """
@@ -283,7 +286,9 @@ class ClusterPool:
             )
 
         # If we're at 0 samples, or at 1 sample and there's space for a second one, add it
-        if len(self.clusters) == 0 or (len(self.clusters) == 1 and self.max_clusters > 1):
+        if len(self.clusters) == 0 or (
+            len(self.clusters) == 1 and self.max_clusters > 1
+        ):
             return self._add_new_cluster(
                 z=z,
                 add_or_remove_randomly=self.add_rem_rand,
@@ -315,6 +320,7 @@ class ClusterPool:
                 closest_cluster_to_old, nearest_old_sample, nearest_old_label, task_id
             )
             self.clusters[nearest_cluster_idx_to_new] = Cluster(
+                removal_function=self.removal_function,
                 initial_sample=z,
                 random_add_or_remove=self.add_rem_rand,
                 initial_label=label,
@@ -372,6 +378,7 @@ class ClusterPool:
             label (, optional): Label to assign to the sample. Defaults to None.
         """
         new_cluster = Cluster(
+            removal_function=self.removal_function,
             initial_sample=z,
             random_add_or_remove=add_or_remove_randomly,
             initial_label=label,
@@ -497,7 +504,8 @@ class ClusterPool:
             list: List of oldest task IDs for each cluster, padded with None for unused cluster slots
         """
         oldest_task_ids = [
-            cluster.get_oldest_task_id() if cluster else None for cluster in self.clusters
+            cluster.get_oldest_task_id() if cluster else None
+            for cluster in self.clusters
         ]
 
         # Pad with None for unused cluster slots up to max_clusters
