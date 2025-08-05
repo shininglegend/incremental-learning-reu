@@ -7,7 +7,8 @@
 #SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
 #SBATCH --time="00:30:00" # 00:12:41 baseline. Request a little extra.
 #SBATCH --array=0-4 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
-#SBATCH --exclude=hpcl4-5,hpcl5-3,hpcl6-1,hpcl4-1,hpcl4-2,hpcl4-3 # these guys are bad
+#SBATCH --exclusive
+#SBATCH --exclude=hpcl4-1,hpcl4-2,hpcl4-3,hpcl4-5,hpcl5-3,hpcl6-1, # Block nodes
 # #SBATCH --partition="$PARTITION_NAME"
 # #SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
 
@@ -122,14 +123,9 @@ mkdir -p "$HOME_DIR/test_results/$4"
 for file in "$JOB_SCRATCH_DIR"/*; do
     [ -f "$file" ] || continue
     basename=$(basename "$file")
-    dest="$HOME_DIR/test_results/$4/$basename"
-    counter=1
-    while [ -e "$dest" ]; do
-        name="${basename%.*}"
-        ext="${basename##*.}"
-        [ "$name" = "$ext" ] && dest="$HOME_DIR/test_results/$4/${basename}_$counter" || dest="$HOME_DIR/test_results/$4/${name}_$counter.$ext"
-        ((counter++))
-    done
+    name="${basename%.*}"
+    ext="${basename##*.}"
+    [ "$name" = "$ext" ] && dest="$HOME_DIR/test_results/$4/${basename}_${SLURM_ARRAY_TASK_ID}" || dest="$HOME_DIR/test_results/$4/${name}_${SLURM_ARRAY_TASK_ID}.$ext"
     cp "$file" "$dest"
 done
 rm -rf "$JOB_SCRATCH_DIR"
