@@ -7,7 +7,6 @@ for incremental learning tasks with grayscale conversion.
 import os
 import pickle
 import numpy as np
-import matplotlib.pyplot as plt
 from PIL import Image
 import torch
 from torch.utils.data import TensorDataset, DataLoader
@@ -358,6 +357,7 @@ def show_images(images, title_texts, figure_title="", img_size=32):
 
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
     """Show sample original and grayscale CIFAR-10 images."""
     # Load a small sample for demonstration
     loader = Cifar10DatasetLoader()

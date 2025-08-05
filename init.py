@@ -47,7 +47,7 @@ def parse_args():
         "--dataset",
         type=str,
         default=None,
-        choices=["mnist", "fashion_mnist", "cifar_10"],
+        choices=["mnist", "fashion_mnist", "cifar10"],
         help="Which dataset to use",
     )
     parser.add_argument(
@@ -145,10 +145,10 @@ def initialize_system():
 
     # Apply per-dataset overrides
     match config["dataset_name"]:
-        case "mnist", "fashion_mnist":
+        case "mnist" | "fashion_mnist":
             config["input_dim"] = 784
             config["num_classes"] = 10
-        case "cifar_10":
+        case "cifar10":
             config["input_dim"] = 1024
             config["num_classes"] = 10
         case _:
