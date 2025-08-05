@@ -150,21 +150,40 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
         t.start("add samples")
         # Add samples per batch based on sampling_rate
-        if SAMPLING_RATE < 1:
-            # Fractional sampling - add every 1/SAMPLING_RATE batches
-            if batch_idx % int(1 / SAMPLING_RATE) == 0:
-                samples_added += 1
-                clustering_memory.add_sample(data[0].cpu(), labels[0].cpu(), task_ids[0])
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-        else:
-            # Sample multiple items per batch (up to batch size and sampling rate)
-            num_to_sample = min(int(SAMPLING_RATE), len(data))
-            for i in range(num_to_sample):
-                samples_added += 1
-                clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
-                # Track oldest task IDs after adding sample
-                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+        if config['memory_sampling'] == 'sampling rate':
+            if SAMPLING_RATE < 1:
+                # Fractional sampling - add every 1/SAMPLING_RATE batches
+                if batch_idx % int(1 / SAMPLING_RATE) == 0:
+                    samples_added += 1
+                    clustering_memory.add_sample(data[0].cpu(), labels[0].cpu(), task_ids[0])
+                    # Track oldest task IDs after adding sample
+                    visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+            else:
+                # Sample multiple items per batch (up to batch size and sampling rate)
+                num_to_sample = min(int(SAMPLING_RATE), len(data))
+                for i in range(num_to_sample):
+                    samples_added += 1
+                    clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
+                    # Track oldest task IDs after adding sample
+                    visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+        elif config['memory_sampling'] == 'interval':
+            if clustering_memory.time_to_update_memory():
+                # Run the raw sampling rate code
+                if SAMPLING_RATE < 1:
+                    # Fractional sampling - add every 1/SAMPLING_RATE batches
+                    if batch_idx % int(1 / SAMPLING_RATE) == 0:
+                        samples_added += 1
+                        clustering_memory.add_sample(data[0].cpu(), labels[0].cpu(), task_ids[0])
+                        # Track oldest task IDs after adding sample
+                        visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+                else:
+                    # Sample multiple items per batch (up to batch size and sampling rate)
+                    num_to_sample = min(int(SAMPLING_RATE), len(data))
+                    for i in range(num_to_sample):
+                        samples_added += 1
+                        clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
+                        # Track oldest task IDs after adding sample
+                        visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
         t.end("add samples")
 
         # Update progress bar every 50 batches or on last batch

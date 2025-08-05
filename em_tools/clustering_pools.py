@@ -38,6 +38,11 @@ class ClusteringMemory:
         if self.add_remove_randomly:
             print("ALERT: Adding and removing randomly from clusters is enabled.")
 
+        self.batches_since_update = 0
+        self.interval = 0
+        self.update_count_at_current_interval = 0
+        self.initial_memory = True
+
     def _get_or_create_pool(self, label) -> ClusterPool:
         """Get clustering mechanism for a label, creating if needed.
 
@@ -244,23 +249,36 @@ class ClusteringMemory:
 
         return matrix
 
+    def time_to_update_memory(self):
+        # The first 10,000 batches should update every time
+        # After 10,000 batches, we start the decay function.
+        if self.initial_memory:
+            self.batches_since_update += 1
+            if self.batches_since_update >= 10000:
+                self.initial_memory = False
 
-def time_to_update_memory(
-        batches_since_update: int,
-        update_count_at_current_rate: int,
-        interval: int,
-):
-    if batches_since_update >= interval:
-        return True
-    return False
+            return True
 
+        if self.batches_since_update >= self.interval:
+            # Time to update memory!
 
-def update_interval(interval: int):
-    new_interval = interval+1
-    return new_interval
+            # But first, we update other parameters.
+            self.batches_since_update = 0
+            self.update_count_at_current_interval += 1
 
+            if self.time_to_update_interval():
+                self.update_interval()
 
-def time_to_update_interval(interval: int, update_count_at_current_rate: int):
-    if interval == update_count_at_current_rate:
-        return True
-    return False
+            return True
+
+        self.batches_since_update += 1
+        return False
+
+    def update_interval(self):
+        self.interval += 1
+        self.update_count_at_current_interval = 0
+
+    def time_to_update_interval(self):
+        if self.interval == self.update_count_at_current_interval:
+            return True
+        return False
