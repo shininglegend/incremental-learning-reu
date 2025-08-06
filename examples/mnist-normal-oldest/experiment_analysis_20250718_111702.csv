@@ -1,0 +1,4 @@
+Task Type,Number of Runs,Mean Accuracy,Std Deviation,99% CI Lower,99% CI Upper
+class_split,5,0.8404,0.0136,0.8123,0.8685
+permutation,5,0.7665,0.0102,0.7455,0.7874
+rotation,5,0.5698,0.0084,0.5526,0.5871
