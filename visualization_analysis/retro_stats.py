@@ -226,6 +226,10 @@ def create_summary_table(statistics):
         lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A"
     )
 
+    # for ease
+    display_df["Mean to copy"] = display_df["Mean Accuracy"] + " ± " + display_df["Std Deviation"]
+    display_df["Forgetting to copy"] = display_df["Mean Forgetting"] + " ± " + display_df["Forgetting Std"]
+
     return display_df, df
 
 
@@ -251,6 +255,9 @@ def main():
         help="Directory to save the analysis results (default: test_results)",
     )
     args = parser.parse_args()
+
+    if args.output_dir is None and args.input_dir is not None:
+        args.output_dir = args.input_dir
 
     print("TA-A-GEM Experiment Analysis")
     print("=" * 50)
