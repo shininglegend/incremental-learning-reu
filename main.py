@@ -57,7 +57,6 @@ for i in range(config["num_tasks"]):
     task_training_times.append(0)
     task_losses.append(0)
 
-LOSS_THRESHOLD = config["memory loss commitment threshold"]
 all_tasks_seen = False
 
 time_to_update = False
