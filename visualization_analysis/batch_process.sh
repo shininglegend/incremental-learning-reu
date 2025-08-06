@@ -3,6 +3,9 @@
 # Batch process script for retro_stats.py
 # Usage: ./batch_process.sh <input_dir> <output_dir>
 
+# PYTHON_EXEC="./venv/bin/python" # Uncomment for pip
+PYTHON_EXEC="./env/bin/python" # Uncomment for conda
+
 # Check if correct number of arguments provided
 if [ $# -ne 2 ]; then
     echo "Usage: $0 <input_dir> <output_dir>"
@@ -60,7 +63,7 @@ for folder in "$INPUT_DIR"/4*; do
         echo "  Found $pkl_count pickle files"
 
         # Run retro_stats.py on this folder
-        python3 "$SCRIPT_DIR/retro_stats.py" \
+        $PYTHON_EXEC "$SCRIPT_DIR/retro_stats.py" \
             --input_dir "$folder" \
             --output_dir "$OUTPUT_DIR" \
             --num_runs 50 \
