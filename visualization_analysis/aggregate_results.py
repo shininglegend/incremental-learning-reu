@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!./env/bin/python
 """
 Aggregator script for incremental learning test results.
 Processes detailed CSVs and generates summary spreadsheets grouped by dataset and task introduction type.
@@ -171,7 +171,7 @@ def generate_summary_spreadsheet(
     df = df.drop(columns=[col for col in columns_to_remove if col in df.columns])
 
     # Sort by Method (folder name) and Task
-    df = df.sort_values(["Method", "Task"])
+    df = df.sort_values(["Folder", "Task"])
 
     # Generate filename
     filename = f"{dataset.lower().replace('-', '_')}_{task_intro}_summary.csv"
