@@ -157,8 +157,8 @@ def analyze_experiments(results):
 def calculate_first_task_forgetting(data):
     """
     Calculate average forgetting for the first task.
-    - Find max task 1 accuracy over first 20 epochs
-    - Calculate forgetting for all remaining epochs using that fixed max
+    - Find max task 1 accuracy while training first task (task_id == 0)
+    - Calculate forgetting for all epochs after first task training is complete
     """
     assert data["epoch_data"], "epoch_data is empty"
 
@@ -166,23 +166,22 @@ def calculate_first_task_forgetting(data):
     max_first_task_accuracy = 0.0
     forgetting_values = []
 
-    # Find max accuracy over first 20 epochs
-    for i, epoch_info in enumerate(epoch_data[:20]):
+    # Process all epochs
+    for epoch_info in epoch_data:  # Go through ALL epochs
         assert (
-            len(epoch_info["individual_accuracies"]) > 0
-        ), f"individual_accuracies is empty for epoch {i}"
+                len(epoch_info["individual_accuracies"]) > 0
+        ), f"individual_accuracies is empty for epoch {epoch_info}"
 
         first_task_accuracy = epoch_info["individual_accuracies"][0]
 
-        # Update max accuracy seen so far for first task until the first task is complete
+        # Update max accuracy only while still training the first task
         if epoch_info["task_id"] == 0:
             max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
-            continue
 
-        # After first task training is complete, calculate forgetting for this epoch
-
-        forgetting = max_first_task_accuracy - first_task_accuracy
-        forgetting_values.append(forgetting)
+        # After first task training is complete, calculate forgetting
+        elif epoch_info["task_id"] > 0:  # Training subsequent tasks
+            forgetting = max_first_task_accuracy - first_task_accuracy
+            forgetting_values.append(forgetting)
 
     if len(forgetting_values) == 0:
         return None
