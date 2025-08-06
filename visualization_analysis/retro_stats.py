@@ -32,10 +32,14 @@ def load_pickle_files(directory, num_files=15):
 
             # Extract final accuracy - handle both new and legacy formats
             final_accuracy = None
+            # Extract average first-task accuracy across all epochs
+            avg_first_task_accuracy = None
             if "epoch_data" in data and data["epoch_data"]:
-                # Replaced this line to make it more accurate without knowing why.
                 final_accuracy = sum(
                     ep["overall_accuracy"] for ep in data["epoch_data"]
+                ) / len(data["epoch_data"])
+                avg_first_task_accuracy = sum(
+                    ep["individual_accuracies"][0] for ep in data["epoch_data"]
                 ) / len(data["epoch_data"])
             elif "per_task_accuracies" in data and data["per_task_accuracies"]:
                 print("Warning: Old format detected.")
@@ -57,6 +61,7 @@ def load_pickle_files(directory, num_files=15):
                     "file": os.path.basename(file_path),
                     "task_type": task_type,
                     "final_accuracy": final_accuracy,
+                    "avg_first_task_accuracy": avg_first_task_accuracy,
                     "timestamp": timestamp,
                     "data": data,
                     "file_mtime": os.path.getmtime(file_path),
@@ -94,12 +99,14 @@ def analyze_experiments(results):
     # Group results by task type
     task_groups = {}
     forgetting_groups = {}
+    first_task_groups = {}
 
     for result in results:
         task_type = result["task_type"]
         if task_type not in task_groups:
             task_groups[task_type] = []
             forgetting_groups[task_type] = []
+            first_task_groups[task_type] = []
 
         if result["final_accuracy"] is not None:
             task_groups[task_type].append(result["final_accuracy"])
@@ -108,6 +115,10 @@ def analyze_experiments(results):
             forgetting = calculate_first_task_forgetting(result["data"])
             if forgetting is not None:
                 forgetting_groups[task_type].append(forgetting)
+
+        # Track average first-task accuracy
+        if result["avg_first_task_accuracy"] is not None:
+            first_task_groups[task_type].append(result["avg_first_task_accuracy"])
 
     # Compute statistics for each task type
     statistics = []
@@ -134,6 +145,18 @@ def analyze_experiments(results):
             else (np.nan, np.nan)
         )
 
+        # First-task accuracy statistics
+        first_task_values = first_task_groups[task_type]
+        mean_first_task = np.mean(first_task_values) if first_task_values else np.nan
+        std_first_task = (
+            np.std(first_task_values, ddof=1) if len(first_task_values) > 1 else 0
+        )
+        first_task_ci_lower, first_task_ci_upper = (
+            compute_confidence_interval(first_task_values, confidence=0.99)
+            if first_task_values
+            else (np.nan, np.nan)
+        )
+
         statistics.append(
             {
                 "Task Type": task_type,
@@ -148,6 +171,11 @@ def analyze_experiments(results):
                 "Forgetting CI Lower": forgetting_ci_lower,
                 "Forgetting CI Upper": forgetting_ci_upper,
                 "Raw Forgetting": forgetting_values,
+                "Mean First Task": mean_first_task,
+                "First Task Std": std_first_task,
+                "First Task CI Lower": first_task_ci_lower,
+                "First Task CI Upper": first_task_ci_upper,
+                "Raw First Task": first_task_values,
             }
         )
 
@@ -170,7 +198,7 @@ def calculate_first_task_forgetting(data):
         first_task_accuracy = epoch_info["individual_accuracies"][0]
 
         # Update max accuracy seen so far for first task until the first task is complete
-        if epoch_info["task_id"] < 0:
+        if epoch_info["task_id"] == 0:
             max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
             continue
 
@@ -191,7 +219,7 @@ def create_summary_table(statistics):
     df = pd.DataFrame(statistics)
 
     # Remove raw data from display version
-    display_df = df.drop(["Raw Accuracies", "Raw Forgetting"], axis=1)
+    display_df = df.drop(["Raw Accuracies", "Raw Forgetting", "Raw First Task"], axis=1)
 
     # Format numerical columns
     display_df["Mean Accuracy"] = display_df["Mean Accuracy"].apply(
@@ -216,6 +244,18 @@ def create_summary_table(statistics):
         lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A"
     )
     display_df["Forgetting CI Upper"] = display_df["Forgetting CI Upper"].apply(
+        lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A"
+    )
+    display_df["Mean First Task"] = display_df["Mean First Task"].apply(
+        lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A"
+    )
+    display_df["First Task Std"] = display_df["First Task Std"].apply(
+        lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A"
+    )
+    display_df["First Task CI Lower"] = display_df["First Task CI Lower"].apply(
+        lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A"
+    )
+    display_df["First Task CI Upper"] = display_df["First Task CI Upper"].apply(
         lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A"
     )
 
@@ -308,6 +348,7 @@ def main():
     print("=" * 80)
     to_copy_accuracies = ""
     to_copy_forgetting = ""
+    to_copy_first_task = ""
     for stat in statistics:
         print(f"\n{stat['Task Type']} ({stat['Number of Runs']} runs):")
         print(
@@ -337,9 +378,31 @@ def main():
         else:
             print("  No forgetting data available")
 
+        # First-task accuracy statistics
+        if stat["Raw First Task"]:
+            print("  --")
+            print(
+                f"  Raw first task: [{', '.join(f'{ft:.4f}' for ft in stat['Raw First Task'])}]"
+            )
+            to_copy_first_task += (
+                ",".join(f"{ft:.4f}" for ft in stat["Raw First Task"]) + "\n"
+            )
+            print(
+                f"  First Task Mean: {stat['Mean First Task']:.4f} ± {stat['First Task Std']:.4f}"
+            )
+            print(
+                f"  First Task 99% CI: [{stat['First Task CI Lower']:.4f}, {stat['First Task CI Upper']:.4f}]"
+            )
+        else:
+            print("  No first task data available")
+
     print(
-        f"\nTo copy: Accuracies\n{to_copy_accuracies}Forgetting\n{to_copy_forgetting}"
+        f"\nTo copy:\n-- Accuracies\n{to_copy_accuracies}-- Forgetting\n{to_copy_forgetting}-- First Task\n{to_copy_first_task}"
     )
+    if stat["Raw First Task"]:
+        print(
+            "Note: First Task accuracy is calculated over all epochs after the first 20."
+        )
 
     # Save results to CSV
     if args.output_dir is not None:
