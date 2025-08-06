@@ -32,7 +32,9 @@ from init import initialize_system
 # Extract commonly used variables from config
 QUICK_TEST_MODE = config["lite"]
 VERBOSE = config["verbose"]
-NUM_EPOCHS_PER_TASK = config["num_epochs"]  # With Abby's per-epoch loop, NUM_EPOCHS_PER_TASK is a dictionary.
+NUM_EPOCHS_PER_TASK = config[
+    "num_epochs"
+]  # With Abby's per-epoch loop, NUM_EPOCHS_PER_TASK is a dictionary.
 TOTAL_EPOCHS = config["num_epochs"] * config["num_tasks"]
 USE_LEARNING_RATE_SCHEDULER = config["use_learning_rate_scheduler"]
 LEARNING_RATE = config["learning_rate"]
@@ -55,7 +57,7 @@ for i in range(config["num_tasks"]):
     task_training_times.append(0)
     task_losses.append(0)
 
-LOSS_THRESHOLD = config['memory loss commitment threshold']
+LOSS_THRESHOLD = config["memory loss commitment threshold"]
 all_tasks_seen = False
 
 time_to_update = False
@@ -148,44 +150,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
 
         num_batches += 1
 
-        t.start("add samples")
-        # Add samples per batch based on sampling_rate
-        if config['memory_sampling'] == 'sampling rate':
-            if SAMPLING_RATE < 1:
-                # Fractional sampling - add every 1/SAMPLING_RATE batches
-                if batch_idx % int(1 / SAMPLING_RATE) == 0:
-                    samples_added += 1
-                    clustering_memory.add_sample(data[0].cpu(), labels[0].cpu(), task_ids[0])
-                    # Track oldest task IDs after adding sample
-                    visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-            else:
-                # Sample multiple items per batch (up to batch size and sampling rate)
-                num_to_sample = min(int(SAMPLING_RATE), len(data))
-                for i in range(num_to_sample):
-                    samples_added += 1
-                    clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
-                    # Track oldest task IDs after adding sample
-                    visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-        elif config['memory_sampling'] == 'interval':
-            if clustering_memory.time_to_update_memory():
-                # Run the raw sampling rate code
-                if SAMPLING_RATE < 1:
-                    # Fractional sampling - add every 1/SAMPLING_RATE batches
-                    if batch_idx % int(1 / SAMPLING_RATE) == 0:
-                        samples_added += 1
-                        clustering_memory.add_sample(data[0].cpu(), labels[0].cpu(), task_ids[0])
-                        # Track oldest task IDs after adding sample
-                        visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-                else:
-                    # Sample multiple items per batch (up to batch size and sampling rate)
-                    num_to_sample = min(int(SAMPLING_RATE), len(data))
-                    for i in range(num_to_sample):
-                        samples_added += 1
-                        clustering_memory.add_sample(data[i].cpu(), labels[i].cpu(), task_ids[i])
-                        # Track oldest task IDs after adding sample
-                        visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
-        t.end("add samples")
-
         # Update progress bar every 50 batches or on last batch
         if (
             not QUICK_TEST_MODE
@@ -209,6 +173,32 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
                 flush=True,
             )
 
+    # Update the clustered memory with some samples from this epoch
+    # This is where the core clustering for TA-A-GEM happens
+    t.start("add samples")
+    samples_added = 0
+    for batch_idx, (data, labels) in enumerate(epoch_dataloader):
+        # Add samples per batch based on sampling_rate
+        if SAMPLING_RATE < 1:
+            # Fractional sampling - add every 1/SAMPLING_RATE batches
+            if batch_idx % int(1 / SAMPLING_RATE) == 0:
+                samples_added += 1
+                clustering_memory.add_sample(
+                    data[0].cpu(), labels[0].cpu(), task_ids[0]
+                )
+                # Track oldest task IDs after adding sample
+                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+        else:
+            # Sample multiple items per batch (up to batch size and sampling rate)
+            num_to_sample = min(int(SAMPLING_RATE), len(data))
+            for i in range(num_to_sample):
+                samples_added += 1
+                clustering_memory.add_sample(
+                    data[i].cpu(), labels[i].cpu(), task_ids[i]
+                )
+                # Track oldest task IDs after adding sample
+                visualizer.track_oldest_task_ids(clustering_memory, current_task_id)
+    t.end("add samples")
 
     epoch_training_time = time.time() - epoch_start_time
     task_training_times[current_task_id] += epoch_training_time
@@ -217,7 +207,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
     avg_epoch_loss = epoch_loss / max(num_batches, 1)
 
     # Evaluate performance after each epoch
-    # region Per-epoch evaluation
     t.start("eval")
     model.eval()
 
@@ -235,9 +224,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         individual_accuracies.append(task_acc)
 
     t.end("eval")
-    # endregion
 
-    # region Per-epoch visualizer update
     t.start("visualizer")
     # Update visualizer with epoch metrics
     memory_size = clustering_memory.get_memory_size()
@@ -253,9 +240,7 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         learning_rate=current_lr,
     )
     t.end("visualizer")
-    # endregion
 
-    # region Epoch summaries
     # Print epoch summary
     if QUICK_TEST_MODE and (
         epoch_number % 5 == 0
@@ -287,7 +272,6 @@ for epoch_number, epoch_task_id in enumerate(epoch_list):
         )
         samples_added = 0
         samples_seen = 0
-    # endregion
 
     # End of task summary
     if end_of_task:
