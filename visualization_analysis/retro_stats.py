@@ -175,7 +175,7 @@ def calculate_first_task_forgetting(data):
         first_task_accuracy = epoch_info["individual_accuracies"][0]
 
         # Update max accuracy seen so far for first task until the first task is complete
-        if epoch_info["task_id"] < 0:
+        if epoch_info["task_id"] == 0:
             max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
             continue
 
