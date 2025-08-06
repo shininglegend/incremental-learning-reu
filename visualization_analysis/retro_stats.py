@@ -169,13 +169,14 @@ def calculate_first_task_forgetting(data):
 
         first_task_accuracy = epoch_info["individual_accuracies"][0]
 
-        # Update max accuracy seen so far for first task
-        max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
+        # Update max accuracy seen so far for first task until the first task is complete
+        if epoch_info["task_id"] < 0:
+            max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
+            continue
 
         # After first task training is complete, calculate forgetting for this epoch
-        if epoch_info["task_id"] > 0:
-            forgetting = max_first_task_accuracy - first_task_accuracy
-            forgetting_values.append(forgetting)
+        forgetting = max_first_task_accuracy - first_task_accuracy
+        forgetting_values.append(forgetting)
 
     if len(forgetting_values) == 0:
         return None
