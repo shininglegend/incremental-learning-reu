@@ -28,7 +28,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Counter for processed folders
 processed_count=0
-skipped_count=0
+skipped_folders=()
 
 echo "Batch processing folders in: $INPUT_DIR"
 echo "Output directory: $OUTPUT_DIR"
@@ -46,14 +46,14 @@ for folder in "$INPUT_DIR"/4*; do
         pkl_count=$(find "$folder" -name "*.pkl" | wc -l)
         if [ "$pkl_count" -eq 0 ]; then
             echo "  Warning: No .pkl files found in $folder_name, skipping"
-            ((skipped_count++))
+            skipped_folders+=("$folder_name (no pkl files)")
             continue
         fi
 
         # Assert exactly 15 pickle files
         if [ "$pkl_count" -ne 15 ]; then
             echo "  Error: Expected 15 pickle files, found $pkl_count in $folder_name, skipping"
-            ((skipped_count++))
+            skipped_folders+=("$folder_name ($pkl_count pkl files)")
             continue
         fi
 
@@ -76,16 +76,23 @@ for folder in "$INPUT_DIR"/4*; do
         echo
     else
         echo "Skipping non-directory: $(basename "$folder")"
-        ((skipped_count++))
+        skipped_folders+=("$(basename "$folder") (not a directory)")
     fi
 done
 
 echo "Batch processing complete!"
 echo "Processed: $processed_count folders"
-echo "Skipped: $skipped_count folders"
+if [ ${#skipped_folders[@]} -gt 0 ]; then
+    echo "Skipped folders:"
+    for folder in "${skipped_folders[@]}"; do
+        echo "  - $folder"
+    done
+else
+    echo "No folders skipped"
+fi
 echo "Results saved to: $OUTPUT_DIR"
 
 # List the generated files
-echo
-echo "Generated files:"
-ls -la "$OUTPUT_DIR"/detailed_results-*.csv 2>/dev/null || echo "No detailed results files found"
+# echo
+# echo "Generated files:"
+# ls -la "$OUTPUT_DIR"/detailed_results-*.csv 2>/dev/null || echo "No detailed results files found"
