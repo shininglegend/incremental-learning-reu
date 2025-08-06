@@ -283,10 +283,20 @@ def main():
         default=None,
         help="Directory to save the analysis results (default: test_results)",
     )
+    parser.add_argument(
+        "--no_verbose",
+        default=False,
+        action="store_true",
+        help="Reduce output to command line.",
+    )
     args = parser.parse_args()
 
-    print("TA-A-GEM Experiment Analysis")
-    print("=" * 50)
+    VERBOSE = not args.no_verbose
+    vprint = lambda *args, **kwargs: print(*args, **kwargs) if VERBOSE else None
+
+    vprint("TA-A-GEM Experiment Analysis")
+    vprint("=" * 50)
+    print(f"Analyzing results in {args.input_dir}...")
 
     # Load all pickle files
     results = load_pickle_files(directory=args.input_dir, num_files=args.num_runs)
@@ -295,7 +305,7 @@ def main():
         print(f"No pickle files found in {args.input_dir} directory")
         return
 
-    print(
+    vprint(
         f"Found {len(results)} result files (analyzing last {args.num_runs} runs only)"
     )
 
@@ -311,7 +321,7 @@ def main():
         "%B %d, %Y, at %I:%M:%S %p"
     )
 
-    print(f"Test results are from {earliest_str} to {latest_str}")
+    vprint(f"Test results are from {earliest_str} to {latest_str}")
 
     # Show breakdown by task type
     task_counts = {}
@@ -319,9 +329,9 @@ def main():
         task_type = result["task_type"]
         task_counts[task_type] = task_counts.get(task_type, 0) + 1
 
-    print("\nBreakdown by task type:")
+    vprint("\nBreakdown by task type:")
     for task_type, count in task_counts.items():
-        print(f"  {task_type}: {count} runs")
+        vprint(f"  {task_type}: {count} runs")
 
     # Analyze experiments
     statistics = analyze_experiments(results)
@@ -337,42 +347,42 @@ def main():
     display_df, full_df = create_summary_table(statistics)
 
     # Print results to terminal
-    print("\n" + "=" * 80)
-    print("EXPERIMENT RESULTS SUMMARY")
-    print("=" * 80)
-    print(display_df.to_string(index=False))
+    vprint("\n" + "=" * 80)
+    vprint("EXPERIMENT RESULTS SUMMARY")
+    vprint("=" * 80)
+    vprint(display_df.to_string(index=False))
 
     # Print detailed raw accuracies
-    print("\n" + "=" * 80)
-    print("DETAILED RESULTS")
-    print("=" * 80)
+    vprint("\n" + "=" * 80)
+    vprint("DETAILED RESULTS")
+    vprint("=" * 80)
     to_copy_accuracies = ""
     to_copy_forgetting = ""
     to_copy_first_task = ""
     for stat in statistics:
-        print(f"\n{stat['Task Type']} ({stat['Number of Runs']} runs):")
-        print(
+        vprint(f"\n{stat['Task Type']} ({stat['Number of Runs']} runs):")
+        vprint(
             f"  Raw accuracies: [{', '.join(f'{acc:.4f}' for acc in stat['Raw Accuracies'])}]"
         )
         to_copy_accuracies += (
             ",".join(f"{acc:.4f}" for acc in stat["Raw Accuracies"]) + "\n"
         )
-        print(f"  Mean: {stat['Mean Accuracy']:.4f} ± {stat['Std Deviation']:.4f}")
-        print(f"  99% CI: [{stat['99% CI Lower']:.4f}, {stat['99% CI Upper']:.4f}]")
+        vprint(f"  Mean: {stat['Mean Accuracy']:.4f} ± {stat['Std Deviation']:.4f}")
+        vprint(f"  99% CI: [{stat['99% CI Lower']:.4f}, {stat['99% CI Upper']:.4f}]")
 
         # Forgetting statistics
         if stat["Raw Forgetting"]:
-            print("  --")
-            print(
+            vprint("  --")
+            vprint(
                 f"  Raw forgetting: [{', '.join(f'{fg:.4f}' for fg in stat['Raw Forgetting'])}]"
             )
             to_copy_forgetting += (
                 ",".join(f"{fg:.4f}" for fg in stat["Raw Forgetting"]) + "\n"
             )
-            print(
+            vprint(
                 f"  Forgetting Mean: {stat['Mean Forgetting']:.4f} ± {stat['Forgetting Std']:.4f}"
             )
-            print(
+            vprint(
                 f"  Forgetting 99% CI: [{stat['Forgetting CI Lower']:.4f}, {stat['Forgetting CI Upper']:.4f}]"
             )
         else:
@@ -380,56 +390,89 @@ def main():
 
         # First-task accuracy statistics
         if stat["Raw First Task"]:
-            print("  --")
-            print(
+            vprint("  --")
+            vprint(
                 f"  Raw first task: [{', '.join(f'{ft:.4f}' for ft in stat['Raw First Task'])}]"
             )
             to_copy_first_task += (
                 ",".join(f"{ft:.4f}" for ft in stat["Raw First Task"]) + "\n"
             )
-            print(
+            vprint(
                 f"  First Task Mean: {stat['Mean First Task']:.4f} ± {stat['First Task Std']:.4f}"
             )
-            print(
+            vprint(
                 f"  First Task 99% CI: [{stat['First Task CI Lower']:.4f}, {stat['First Task CI Upper']:.4f}]"
             )
         else:
             print("  No first task data available")
 
-    print(
+    vprint(
         f"\nTo copy:\n-- Accuracies\n{to_copy_accuracies}-- Forgetting\n{to_copy_forgetting}-- First Task\n{to_copy_first_task}"
     )
-    if stat["Raw First Task"]:
-        print(
+    if any(stat["Raw First Task"] for stat in statistics if stat["Raw First Task"]):
+        vprint(
             "Note: First Task accuracy is calculated over all epochs after the first 20."
         )
 
     # Save results to CSV
     if args.output_dir is not None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Save summary table
-        summary_filename = os.path.join(
-            args.output_dir, f"experiment_analysis_{timestamp}.csv"
-        )
-        display_df.to_csv(summary_filename, index=False)
-        print(f"\nSummary results saved to: {summary_filename}")
+        # # Save summary table
+        # summary_filename = os.path.join(
+        #     args.output_dir, f"experiment_analysis_{timestamp}.csv"
+        # )
+        # display_df.to_csv(summary_filename, index=False)
+        # print(f"\nSummary results saved to: {summary_filename}")
 
         # Save detailed results
         detailed_results = []
         for stat in statistics:
+            # Get results for this task type
+            task_results = [r for r in results if r["task_type"] == stat["Task Type"]]
+
             for i, accuracy in enumerate(stat["Raw Accuracies"]):
+                result = task_results[i] if i < len(task_results) else {}
+
+                # Extract params safely
+                params = result.get("data", {}).get("params", {})
+                task_introduction = params.get("task_introduction", "unknown")
+                removal_function = params.get("removal_function", "unknown")
+
+                # Get forgetting and first task accuracy
+                forgetting = (
+                    stat["Raw Forgetting"][i]
+                    if i < len(stat["Raw Forgetting"])
+                    else None
+                )
+                first_task_accuracy = (
+                    stat["Raw First Task"][i]
+                    if i < len(stat["Raw First Task"])
+                    else None
+                )
+
                 detailed_results.append(
                     {
-                        "Task Type": stat["Task Type"],
-                        "Run Number": i + 1,
-                        "Final Accuracy": accuracy,
+                        "filename": result.get("file", "unknown"),
+                        "task_introduction": task_introduction,
+                        "task_type": stat["Task Type"],
+                        "removal_function": removal_function,
+                        "run_number": i + 1,
+                        "accuracy": accuracy,
+                        "forgetting": forgetting,
+                        "first_task_accuracy": first_task_accuracy,
                     }
                 )
 
         detailed_df = pd.DataFrame(detailed_results)
+        # Extract just the folder name from input_dir path
+        input_dir_name = os.path.basename(os.path.normpath(args.input_dir))
+        # Escape the directory name for filename safety
+        safe_dir_name = "".join(
+            c if c.isalnum() or c in "-_" else "_" for c in input_dir_name
+        )
         detailed_filename = os.path.join(
-            args.output_dir, f"detailed_results_{timestamp}.csv"
+            args.output_dir, f"detailed_results-{safe_dir_name}.csv"
         )
         detailed_df.to_csv(detailed_filename, index=False)
         print(f"Detailed results saved to: {detailed_filename}")
