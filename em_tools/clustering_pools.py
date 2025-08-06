@@ -282,3 +282,7 @@ class ClusteringMemory:
         if self.interval == self.update_count_at_current_interval:
             return True
         return False
+
+    def get_removal_function(self):
+        return ClusterPool.get_removal_function()
+
