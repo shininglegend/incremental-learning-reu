@@ -1,11 +1,10 @@
 #!/bin/bash
-#SBATCH --exclusive
 #SBATCH --job-name="parallel_taagem"
 #SBATCH --output="./sbatch_results/slurm-%A_%a.out" # %A for Job Array ID, %a for Task ID output
 #SBATCH --error="./sbatch_results/slurm-%A_%a.err"  # Error log file
 #SBATCH --nodes=1 # Nodes per instance. 1 node = 24 CPUs. Baseline 1
 #SBATCH --ntasks=1 # Each array task runs one main script. Baseline 1
-#SBATCH --mem=2G  # Request memory in Gigabytes. One main.py job takes about 1.2G RAM. Request a little extra.
+#SBATCH --mem=2G  # Request memory in Gigabytes. One new_main.py job takes about 1.2G RAM. Request a little extra.
 #SBATCH --time="00:30:00" # 00:12:41 baseline. Request a little extra.
 #SBATCH --array=0-4 # Adjust the range based on how many runs you want. 0-4 for 5 runs, 0-19 for 20 runs
 #SBATCH --exclusive
@@ -13,11 +12,10 @@
 # #SBATCH --partition="$PARTITION_NAME"
 # #SBATCH --cpus-per-task=24 # How many CPU cores per instance. Baseline 24
 
-
 # A Slurm batch script for running the program many times in parallel across CPUs
 
 # ------- GLOBAL CONFIG (CUSTOMIZE WITH YOUR FILE LOCATIONS) -------
-HOME_DIR="/home/NAS/$USER/17_1-continual-introduction-hyperparameters"
+HOME_DIR="/home/NAS/$USER/incremental-learning-reu"
 PYTHON_SCRIPT="$HOME_DIR/main.py" # Or wherever you put main.py
 
 # Define Python executable path relative to the script's directory
@@ -29,7 +27,7 @@ fi
 
 # General Job Settings
 JOB_NAME="parallel_taagem"          # A descriptive name for your job
-TIME_LIMIT="00:30:00"            # Max time for each task (HH:MM:SS)
+TIME_LIMIT="00:20:00"            # Max time for each task (HH:MM:SS)
 TASK_TYPE=$1 # Type of task: "permutation", "class_split", "rotation"
 DATASET_NAME=$2 # mnist or fashion_mnist
 if [[ -z "$TASK_TYPE" || -z "$DATASET_NAME" ]]; then
