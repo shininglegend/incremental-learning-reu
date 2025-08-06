@@ -572,9 +572,9 @@ class ClusterPool:
             y=y_col,
             z=z_col,
             color="Cluster",
-            symbol="Label",
+            symbol="Task",
             title=title,
-            hover_data={"Cluster": True, "Label": True},
+            hover_data={"Cluster": True, "Task": True},
         )
 
         fig.show()
