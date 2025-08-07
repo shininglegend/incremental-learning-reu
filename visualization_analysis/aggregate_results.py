@@ -118,8 +118,8 @@ def generate_summary_spreadsheet(
                 "Task": extract_task_type_mapping(task_type),
                 "Folder": folder_name,
                 "Dataset": dataset,
-                "Avg Accuracy": "",
-                "Std Dev.": "",
+                "A-Average": "",
+                "A-Std Dev": "",
             }
 
             # Add accuracy results with 6 decimal places
@@ -132,6 +132,9 @@ def generate_summary_spreadsheet(
             row["A-BGD"] = ""
             row["A-TA-A-GEM"] = ""
 
+            row["F-Average"] = ""
+            row["F-Std Dev"] = ""
+
             # Add forgetting results with 6 decimal places
             for i in range(5):
                 if i < len(forgettings):
@@ -141,6 +144,9 @@ def generate_summary_spreadsheet(
             row["F-Better?"] = ""
             row["F-BGD"] = ""
             row["F-TA-A-GEM"] = ""
+
+            row["T-Average"] = ""
+            row["T-Std Dev"] = ""
 
             # Add first task results with 6 decimal places
             for i in range(5):
