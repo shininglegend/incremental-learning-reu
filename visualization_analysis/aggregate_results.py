@@ -113,9 +113,13 @@ def generate_summary_spreadsheet(
             first_tasks = task_data["first_tasks"]
 
             row = {
+                # Blanks will be filled in later.
+                "Notes": "",
+                "Task": extract_task_type_mapping(task_type),
                 "Folder": folder_name,
                 "Dataset": dataset,
-                "Task": extract_task_type_mapping(task_type),
+                "Avg Accuracy": "",
+                "Std Dev.": "",
             }
 
             # Add accuracy results with 6 decimal places
@@ -124,6 +128,9 @@ def generate_summary_spreadsheet(
                     row[f"Accuracy_{i+1}"] = f"{accuracies[i]:.6f}"
                 else:
                     row[f"Accuracy_{i+1}"] = ""
+            row["A-Better?"] = ""
+            row["A-BGD"] = ""
+            row["A-TA-A-GEM"] = ""
 
             # Add forgetting results with 6 decimal places
             for i in range(5):
@@ -131,6 +138,9 @@ def generate_summary_spreadsheet(
                     row[f"Forgetting_{i+1}"] = f"{forgettings[i]:.6f}"
                 else:
                     row[f"Forgetting_{i+1}"] = ""
+            row["F-Better?"] = ""
+            row["F-BGD"] = ""
+            row["F-TA-A-GEM"] = ""
 
             # Add first task results with 6 decimal places
             for i in range(5):
@@ -138,6 +148,9 @@ def generate_summary_spreadsheet(
                     row[f"FirstTask_{i+1}"] = f"{first_tasks[i]:.6f}"
                 else:
                     row[f"FirstTask_{i+1}"] = ""
+            row["T-Better?"] = ""
+            row["T-BGD"] = ""
+            row["T-TA-A-GEM"] = ""
 
             summary_rows.append(row)
 
