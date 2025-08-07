@@ -12,6 +12,21 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "Python Debugger: Aggregate",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "visualization_analysis/aggregate_results.py",
+      "console": "integratedTerminal",
+      "args": "--input-dir test_results/agg-4-composite --output-dir test_results/combined_results"
+    },
+    {
+      "name": "Python Debugger: ReadPickle",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "read_pickle.py",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Python Debugger: Normal Mode",
       "type": "debugpy",
       "request": "launch",
