@@ -14,6 +14,7 @@ INDIVIDUAL_PLOTS_TO_DISPLAY = {
     # Accuracy
     "per_task_accuracies": False,  # Matrix of current task to accuracy on previous task
     "task_accuracies": True,  # Line graph
+    "forgetting": False,  # Forgetting on first task over time
     # Loss
     "batch_losses": False,
     "epoch_losses": False,
@@ -519,6 +520,47 @@ if "oldest_task_ids_tracking" in data and data["oldest_task_ids_tracking"]:
         )
         print("Saved oldest_task_ids_tracking.png")
     plt.close()
+
+# 9. First Task Forgetting Graph
+if "per_task_accuracies" in data and data["per_task_accuracies"]:
+    fig_forgetting = go.Figure()
+
+    # Track only first task (task_id = 0)
+    max_first_task_accuracy = 0.0
+    first_task_forgetting = []
+    x_values = []
+
+    for epoch_idx, epoch_accs in enumerate(data["per_task_accuracies"]):
+        first_task_accuracy = epoch_accs[0]
+
+        # During first task training, track max accuracy
+        if data["epoch_data"][epoch_idx]["task_id"] == 0:
+            max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
+            continue
+        forgetting = max_first_task_accuracy - first_task_accuracy
+        first_task_forgetting.append(forgetting)
+        x_values.append(epoch_idx + 1)
+
+    if first_task_forgetting:
+        fig_forgetting.add_trace(
+            go.Scatter(
+                x=x_values,
+                y=first_task_forgetting,
+                mode="lines+markers",
+                name="First Task Forgetting",
+                line=dict(width=2.5, color="red"),
+                marker=dict(size=6),
+            )
+        )
+
+        fig_forgetting.update_layout(
+            title="First Task Forgetting Over Time",
+            xaxis_title="Epoch",
+            yaxis_title="Forgetting",
+            yaxis=dict(range=[0, max(first_task_forgetting) * 1.1 if first_task_forgetting else 1]),
+            hovermode="x unified",
+        )
+        show_or_open(fig_forgetting, "forgetting")
 
 print("\nVisualization complete! All plots have been displayed.")
 
