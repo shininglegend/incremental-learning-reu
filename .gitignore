@@ -1,4 +1,5 @@
 /test_results/*
+/mlruns/*
 /sbatch_results/*
 TRAINING_LOG.md
 
