@@ -245,7 +245,7 @@ def pad_accuracy_sequences(accuracy_lists):
     return epochs, mean_accuracy, std_accuracy
 
 
-def add_accuracy_traces(fig, epochs, mean_accuracy, std_accuracy, directory, color):
+def add_accuracy_traces(fig, epochs, mean_accuracy, std_accuracy, name, color):
     """Add mean line and std deviation band to figure"""
     # Add mean line
     fig.add_trace(
@@ -253,9 +253,9 @@ def add_accuracy_traces(fig, epochs, mean_accuracy, std_accuracy, directory, col
             x=epochs,
             y=mean_accuracy,
             mode="lines",
-            name=f"{directory}",
+            name=f"{name}",
             line=dict(color=color),
-            legendgroup=f"{directory}",
+            legendgroup=f"{name}",
         )
     )
 
@@ -271,19 +271,21 @@ def add_accuracy_traces(fig, epochs, mean_accuracy, std_accuracy, directory, col
             line=dict(color="rgba(255,255,255,0)"),
             showlegend=False,
             hoverinfo="skip",
-            legendgroup=f"{directory}",
+            legendgroup=f"{name}",
         )
     )
 
 
-def create_task_plot(task_dirs, task_type, colors):
+def create_task_plot(task_dirs, task_type, colors, names):
     """Create a single plot for a task type"""
     fig = go.Figure()
 
     for idx, (directory, accuracy_lists) in enumerate(task_dirs.items()):
+        if names.get(directory, None) is None:
+            names[directory] = input(f"Prev: {directory}\nEnter new name: ")
         epochs, mean_accuracy, std_accuracy = pad_accuracy_sequences(accuracy_lists)
         color = colors[idx % len(colors)]
-        add_accuracy_traces(fig, epochs, mean_accuracy, std_accuracy, directory, color)
+        add_accuracy_traces(fig, epochs, mean_accuracy, std_accuracy, names[directory], color)
 
     fig.update_layout(
         title=f"Accuracy vs Epochs - {task_type.title()} (Mean ± 1 Standard Deviation)",
@@ -359,19 +361,20 @@ def create_epoch_plot(all_results, task_filter=None):
             all_task_data[task_type][directory].append(item["accuracies"])
 
     # Create plots
+    names = {}
     if task_filter:
         # Single plot for specified task type
         if task_filter not in all_task_data:
             print(f"Warning: No data found for task type '{task_filter}'")
             return [go.Figure()]
 
-        fig = create_task_plot(all_task_data[task_filter], task_filter, colors)
+        fig = create_task_plot(all_task_data[task_filter], task_filter, colors, names)
         return [fig]
     else:
         # Multiple plots - one for each task type
         figures = []
         for task_type, task_dirs in all_task_data.items():
-            fig = create_task_plot(task_dirs, task_type, colors)
+            fig = create_task_plot(task_dirs, task_type, colors, names)
             figures.append((task_type, fig))
         return figures
 
