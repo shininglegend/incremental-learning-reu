@@ -42,6 +42,13 @@ EXPORT_FORMATS = {
     "csv": False,  # Save a csv of the data
 }
 
+# Plot configuration constants
+PLOT_CONFIG = {
+    'legend': dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+    'height': 700,
+    'yaxis_range': [0, 1]
+}
+
 # This import is not needed for this script, but it is needed to export images
 if any([EXPORT_FORMATS["png"], EXPORT_FORMATS["pdf"], EXPORT_FORMATS["svg"]]):
     import kaleido
@@ -381,8 +388,9 @@ def create_task_plot(task_dirs, task_type, colors, names):
         xaxis_title="Epoch",
         yaxis_title="Accuracy",
         hovermode="x unified",
-        yaxis=dict(range=[0, 1]),
-        height=700,
+        yaxis=dict(range=PLOT_CONFIG['yaxis_range']),
+        height=PLOT_CONFIG['height'],
+        legend=PLOT_CONFIG['legend'],
     )
 
     return fig
@@ -506,14 +514,20 @@ def create_first_task_forgetting_epoch_plot(all_results, names, task_filter=None
             return [go.Figure()]
 
         fig = create_task_plot(all_task_data[task_filter], task_filter, colors, names)
-        fig.update_layout(title=f"First Task Forgetting - {task_filter}")
+        fig.update_layout(
+            title=f"First Task Forgetting - {task_filter}",
+            legend=PLOT_CONFIG['legend']
+        )
         return [fig]
     else:
         # Multiple plots - one for each task type
         figures = []
         for task_type, task_dirs in all_task_data.items():
             fig = create_task_plot(task_dirs, task_type, colors, names)
-            fig.update_layout(title=f"First Task Forgetting - {task_type}")
+            fig.update_layout(
+                title=f"First Task Forgetting - {task_type}",
+                legend=PLOT_CONFIG['legend']
+            )
             figures.append((task_type, fig))
         return figures
 
@@ -552,14 +566,20 @@ def create_first_task_epoch_plot(all_results, names, task_filter=None):
             return [go.Figure()]
 
         fig = create_task_plot(all_task_data[task_filter], task_filter, colors, names)
-        fig.update_layout(title=f"First Task Accuracy - {task_filter}")
+        fig.update_layout(
+            title=f"First Task Accuracy - {task_filter}",
+            legend=PLOT_CONFIG['legend']
+        )
         return [fig]
     else:
         # Multiple plots - one for each task type
         figures = []
         for task_type, task_dirs in all_task_data.items():
             fig = create_task_plot(task_dirs, task_type, colors, names)
-            fig.update_layout(title=f"First Task Accuracy - {task_type}")
+            fig.update_layout(
+                title=f"First Task Accuracy - {task_type}",
+                legend=PLOT_CONFIG['legend']
+            )
             figures.append((task_type, fig))
         return figures
 
