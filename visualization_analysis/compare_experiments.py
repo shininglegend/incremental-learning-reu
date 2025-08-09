@@ -29,7 +29,11 @@ from retro_stats import load_pickle_files
 
 # Static image export controls
 EXPORT_FORMATS = {
-    "accuracy_plots": True,  # Accuracy vs epochs plots
+    # Kinds
+    "accuracy": True,  # Accuracy vs epochs plots
+    "first_task": True,  # Forgetting on first task
+    "first_task_forgetting": True,
+    # Formats
     "html": False,  # Save HTML format
     "show_html": False,  # Show HTML image
     "png": True,  # Save PNG format
@@ -86,6 +90,89 @@ def extract_epoch_accuracies(results):
         )
 
     return epoch_accuracies
+
+
+def extract_first_task_accuracies(results):
+    """Extract first task accuracy per epoch for plotting"""
+    epoch_accuracies = []
+
+    for result in results:
+        if result["final_accuracy"] is None:
+            continue
+
+        data = result["data"]
+        task_type = result["task_type"]
+
+        # Extract first task accuracy from epoch data
+        if "epoch_data" not in data or not data["epoch_data"]:
+            continue
+
+        # Extract first task accuracy for each epoch after first task completion
+        first_task_accuracies = []
+        for epoch_info in data["epoch_data"]:
+            # Error for missing data
+            first_task_accuracy = epoch_info["individual_accuracies"][0]
+            first_task_accuracies.append(first_task_accuracy)
+
+        if not first_task_accuracies:
+            continue
+
+        epoch_accuracies.append(
+            {
+                "task_type": task_type,
+                "accuracies": first_task_accuracies,
+                "num_epochs": len(first_task_accuracies),
+            }
+        )
+
+    return epoch_accuracies
+
+
+def extract_first_task_forgetting(results):
+    """Extract first task forgetting per epoch for plotting"""
+    epoch_forgetting = []
+
+    for result in results:
+        if result["final_accuracy"] is None:
+            continue
+
+        data = result["data"]
+        task_type = result["task_type"]
+
+        # Extract first task forgetting from epoch data
+        if "epoch_data" not in data or not data["epoch_data"]:
+            continue
+
+        epoch_data = data["epoch_data"]
+        max_first_task_accuracy = 0.0
+        forgetting_values = []
+
+        for epoch_info in epoch_data:
+            # Error for missing data
+            first_task_accuracy = epoch_info["individual_accuracies"][0]
+
+            # Update max accuracy seen so far for first task until the first task is complete
+            if epoch_info["task_id"] == 0:
+                max_first_task_accuracy = max(max_first_task_accuracy, first_task_accuracy)
+                forgetting_values.append(0.0)  # No forgetting during first task training
+                continue
+
+            # After first task training is complete, calculate forgetting for this epoch
+            forgetting = max_first_task_accuracy - first_task_accuracy
+            forgetting_values.append(forgetting)
+
+        if not forgetting_values:
+            continue
+
+        epoch_forgetting.append(
+            {
+                "task_type": task_type,
+                "forgetting": forgetting_values,
+                "num_epochs": len(forgetting_values),
+            }
+        )
+
+    return epoch_forgetting
 
 
 def perform_statistical_comparison(all_results, task_filter=None):
@@ -285,7 +372,9 @@ def create_task_plot(task_dirs, task_type, colors, names):
             names[directory] = input(f"Prev: {directory}\nEnter new name: ")
         epochs, mean_accuracy, std_accuracy = pad_accuracy_sequences(accuracy_lists)
         color = colors[idx % len(colors)]
-        add_accuracy_traces(fig, epochs, mean_accuracy, std_accuracy, names[directory], color)
+        add_accuracy_traces(
+            fig, epochs, mean_accuracy, std_accuracy, names[directory], color
+        )
 
     fig.update_layout(
         title=f"Accuracy vs Epochs - {task_type.title()} (Mean ± 1 Standard Deviation)",
@@ -300,10 +389,15 @@ def create_task_plot(task_dirs, task_type, colors, names):
 
 
 def save_or_show_figure(
-    figure: go.Figure, plot_type: str, task_type: str, output_dir: str | None = None
+    kind: str,
+    figure: go.Figure,
+    plot_type: str,
+    task_type: str,
+    output_dir: str | None = None,
 ):
+    assert kind in EXPORT_FORMATS.keys()
     """Save figure to static images and/or show based on configuration"""
-    if output_dir and EXPORT_FORMATS["accuracy_plots"]:
+    if output_dir and EXPORT_FORMATS[kind]:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_filename = f"{plot_type}_{task_type}_{timestamp}"
         # Save in requested formats
@@ -334,7 +428,7 @@ def save_or_show_figure(
         figure.show()
 
 
-def create_epoch_plot(all_results, task_filter=None):
+def create_epoch_plot(all_results, names, task_filter=None):
     """Create plotly graph showing accuracy vs epochs with std deviation bands"""
     colors = px.colors.qualitative.Set1
 
@@ -361,7 +455,6 @@ def create_epoch_plot(all_results, task_filter=None):
             all_task_data[task_type][directory].append(item["accuracies"])
 
     # Create plots
-    names = {}
     if task_filter:
         # Single plot for specified task type
         if task_filter not in all_task_data:
@@ -375,6 +468,98 @@ def create_epoch_plot(all_results, task_filter=None):
         figures = []
         for task_type, task_dirs in all_task_data.items():
             fig = create_task_plot(task_dirs, task_type, colors, names)
+            figures.append((task_type, fig))
+        return figures
+
+
+def create_first_task_forgetting_epoch_plot(all_results, names, task_filter=None):
+    """Create plotly graph showing first task forgetting vs epochs with std deviation bands"""
+    colors = px.colors.qualitative.Set1
+
+    # Group all data by task type first
+    all_task_data = {}
+
+    for directory, results in all_results.items():
+        epoch_data = extract_first_task_forgetting(results)
+        if not epoch_data:
+            continue
+
+        # Group by task type
+        for item in epoch_data:
+            task_type = item["task_type"]
+
+            # Filter by task type if specified
+            if task_filter and task_type != task_filter:
+                continue
+
+            if task_type not in all_task_data:
+                all_task_data[task_type] = {}
+            if directory not in all_task_data[task_type]:
+                all_task_data[task_type][directory] = []
+            all_task_data[task_type][directory].append(item["forgetting"])
+
+    # Create plots
+    if task_filter:
+        # Single plot for specified task type
+        if task_filter not in all_task_data:
+            print(f"Warning: No data found for task type '{task_filter}'")
+            return [go.Figure()]
+
+        fig = create_task_plot(all_task_data[task_filter], task_filter, colors, names)
+        fig.update_layout(title=f"First Task Forgetting - {task_filter}")
+        return [fig]
+    else:
+        # Multiple plots - one for each task type
+        figures = []
+        for task_type, task_dirs in all_task_data.items():
+            fig = create_task_plot(task_dirs, task_type, colors, names)
+            fig.update_layout(title=f"First Task Forgetting - {task_type}")
+            figures.append((task_type, fig))
+        return figures
+
+
+def create_first_task_epoch_plot(all_results, names, task_filter=None):
+    """Create plotly graph showing first task accuracy vs epochs with std deviation bands"""
+    colors = px.colors.qualitative.Set1
+
+    # Group all data by task type first
+    all_task_data = {}
+
+    for directory, results in all_results.items():
+        epoch_data = extract_first_task_accuracies(results)
+        if not epoch_data:
+            continue
+
+        # Group by task type
+        for item in epoch_data:
+            task_type = item["task_type"]
+
+            # Filter by task type if specified
+            if task_filter and task_type != task_filter:
+                continue
+
+            if task_type not in all_task_data:
+                all_task_data[task_type] = {}
+            if directory not in all_task_data[task_type]:
+                all_task_data[task_type][directory] = []
+            all_task_data[task_type][directory].append(item["accuracies"])
+
+    # Create plots
+    if task_filter:
+        # Single plot for specified task type
+        if task_filter not in all_task_data:
+            print(f"Warning: No data found for task type '{task_filter}'")
+            return [go.Figure()]
+
+        fig = create_task_plot(all_task_data[task_filter], task_filter, colors, names)
+        fig.update_layout(title=f"First Task Accuracy - {task_filter}")
+        return [fig]
+    else:
+        # Multiple plots - one for each task type
+        figures = []
+        for task_type, task_dirs in all_task_data.items():
+            fig = create_task_plot(task_dirs, task_type, colors, names)
+            fig.update_layout(title=f"First Task Accuracy - {task_type}")
             figures.append((task_type, fig))
         return figures
 
@@ -471,17 +656,52 @@ Examples:
     print_comparison_results(comparison_results)
 
     # Create and save plot(s)
-    figures = create_epoch_plot(all_results, args.task_type)
+    names = {}
+    first_task_figures = create_first_task_epoch_plot(
+        all_results, names, args.task_type
+    )
+    first_task_plot_name = "first_task_accuracy"
+
+    first_task_forgetting_figures = create_first_task_forgetting_epoch_plot(
+        all_results, names, args.task_type
+    )
+    first_task_forgetting_plot_name = "first_task_forgetting"
+
+    figures = create_epoch_plot(all_results, names, args.task_type)
+    plot_name = "accuracy_comparison"
 
     if args.task_type:
         # Single plot for specific task type
-        save_or_show_figure(
-            figures[0], "accuracy_comparison", args.task_type, args.output_dir
-        )
+        if isinstance(figures, list) and len(figures) > 0:
+            save_or_show_figure(
+                "accuracy", figures[0], plot_name, args.task_type, args.output_dir
+            )
+            save_or_show_figure(
+                "first_task",
+                first_task_figures[0],
+                first_task_plot_name,
+                args.task_type,
+                args.output_dir,
+            )
+            save_or_show_figure(
+                "first_task_forgetting",
+                first_task_forgetting_figures[0],
+                first_task_forgetting_plot_name,
+                args.task_type,
+                args.output_dir,
+            )
     else:
         # Multiple plots - one for each task type
         for task_type, fig in figures:
-            save_or_show_figure(fig, "accuracy_comparison", task_type, args.output_dir)
+            save_or_show_figure("accuracy", fig, plot_name, task_type, args.output_dir)
+        for task_type, fig in first_task_figures:
+            save_or_show_figure(
+                "first_task", fig, first_task_plot_name, task_type, args.output_dir
+            )
+        for task_type, fig in first_task_forgetting_figures:
+            save_or_show_figure(
+                "first_task_forgetting", fig, first_task_forgetting_plot_name, task_type, args.output_dir
+            )
 
     # Save statistical results to CSV
     if args.output_dir and EXPORT_FORMATS["csv"]:
