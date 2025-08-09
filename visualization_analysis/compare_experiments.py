@@ -49,6 +49,13 @@ PLOT_CONFIG = {
     'yaxis_range': [0, 1]
 }
 
+# Task type display names
+TASK_TYPE_LABELS = {
+    'class_split': 'Class Split',
+    'permutation': 'Permutation',
+    'rotation': 'Rotation'
+}
+
 # This import is not needed for this script, but it is needed to export images
 if any([EXPORT_FORMATS["png"], EXPORT_FORMATS["pdf"], EXPORT_FORMATS["svg"]]):
     import kaleido
@@ -383,8 +390,9 @@ def create_task_plot(task_dirs, task_type, colors, names):
             fig, epochs, mean_accuracy, std_accuracy, names[directory], color
         )
 
+    task_label = TASK_TYPE_LABELS.get(task_type, task_type.title())
     fig.update_layout(
-        title=f"Accuracy vs Epochs - {task_type.title()} (Mean ± 1 Standard Deviation)",
+        title=f"Accuracy vs Epochs - {task_label} (Mean ± 1 Standard Deviation)",
         xaxis_title="Epoch",
         yaxis_title="Accuracy",
         hovermode="x unified",
@@ -514,8 +522,9 @@ def create_first_task_forgetting_epoch_plot(all_results, names, task_filter=None
             return [go.Figure()]
 
         fig = create_task_plot(all_task_data[task_filter], task_filter, colors, names)
+        task_label = TASK_TYPE_LABELS.get(task_filter, task_filter.title())
         fig.update_layout(
-            title=f"First Task Forgetting - {task_filter}",
+            title=f"First Task Forgetting - {task_label}",
             legend=PLOT_CONFIG['legend']
         )
         return [fig]
@@ -524,8 +533,9 @@ def create_first_task_forgetting_epoch_plot(all_results, names, task_filter=None
         figures = []
         for task_type, task_dirs in all_task_data.items():
             fig = create_task_plot(task_dirs, task_type, colors, names)
+            task_label = TASK_TYPE_LABELS.get(task_type, task_type.title())
             fig.update_layout(
-                title=f"First Task Forgetting - {task_type}",
+                title=f"First Task Forgetting - {task_label}",
                 legend=PLOT_CONFIG['legend']
             )
             figures.append((task_type, fig))
@@ -566,8 +576,9 @@ def create_first_task_epoch_plot(all_results, names, task_filter=None):
             return [go.Figure()]
 
         fig = create_task_plot(all_task_data[task_filter], task_filter, colors, names)
+        task_label = TASK_TYPE_LABELS.get(task_filter, task_filter.title())
         fig.update_layout(
-            title=f"First Task Accuracy - {task_filter}",
+            title=f"First Task Accuracy - {task_label}",
             legend=PLOT_CONFIG['legend']
         )
         return [fig]
@@ -576,8 +587,9 @@ def create_first_task_epoch_plot(all_results, names, task_filter=None):
         figures = []
         for task_type, task_dirs in all_task_data.items():
             fig = create_task_plot(task_dirs, task_type, colors, names)
+            task_label = TASK_TYPE_LABELS.get(task_type, task_type.title())
             fig.update_layout(
-                title=f"First Task Accuracy - {task_type}",
+                title=f"First Task Accuracy - {task_label}",
                 legend=PLOT_CONFIG['legend']
             )
             figures.append((task_type, fig))
