@@ -133,7 +133,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
-        use_cuda
+        use_cuda,
     ):
         """Create permutation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
@@ -179,7 +179,11 @@ class FashionMnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, pin_memory=use_cuda
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                drop_last=True,
+                pin_memory=use_cuda,
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -197,7 +201,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
-        use_cuda
+        use_cuda,
     ):
         """Create rotation-based tasks for Fashion-MNIST."""
         train_dataloaders = []
@@ -252,7 +256,11 @@ class FashionMnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_subset)
             test_dataset = TensorDataset(x_test_task, y_test_subset)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, pin_memory=use_cuda
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                drop_last=True,
+                pin_memory=use_cuda,
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -270,7 +278,7 @@ class FashionMnistDatasetLoader(DatasetLoader):
         y_test_tensor,
         num_tasks,
         batch_size,
-        use_cuda
+        use_cuda,
     ):
         """Create class-split-based tasks for Fashion-MNIST."""
         train_dataloaders = []
@@ -316,7 +324,11 @@ class FashionMnistDatasetLoader(DatasetLoader):
             train_dataset = TensorDataset(x_train_task, y_train_task)
             test_dataset = TensorDataset(x_test_task, y_test_task)
             train_dataloader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, pin_memory=use_cuda
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                drop_last=True,
+                pin_memory=use_cuda,
             )
             test_dataloader = DataLoader(
                 test_dataset, batch_size=batch_size, shuffle=False
@@ -342,121 +354,89 @@ FASHION_MNIST_CLASSES = [
 ]
 
 
-# Load Fashion-MNIST dataset for standalone use
-def load_fashion_mnist_data():
-    """Load Fashion-MNIST dataset for standalone use."""
-    loader = FashionMnistDatasetLoader()
-    return loader.load_raw_data()
-
-
 if __name__ == "__main__":
     import random
     import matplotlib.pyplot as plt
 
-    # Initialize the loader
+    # Load Fashion-MNIST data
     loader = FashionMnistDatasetLoader()
-
-    def show_images(images, title_texts, figure_title=""):
-        """Helper function to show a list of images with their relating titles."""
-        cols = 5
-        rows = int(len(images) / cols) + 1
-        plt.figure(figsize=(15, 10))
-        if figure_title:
-            plt.suptitle(figure_title, fontsize=16)
-        index = 1
-        for x in zip(images, title_texts):
-            image = x[0]
-            title_text = x[1]
-            plt.subplot(rows, cols, index)
-            plt.imshow(
-                image.reshape(28, 28) if len(image.shape) == 1 else image, cmap="gray"
-            )
-            if title_text != "":
-                plt.title(title_text, fontsize=10)
-            plt.axis("off")
-            index += 1
-        plt.tight_layout()
-        plt.show()
-
-    print("=== Fashion-MNIST Task Visualization ===")
-
-    # Load and preprocess data with quick_test for faster demonstration
     x_train, y_train, x_test, y_test = loader.load_raw_data()
-    x_train, y_train, x_test, y_test = loader.preprocess_data(
+    x_train_prep, y_train_prep, x_test_prep, y_test_prep = loader.preprocess_data(
         x_train, y_train, x_test, y_test, quick_test=True
     )
 
-    print(f"Dataset shapes: train {x_train.shape}, test {x_test.shape}")
-
-    # Original data samples
-    print("\n1. Original Fashion-MNIST samples:")
-    images_2_show = []
-    titles_2_show = []
-    for i in range(10):
-        r = random.randint(0, len(x_train) - 1)
-        images_2_show.append(x_train[r].numpy())
-        class_name = FASHION_MNIST_CLASSES[y_train[r].item()]
-        titles_2_show.append(f"{class_name}")
-    show_images(images_2_show, titles_2_show, "Original Fashion-MNIST Samples")
-
-    # Permutation task samples
-    print("2. Permutation task samples:")
-    train_loaders, test_loaders = loader._create_permutation_tasks(
-        x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32
+    # Generate task dataloaders
+    permutation_train, permutation_test = loader._create_permutation_tasks(
+        x_train_prep, y_train_prep, x_test_prep, y_test_prep, 9, 32
+    )
+    rotation_train, rotation_test = loader._create_rotation_tasks(
+        x_train_prep, y_train_prep, x_test_prep, y_test_prep, 9, 32
+    )
+    class_split_train, class_split_test = loader._create_class_split_tasks(
+        x_train_prep, y_train_prep, x_test_prep, y_test_prep, 5, 32
     )
 
-    for task_id in range(3):
-        images_2_show = []
-        titles_2_show = []
-        # Get first batch from each task
-        batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
-            images_2_show.append(batch_x[i].numpy())
-            class_name = FASHION_MNIST_CLASSES[batch_y[i].item()]
-            titles_2_show.append(f"{class_name}")
-        show_images(images_2_show, titles_2_show, f"Permutation Task {task_id + 1}")
+    # Create 2x8 subplot grid
+    fig, axes = plt.subplots(2, 8, figsize=(32, 8))
 
-    # Rotation task samples
-    print("3. Rotation task samples:")
-    train_loaders, test_loaders = loader._create_rotation_tasks(
-        x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32
-    )
+    # Task configurations
+    task_configs = [
+        ("Normal", None, None),
+        ("Class Split", class_split_train, 5),
+        ("Permutation", permutation_train, 9),
+        ("Rotation", rotation_train, 9),
+    ]
 
-    for task_id in range(3):
-        images_2_show = []
-        titles_2_show = []
-        batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
-            images_2_show.append(batch_x[i].numpy())
-            class_name = FASHION_MNIST_CLASSES[batch_y[i].item()]
-            titles_2_show.append(f"{class_name}, {task_id * 20}°")
-        show_images(
-            images_2_show,
-            titles_2_show,
-            f"Rotation Task {task_id + 1} ({task_id * 20}° rotation)",
-        )
+    for task_type_idx, (task_name, dataloaders, num_tasks) in enumerate(task_configs):
+        if task_name == "Normal":
+            # Sample 4 random normal images
+            for i in range(4):
+                r = random.randint(0, len(x_train_prep) - 1)
+                image = x_train_prep[r].numpy()
+                class_label = FASHION_MNIST_CLASSES[y_train_prep[r].item()]
 
-    # Class split task samples
-    print("4. Class split task samples:")
-    train_loaders, test_loaders = loader._create_class_split_tasks(
-        x_train, y_train, x_test, y_test, num_tasks=5, batch_size=32
-    )
+                row = i // 2
+                col = (i % 2) + (task_type_idx * 2)
 
-    for task_id in range(5):
-        images_2_show = []
-        titles_2_show = []
-        batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
-            images_2_show.append(batch_x[i].numpy())
-            orig_classes = [
-                FASHION_MNIST_CLASSES[task_id * 2],
-                FASHION_MNIST_CLASSES[task_id * 2 + 1],
-            ]
-            titles_2_show.append(f"{'/'.join(orig_classes)}, New: {batch_y[i].item()}")
-        show_images(
-            images_2_show,
-            titles_2_show,
-            f"Class Split Task {task_id + 1} (classes {task_id*2}-{task_id*2+1})",
-        )
+                axes[row, col].imshow(image, cmap="gray")
+                axes[row, col].set_title(
+                    f"{task_name}\nClass: {class_label}", fontsize=10
+                )
+                axes[row, col].axis("off")
+        else:
+            # Select representative task indices using even spacing
+            if num_tasks <= 4:
+                selected_tasks = list(range(num_tasks))
+            else:
+                # Use evenly spaced indices across all tasks
+                selected_tasks = np.linspace(0, num_tasks - 1, 4, dtype=int).tolist()
 
-    print("Visualization complete!")
+            # Ensure we have exactly 4 tasks
+            while len(selected_tasks) < 4:
+                selected_tasks.append(selected_tasks[-1])
+
+            # Sample one image from each selected task
+            for i, task_idx in enumerate(selected_tasks):
+                batch = next(iter(dataloaders[task_idx]))
+                sample_idx = random.randint(0, len(batch[0]) - 1)
+                image = batch[0][sample_idx].numpy().reshape(28, 28)
+                label = batch[1][sample_idx].item()
+
+                if task_name == "Class Split":
+                    # For class split, convert binary label back to original class
+                    orig_class = (task_idx * 2) + label
+                    class_label = FASHION_MNIST_CLASSES[orig_class]
+                else:
+                    class_label = FASHION_MNIST_CLASSES[label]
+
+                row = i // 2
+                col = (i % 2) + (task_type_idx * 2)
+
+                axes[row, col].imshow(image, cmap="gray")
+                axes[row, col].set_title(
+                    f"{task_name}\nClass: {class_label}\nTask: {task_idx}", fontsize=10
+                )
+                axes[row, col].axis("off")
+
+    plt.tight_layout()
+    plt.show()

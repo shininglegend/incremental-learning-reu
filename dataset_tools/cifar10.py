@@ -254,9 +254,7 @@ class Cifar10DatasetLoader(DatasetLoader):
                 drop_last=True,
                 pin_memory=use_cuda,
             )
-            test_loader = DataLoader(
-                test_dataset, batch_size=batch_size, shuffle=False
-            )
+            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
             train_dataloaders.append(train_loader)
             test_dataloaders.append(test_loader)
@@ -357,83 +355,95 @@ def show_images(images, title_texts, figure_title="", img_size=32):
 
 
 if __name__ == "__main__":
+    import random
     import matplotlib.pyplot as plt
-    """Show sample original and grayscale CIFAR-10 images."""
-    # Load a small sample for demonstration
+    import numpy as np
+
+    # CIFAR-10 class names
+    CIFAR10_CLASSES = [
+        "airplane", "automobile", "bird", "cat", "deer",
+        "dog", "frog", "horse", "ship", "truck"
+    ]
+
+    # Load CIFAR-10 data
     loader = Cifar10DatasetLoader()
     x_train, y_train, x_test, y_test = loader.load_raw_data()
+    x_train_prep, y_train_prep, x_test_prep, y_test_prep = loader.preprocess_data(
+        x_train, y_train, x_test, y_test, quick_test=True
+    )
 
-    # Print the actual shape
-    print(f"CIFAR-10 image shape: {x_train[0].shape}")  # Should be (32, 32, 3) in color
-    print(f"Total pixels per image: {x_train[0].size}")  # Should be 3,072 in color
+    # Generate task dataloaders
+    permutation_train, permutation_test = loader._create_permutation_tasks(
+        x_train_prep, y_train_prep, x_test_prep, y_test_prep, 9, 32, False
+    )
+    rotation_train, rotation_test = loader._create_rotation_tasks(
+        x_train_prep, y_train_prep, x_test_prep, y_test_prep, 9, 32, False
+    )
+    class_split_train, class_split_test = loader._create_class_split_tasks(
+        x_train_prep, y_train_prep, x_test_prep, y_test_prep, 5, 32, False
+    )
 
-    # Show original color images
-    plt.figure(figsize=(10, 2))
-    for i in range(5):
-        plt.subplot(1, 5, i + 1)
-        plt.imshow(x_train[i])
-        plt.axis("off")
-    plt.suptitle("Original CIFAR-10 Images")
+    # Create 2x8 subplot grid
+    fig, axes = plt.subplots(2, 8, figsize=(32, 8))
+
+    # Task configurations
+    task_configs = [
+        ("Normal", None, None),
+        ("Class Split", class_split_train, 5),
+        ("Permutation", permutation_train, 9),
+        ("Rotation", rotation_train, 9),
+    ]
+
+    for task_type_idx, (task_name, dataloaders, num_tasks) in enumerate(task_configs):
+        if task_name == "Normal":
+            # Sample 4 random normal images (use colored version)
+            for i in range(4):
+                r = random.randint(0, len(x_train) - 1)
+                image = x_train[r]  # Original RGB image
+                class_label = CIFAR10_CLASSES[y_train[r]]
+
+                row = i // 2
+                col = (i % 2) + (task_type_idx * 2)
+
+                axes[row, col].imshow(image)
+                axes[row, col].set_title(
+                    f"{task_name}\nClass: {class_label}", fontsize=10
+                )
+                axes[row, col].axis("off")
+        else:
+            # Select representative task indices using even spacing
+            if num_tasks <= 4:
+                selected_tasks = list(range(num_tasks))
+            else:
+                # Use evenly spaced indices across all tasks
+                selected_tasks = np.linspace(0, num_tasks - 1, 4, dtype=int).tolist()
+
+            # Ensure we have exactly 4 tasks
+            while len(selected_tasks) < 4:
+                selected_tasks.append(selected_tasks[-1])
+
+            # Sample one image from each selected task
+            for i, task_idx in enumerate(selected_tasks):
+                batch = next(iter(dataloaders[task_idx]))
+                sample_idx = random.randint(0, len(batch[0]) - 1)
+                image = batch[0][sample_idx].numpy().reshape(32, 32)
+                label = batch[1][sample_idx].item()
+
+                if task_name == "Class Split":
+                    # For class split, convert binary label back to original class
+                    orig_class = (task_idx * 2) + label
+                    class_label = CIFAR10_CLASSES[orig_class]
+                else:
+                    class_label = CIFAR10_CLASSES[label]
+
+                row = i // 2
+                col = (i % 2) + (task_type_idx * 2)
+
+                axes[row, col].imshow(image, cmap="gray")
+                axes[row, col].set_title(
+                    f"{task_name}\nClass: {class_label}\nTask: {task_idx}", fontsize=10
+                )
+                axes[row, col].axis("off")
+
+    plt.tight_layout()
     plt.show()
-
-    # Convert to grayscale and show
-    x_train_grey = loader._convert_to_grayscale(x_train[:5])
-    plt.figure(figsize=(10, 2))
-    for i in range(5):
-        plt.subplot(1, 5, i + 1)
-        plt.imshow(x_train_grey[i], cmap="gray")
-        plt.axis("off")
-    plt.suptitle("Grayscale CIFAR-10 Images")
-    plt.show()
-
-    # Show the task images.
-    loader = Cifar10DatasetLoader()
-
-    # Load and preprocess data
-    x_train, y_train, x_test, y_test = loader.load_raw_data()
-    x_train_tensor, y_train_tensor, x_test_tensor, y_test_tensor = (
-        loader.preprocess_data(x_train, y_train, x_test, y_test, quick_test=True)
-    )
-
-    # Show permutation task samples
-    train_loaders, _ = loader._create_permutation_tasks(
-        x_train_tensor,
-        y_train_tensor,
-        x_test_tensor,
-        y_test_tensor,
-        num_tasks=3,
-        batch_size=64,
-        use_cuda=False,
-    )
-
-    sample_images = []
-    titles = []
-    for i, train_loader in enumerate(train_loaders):
-        batch_x, batch_y = next(iter(train_loader))
-        sample_images.append(batch_x[0].numpy())
-        titles.append(f"Permutation Task {i+1}")
-
-    show_images(sample_images, titles, "Permutation Tasks Sample", img_size=32)
-
-    # Show rotation task samples
-    train_loaders, _ = loader._create_rotation_tasks(
-        x_train_tensor,
-        y_train_tensor,
-        x_test_tensor,
-        y_test_tensor,
-        num_tasks=10,
-        batch_size=64,
-        use_cuda=False,
-    )
-
-    sample_images = []
-    titles = []
-    for i, train_loader in enumerate(train_loaders):
-        if i > 3:
-            break
-        batch_x, batch_y = next(iter(train_loader))
-        sample_images.append(batch_x[0].numpy())
-        titles.append(f"Rotation Task {i+1}")
-
-    show_images(sample_images, titles, "Rotation Tasks Sample", img_size=32)
-    print("Done.")

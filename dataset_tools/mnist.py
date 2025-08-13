@@ -350,115 +350,85 @@ class MnistDatasetLoader(DatasetLoader):
         return train_dataloaders, test_dataloaders
 
 
-# Backward compatibility function
-# def prepare_domain_incremental_mnist(task_type, num_tasks, batch_size, quick_test=False):
-#     """Load and prepare MNIST data for domain-incremental learning (backward compatibility)."""
-#     loader = MnistDatasetLoader()
-#     return loader.prepare_domain_incremental_data(task_type, num_tasks, batch_size, quick_test)
-
-
 if __name__ == "__main__":
     import random
     import matplotlib.pyplot as plt
 
-    # Initialize the loader
     loader = MnistDatasetLoader()
-
-    # Helper function to show a list of images with their relating titles
-    def show_images(images, title_texts, figure_title=""):
-        cols = 5
-        rows = int(len(images) / cols) + 1
-        plt.figure(figsize=(15, 10))
-        if figure_title:
-            plt.suptitle(figure_title, fontsize=16)
-        index = 1
-        for x in zip(images, title_texts):
-            image = x[0]
-            title_text = x[1]
-            plt.subplot(rows, cols, index)
-            plt.imshow(
-                image.reshape(28, 28) if len(image.shape) == 1 else image, cmap="gray"
-            )
-            if title_text != "":
-                plt.title(title_text, fontsize=10)
-            plt.axis("off")
-            index += 1
-        plt.tight_layout()
-        plt.show()
-
-    print("=== MNIST Task Visualization ===")
-
-    # Load and preprocess data with quick_test for faster demonstration
     x_train, y_train, x_test, y_test = loader.load_raw_data()
     x_train, y_train, x_test, y_test = loader.preprocess_data(
         x_train, y_train, x_test, y_test, quick_test=True
     )
 
-    print(f"Dataset shapes: train {x_train.shape}, test {x_test.shape}")
+    batch_size = 64
 
-    # Original data samples
-    print("\n1. Original MNIST samples:")
-    images_2_show = []
-    titles_2_show = []
-    for i in range(10):
-        r = random.randint(0, len(x_train) - 1)
-        images_2_show.append(x_train[r].numpy())
-        titles_2_show.append(f"Label: {y_train[r].item()}")
-    show_images(images_2_show, titles_2_show, "Original MNIST Samples")
-
-    # Permutation task samples
-    print("2. Permutation task samples:")
-    train_loaders, test_loaders = loader._create_permutation_tasks(
-        x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32
+    # Create task types with appropriate counts
+    class_train_loaders, _ = loader._create_class_split_tasks(
+        x_train, y_train, x_test, y_test, 5, batch_size
+    )
+    perm_train_loaders, _ = loader._create_permutation_tasks(
+        x_train, y_train, x_test, y_test, 10, batch_size
+    )
+    rot_train_loaders, _ = loader._create_rotation_tasks(
+        x_train, y_train, x_test, y_test, 10, batch_size
     )
 
-    for task_id in range(3):
-        images_2_show = []
-        titles_2_show = []
-        # Get first batch from each task
-        batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
-            images_2_show.append(batch_x[i].numpy())
-            titles_2_show.append(f"Label: {batch_y[i].item()}")
-        show_images(images_2_show, titles_2_show, f"Permutation Task {task_id + 1}")
+    def select_task_indices(num_tasks):
+        return np.linspace(0, num_tasks - 1, 4, dtype=int).tolist()
 
-    # Rotation task samples
-    print("3. Rotation task samples:")
-    train_loaders, test_loaders = loader._create_rotation_tasks(
-        x_train, y_train, x_test, y_test, num_tasks=3, batch_size=32
+    def get_sample_from_loader(dataloader):
+        for batch_x, batch_y in dataloader:
+            idx = random.randint(0, len(batch_x) - 1)
+            return batch_x[idx], batch_y[idx]
+        return None, None
+
+    def place_images(axes, task_type, images_data):
+        for i, (img, label, task_num, title) in enumerate(images_data):
+            if i >= 4:
+                break
+            row = i // 2
+            col = (i % 2) + (task_type * 2)
+
+            axes[row, col].imshow(img.view(28, 28), cmap="gray")
+            axes[row, col].set_title(title, fontsize=10)
+            axes[row, col].axis("off")
+
+    def sample_task_data(loaders, task_indices, task_type_name):
+        task_data = []
+        for task_idx in task_indices:
+            img, label = get_sample_from_loader(loaders[task_idx])
+            if img is not None and label is not None:
+                title = f"{task_type_name}\nClass: {label.item()}\nTask: {task_idx}"
+                task_data.append((img, label, task_idx, title))
+        return task_data
+
+    fig, axes = plt.subplots(2, 8, figsize=(32, 8))
+
+    # Normal images
+    normal_data = []
+    for i in range(4):
+        sample_idx = random.randint(0, len(x_train) - 1)
+        img = x_train[sample_idx]
+        label = y_train[sample_idx].item()
+        normal_data.append((img, label, None, f"Normal\nClass: {label}"))
+    place_images(axes, 0, normal_data)
+
+    # Task sampling for each type
+    place_images(
+        axes,
+        1,
+        sample_task_data(class_train_loaders, select_task_indices(5), "Class Split"),
+    )
+    place_images(
+        axes,
+        2,
+        sample_task_data(perm_train_loaders, select_task_indices(10), "Permutation"),
+    )
+    place_images(
+        axes,
+        3,
+        sample_task_data(rot_train_loaders, select_task_indices(10), "Rotation"),
     )
 
-    for task_id in range(3):
-        images_2_show = []
-        titles_2_show = []
-        batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
-            images_2_show.append(batch_x[i].numpy())
-            titles_2_show.append(f"Label: {batch_y[i].item()}, Rot: {task_id * 20}°")
-        show_images(
-            images_2_show,
-            titles_2_show,
-            f"Rotation Task {task_id + 1} ({task_id * 20}° rotation)",
-        )
-
-    # Class split task samples
-    print("4. Class split task samples:")
-    train_loaders, test_loaders = loader._create_class_split_tasks(
-        x_train, y_train, x_test, y_test, num_tasks=5, batch_size=32
-    )
-
-    for task_id in range(5):
-        images_2_show = []
-        titles_2_show = []
-        batch_x, batch_y = next(iter(train_loaders[task_id]))
-        for i in range(min(5, len(batch_x))):
-            images_2_show.append(batch_x[i].numpy())
-            orig_classes = f"{task_id*2},{task_id*2+1}"
-            titles_2_show.append(f"Orig: {orig_classes}, New: {batch_y[i].item()}")
-        show_images(
-            images_2_show,
-            titles_2_show,
-            f"Class Split Task {task_id + 1} (classes {task_id*2}-{task_id*2+1})",
-        )
-
-    print("Visualization complete!")
+    plt.tight_layout()
+    plt.show()
